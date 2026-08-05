@@ -60,7 +60,7 @@ pub fn list_content_files(dir: &Path) -> Vec<ContentEntry> {
             !is_ignored(&name)
         })
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
+        .filter(|e| e.file_type().is_file() || (e.file_type().is_symlink() && e.path().is_file()))
         .collect();
 
     entries.sort_by(|a, b| a.path().cmp(b.path()));
@@ -153,6 +153,28 @@ mod tests {
             hash_directory(&link).unwrap(),
             hash_directory(&real).unwrap()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hash_includes_symlinked_file_content() {
+        let tmp = tempdir().unwrap();
+        let source = tmp.path().join("source.md");
+        fs::write(&source, "first").unwrap();
+        let skill = tmp.path().join("skill");
+        fs::create_dir(&skill).unwrap();
+        std::os::unix::fs::symlink(&source, skill.join("SKILL.md")).unwrap();
+
+        let first = hash_directory(&skill).unwrap();
+        assert_eq!(
+            list_content_files(&skill)
+                .iter()
+                .map(|entry| entry.relative_path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["SKILL.md"]
+        );
+        fs::write(&source, "second").unwrap();
+        assert_ne!(first, hash_directory(&skill).unwrap());
     }
 
     #[test]

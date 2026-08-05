@@ -65,6 +65,22 @@ pub struct PendingConflictRow {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DiscoveryProvenance {
+    /// Runtime owner class. `codex_plugin` means Codex, not a loose directory,
+    /// decided that this location is active.
+    pub owner_type: String,
+    /// Stable runtime owner key, e.g. `github@openai-curated`.
+    pub owner_id: String,
+    pub source_marketplace: Option<String>,
+    pub source_type: Option<String>,
+    pub source_ref: Option<String>,
+    /// Active cache revision reported by the host runtime.
+    pub source_revision: Option<String>,
+    /// Skill path relative to the active plugin root.
+    pub source_subpath: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct DiscoveredSkillRecord {
     pub id: String,
     pub tool: String,
@@ -73,6 +89,7 @@ pub struct DiscoveredSkillRecord {
     pub fingerprint: Option<String>,
     pub found_at: i64,
     pub imported_skill_id: Option<String>,
+    pub provenance: Option<DiscoveryProvenance>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -526,8 +543,11 @@ impl SkillStore {
     pub fn insert_discovered(&self, rec: &DiscoveredSkillRecord) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO discovered_skills (id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO discovered_skills (
+                id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id,
+                owner_type, owner_id, source_marketplace, discovery_source_type,
+                discovery_source_ref, discovery_source_revision, discovery_source_subpath
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 rec.id,
                 rec.tool,
@@ -536,6 +556,23 @@ impl SkillStore {
                 rec.fingerprint,
                 rec.found_at,
                 rec.imported_skill_id,
+                rec.provenance.as_ref().map(|p| p.owner_type.as_str()),
+                rec.provenance.as_ref().map(|p| p.owner_id.as_str()),
+                rec.provenance
+                    .as_ref()
+                    .and_then(|p| p.source_marketplace.as_deref()),
+                rec.provenance
+                    .as_ref()
+                    .and_then(|p| p.source_type.as_deref()),
+                rec.provenance
+                    .as_ref()
+                    .and_then(|p| p.source_ref.as_deref()),
+                rec.provenance
+                    .as_ref()
+                    .and_then(|p| p.source_revision.as_deref()),
+                rec.provenance
+                    .as_ref()
+                    .and_then(|p| p.source_subpath.as_deref()),
             ],
         )?;
         Ok(())
@@ -544,9 +581,26 @@ impl SkillStore {
     pub fn get_all_discovered(&self) -> Result<Vec<DiscoveredSkillRecord>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id FROM discovered_skills",
+            "SELECT id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id,
+                    owner_type, owner_id, source_marketplace, discovery_source_type,
+                    discovery_source_ref, discovery_source_revision, discovery_source_subpath
+             FROM discovered_skills",
         )?;
         let rows = stmt.query_map([], |row| {
+            let owner_type: Option<String> = row.get(7)?;
+            let owner_id: Option<String> = row.get(8)?;
+            let provenance = match (owner_type, owner_id) {
+                (Some(owner_type), Some(owner_id)) => Some(DiscoveryProvenance {
+                    owner_type,
+                    owner_id,
+                    source_marketplace: row.get(9)?,
+                    source_type: row.get(10)?,
+                    source_ref: row.get(11)?,
+                    source_revision: row.get(12)?,
+                    source_subpath: row.get(13)?,
+                }),
+                _ => None,
+            };
             Ok(DiscoveredSkillRecord {
                 id: row.get(0)?,
                 tool: row.get(1)?,
@@ -555,6 +609,7 @@ impl SkillStore {
                 fingerprint: row.get(4)?,
                 found_at: row.get(5)?,
                 imported_skill_id: row.get(6)?,
+                provenance,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -1504,6 +1559,46 @@ mod scenario_membership_tests {
             .get_enabled_tools_for_scenario_skill("ghost-s", "k1")
             .unwrap()
             .is_empty());
+    }
+}
+
+#[cfg(test)]
+mod discovered_provenance_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn discovered_provenance_round_trips_through_store() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store
+            .insert_discovered(&DiscoveredSkillRecord {
+                id: "location-1".to_string(),
+                tool: "codex".to_string(),
+                found_path: "/tmp/cache/skills/alpha".to_string(),
+                name_guess: Some("alpha".to_string()),
+                fingerprint: Some("digest".to_string()),
+                found_at: 1,
+                imported_skill_id: None,
+                provenance: Some(DiscoveryProvenance {
+                    owner_type: "codex_plugin".to_string(),
+                    owner_id: "tool@market".to_string(),
+                    source_marketplace: Some("market".to_string()),
+                    source_type: Some("git".to_string()),
+                    source_ref: Some("https://example.test/repo.git".to_string()),
+                    source_revision: Some("rev-1".to_string()),
+                    source_subpath: Some("skills/alpha".to_string()),
+                }),
+            })
+            .unwrap();
+
+        let records = store.get_all_discovered().unwrap();
+        assert_eq!(records.len(), 1);
+        let provenance = records[0].provenance.as_ref().unwrap();
+        assert_eq!(provenance.owner_id, "tool@market");
+        assert_eq!(provenance.source_marketplace.as_deref(), Some("market"));
+        assert_eq!(provenance.source_revision.as_deref(), Some("rev-1"));
+        assert_eq!(provenance.source_subpath.as_deref(), Some("skills/alpha"));
     }
 }
 

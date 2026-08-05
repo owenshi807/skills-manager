@@ -112,15 +112,39 @@ export interface Preset {
 export interface DiscoveredGroup {
   name: string;
   fingerprint: string | null;
-  locations: { id: string; tool: string; found_path: string }[];
+  locations: DiscoveredLocation[];
   imported: boolean;
   found_at: number;
+}
+
+export interface DiscoveryProvenance {
+  owner_type: string;
+  owner_id: string;
+  source_marketplace: string | null;
+  source_type: string | null;
+  source_ref: string | null;
+  source_revision: string | null;
+  source_subpath: string | null;
+}
+
+export interface DiscoveredLocation {
+  id: string;
+  tool: string;
+  found_path: string;
+  provenance?: DiscoveryProvenance;
+}
+
+export interface DiscoveryDiagnostic {
+  code: string;
+  owner_id: string | null;
+  message: string;
 }
 
 export interface ScanResult {
   tools_scanned: number;
   skills_found: number;
   groups: DiscoveredGroup[];
+  diagnostics: DiscoveryDiagnostic[];
 }
 
 export interface SkillsShSkill {

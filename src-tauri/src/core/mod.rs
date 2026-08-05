@@ -3,6 +3,7 @@ pub mod audit_log;
 pub mod auto_backup;
 pub mod central_repo;
 pub mod content_hash;
+pub mod codex_plugins;
 pub mod crypto;
 pub mod error;
 pub mod file_watcher;

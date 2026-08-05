@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
 /// Current schema version. Bump this when adding a new migration.
-const LATEST_VERSION: u32 = 7;
+const LATEST_VERSION: u32 = 8;
 
 /// Run all pending migrations on the database.
 ///
@@ -54,6 +54,7 @@ fn migrate_step(conn: &Connection, from_version: u32) -> Result<()> {
         4 => migrate_v4_to_v5(conn),
         5 => migrate_v5_to_v6(conn),
         6 => migrate_v6_to_v7(conn),
+        7 => migrate_v7_to_v8(conn),
         _ => bail!("unknown migration version: {from_version}"),
     }
 }
@@ -110,7 +111,14 @@ fn migrate_v0_to_v1(conn: &Connection) -> Result<()> {
             name_guess TEXT,
             fingerprint TEXT,
             found_at INTEGER NOT NULL,
-            imported_skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL
+            imported_skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL,
+            owner_type TEXT,
+            owner_id TEXT,
+            source_marketplace TEXT,
+            discovery_source_type TEXT,
+            discovery_source_ref TEXT,
+            discovery_source_revision TEXT,
+            discovery_source_subpath TEXT
         );
 
         CREATE TABLE IF NOT EXISTS settings (
@@ -294,6 +302,45 @@ fn migrate_v6_to_v7(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v7 → v8: retain runtime-owner and source provenance for discovered
+/// locations. These columns describe the active projection; they do not turn
+/// a plugin cache path into an install/update source.
+fn migrate_v7_to_v8(conn: &Connection) -> Result<()> {
+    // Some early databases were stamped v1 without every initial table.
+    // Recreate the discovery projection if absent before extending it.
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS discovered_skills (
+            id TEXT PRIMARY KEY,
+            tool TEXT NOT NULL,
+            found_path TEXT NOT NULL,
+            name_guess TEXT,
+            fingerprint TEXT,
+            found_at INTEGER NOT NULL,
+            imported_skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL
+        );
+        ",
+    )?;
+    add_column_if_missing(conn, "discovered_skills", "owner_type", "TEXT")?;
+    add_column_if_missing(conn, "discovered_skills", "owner_id", "TEXT")?;
+    add_column_if_missing(conn, "discovered_skills", "source_marketplace", "TEXT")?;
+    add_column_if_missing(conn, "discovered_skills", "discovery_source_type", "TEXT")?;
+    add_column_if_missing(conn, "discovered_skills", "discovery_source_ref", "TEXT")?;
+    add_column_if_missing(
+        conn,
+        "discovered_skills",
+        "discovery_source_revision",
+        "TEXT",
+    )?;
+    add_column_if_missing(
+        conn,
+        "discovered_skills",
+        "discovery_source_subpath",
+        "TEXT",
+    )?;
+    Ok(())
+}
+
 // ── Helpers ──
 
 fn add_column_if_missing(
@@ -362,6 +409,8 @@ mod tests {
         assert!(tables.contains(&"skill_tags".to_string()));
         assert!(tables.contains(&"scenario_skill_tools".to_string()));
         assert!(tables.contains(&"audit_log".to_string()));
+        assert!(has_column(&conn, "discovered_skills", "owner_id").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "discovery_source_revision").unwrap());
     }
 
     #[test]
@@ -373,6 +422,37 @@ mod tests {
         // Running again should be a no-op
         run_migrations(&conn).unwrap();
 
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, LATEST_VERSION);
+    }
+
+    #[test]
+    fn test_v7_database_adds_discovery_provenance_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE discovered_skills (
+                id TEXT PRIMARY KEY,
+                tool TEXT NOT NULL,
+                found_path TEXT NOT NULL,
+                name_guess TEXT,
+                fingerprint TEXT,
+                found_at INTEGER NOT NULL,
+                imported_skill_id TEXT
+            );
+            PRAGMA user_version = 7;
+            ",
+        )
+        .unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        assert!(has_column(&conn, "discovered_skills", "owner_type").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "owner_id").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "source_marketplace").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "discovery_source_revision").unwrap());
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();

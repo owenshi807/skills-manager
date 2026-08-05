@@ -8,7 +8,9 @@ pub struct SkillMeta {
 fn read_named_file_exact(dir: &Path, target_name: &str) -> Option<String> {
     let entries = std::fs::read_dir(dir).ok()?;
     for entry in entries.flatten() {
-        if !entry.file_type().ok()?.is_file() {
+        // Path::is_file follows a file symlink but still rejects directories
+        // and broken links. Agent installers commonly link only SKILL.md.
+        if !entry.path().is_file() {
             continue;
         }
         if entry.file_name().to_string_lossy() == target_name {
@@ -23,8 +25,7 @@ fn has_named_file_exact(dir: &Path, target_name: &str) -> bool {
         return false;
     };
     entries.flatten().any(|entry| {
-        entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
-            && entry.file_name().to_string_lossy() == target_name
+        entry.path().is_file() && entry.file_name().to_string_lossy() == target_name
     })
 }
 
@@ -247,6 +248,22 @@ mod tests {
         let meta = parse_skill_md(tmp.path());
         assert_eq!(meta.name.as_deref(), Some("from-lowercase"));
         assert_eq!(meta.description.as_deref(), Some("desc"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parse_and_validate_skill_md_file_symlink() {
+        let tmp = tempdir().unwrap();
+        let source = tmp.path().join("source.md");
+        fs::write(&source, "---\nname: linked-skill\ndescription: linked\n---\n").unwrap();
+        let skill = tmp.path().join("skill");
+        fs::create_dir(&skill).unwrap();
+        std::os::unix::fs::symlink(&source, skill.join("SKILL.md")).unwrap();
+
+        assert!(is_valid_skill_dir(&skill));
+        let meta = parse_skill_md(&skill);
+        assert_eq!(meta.name.as_deref(), Some("linked-skill"));
+        assert_eq!(meta.description.as_deref(), Some("linked"));
     }
 
     #[test]

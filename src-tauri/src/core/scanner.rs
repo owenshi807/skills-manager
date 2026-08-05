@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::content_hash;
 use super::skill_metadata;
-use super::skill_store::DiscoveredSkillRecord;
+use super::skill_store::{DiscoveredSkillRecord, DiscoveryProvenance};
 use super::tool_adapters;
 
 pub struct ScanPlan {
@@ -28,6 +28,8 @@ pub struct DiscoveredLocation {
     pub id: String,
     pub tool: String,
     pub found_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<DiscoveryProvenance>,
 }
 
 /// Directories to skip during recursive scans (internal/tool-specific metadata).
@@ -87,15 +89,15 @@ fn collect_skill_dirs_recursive(
 
 /// Build a `DiscoveredSkillRecord` for `path` and push it onto `discovered`,
 /// unless `path` is already tracked in `managed_paths`.
-fn push_discovered(
+pub(crate) fn discovered_record(
     adapter_key: &str,
     path: PathBuf,
     managed_paths: &[String],
-    discovered: &mut Vec<DiscoveredSkillRecord>,
-) {
+    provenance: Option<DiscoveryProvenance>,
+) -> Option<DiscoveredSkillRecord> {
     let path_str = path.to_string_lossy().to_string();
     if managed_paths.contains(&path_str) {
-        return;
+        return None;
     }
     let name = skill_metadata::infer_skill_name(&path);
     let fingerprint = content_hash::hash_directory(&path).ok();
@@ -105,7 +107,7 @@ fn push_discovered(
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_millis() as i64)
         .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
-    discovered.push(DiscoveredSkillRecord {
+    Some(DiscoveredSkillRecord {
         id: uuid::Uuid::new_v4().to_string(),
         tool: adapter_key.to_string(),
         found_path: path_str,
@@ -113,7 +115,19 @@ fn push_discovered(
         fingerprint,
         found_at,
         imported_skill_id: None,
-    });
+        provenance,
+    })
+}
+
+fn push_discovered(
+    adapter_key: &str,
+    path: PathBuf,
+    managed_paths: &[String],
+    discovered: &mut Vec<DiscoveredSkillRecord>,
+) {
+    if let Some(record) = discovered_record(adapter_key, path, managed_paths, None) {
+        discovered.push(record);
+    }
 }
 
 fn scan_flat_dir(
@@ -246,6 +260,7 @@ pub fn group_discovered(records: &[DiscoveredSkillRecord]) -> Vec<DiscoveredGrou
             id: rec.id.clone(),
             tool: rec.tool.clone(),
             found_path: rec.found_path.clone(),
+            provenance: rec.provenance.clone(),
         });
     }
 
@@ -420,6 +435,7 @@ mod tests {
                 fingerprint: Some("hash-a".into()),
                 found_at: 10,
                 imported_skill_id: None,
+                provenance: None,
             },
             DiscoveredSkillRecord {
                 id: "2".into(),
@@ -429,6 +445,7 @@ mod tests {
                 fingerprint: Some("hash-b".into()),
                 found_at: 20,
                 imported_skill_id: None,
+                provenance: None,
             },
         ];
 
@@ -447,6 +464,7 @@ mod tests {
                 fingerprint: Some("hash-a".into()),
                 found_at: 10,
                 imported_skill_id: None,
+                provenance: None,
             },
             DiscoveredSkillRecord {
                 id: "2".into(),
@@ -456,6 +474,7 @@ mod tests {
                 fingerprint: Some("hash-a".into()),
                 found_at: 20,
                 imported_skill_id: None,
+                provenance: None,
             },
         ];
 

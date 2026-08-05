@@ -4,7 +4,8 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::core::{
-    error::AppError, installer, scanner, skill_store::SkillStore, sync_metadata, tool_adapters,
+    codex_plugins, error::AppError, installer, scanner, skill_store::SkillStore, sync_metadata,
+    tool_adapters,
 };
 
 fn canonicalize_lossy(path: &str) -> PathBuf {
@@ -45,6 +46,7 @@ pub struct ScanResultDto {
     pub tools_scanned: usize,
     pub skills_found: usize,
     pub groups: Vec<scanner::DiscoveredGroup>,
+    pub diagnostics: Vec<codex_plugins::DiscoveryDiagnostic>,
 }
 
 #[tauri::command]
@@ -61,6 +63,16 @@ pub async fn scan_local_skills(
         let adapters = tool_adapters::all_tool_adapters(&store);
         let mut plan = scanner::scan_local_skills_with_adapters(&managed_paths, &adapters)
             .map_err(AppError::io)?;
+        let plugin_scan = if adapters
+            .iter()
+            .any(|adapter| adapter.key == "codex" && adapter.is_installed())
+        {
+            codex_plugins::scan_active_plugin_skills(&managed_paths)
+        } else {
+            codex_plugins::CodexPluginScan::default()
+        };
+        plan.discovered.extend(plugin_scan.discovered);
+        plan.skills_found = plan.discovered.len();
 
         for rec in &mut plan.discovered {
             rec.imported_skill_id = match_imported_skill_id(rec, &managed_skills);
@@ -79,6 +91,7 @@ pub async fn scan_local_skills(
             tools_scanned: plan.tools_scanned,
             skills_found: plan.skills_found,
             groups,
+            diagnostics: plugin_scan.diagnostics,
         })
     })
     .await?
@@ -252,6 +265,7 @@ mod tests {
             fingerprint: fingerprint.map(str::to_string),
             found_at: 0,
             imported_skill_id: None,
+            provenance: None,
         }
     }
 
