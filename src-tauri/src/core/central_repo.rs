@@ -532,27 +532,35 @@ pub fn ensure_central_repo() -> Result<()> {
     // run against the default location even though the user configured (and
     // populated) another one. Never let that pass silently — it presents as
     // "the library was rebuilt empty, all skills lost" (#228 review).
-    let mut config = match load_config_state() {
-        ConfigState::Valid(config) => {
-            if let Some(raw) = config.repo_path.as_deref() {
-                if let Err(err) = normalize_path(raw) {
-                    log::error!(
-                        "central repo: configured repo_path {raw:?} is invalid ({err}); \
-                         falling back to the default location"
-                    );
-                    push_startup_warning("repo_path_invalid");
+    let mut config = if base_dir_override_active() {
+        // CLI external roots and the debug-only evaluation runtime are already
+        // explicit. Do not even read the user's app config in those sessions:
+        // a pending migration or malformed real config must not influence an
+        // isolated store.
+        RepoPathConfig::default()
+    } else {
+        match load_config_state() {
+            ConfigState::Valid(config) => {
+                if let Some(raw) = config.repo_path.as_deref() {
+                    if let Err(err) = normalize_path(raw) {
+                        log::error!(
+                            "central repo: configured repo_path {raw:?} is invalid ({err}); \
+                             falling back to the default location"
+                        );
+                        push_startup_warning("repo_path_invalid");
+                    }
                 }
+                config
             }
-            config
-        }
-        ConfigState::Missing => RepoPathConfig::default(),
-        ConfigState::Invalid(detail) => {
-            log::error!(
-                "central repo: config is unreadable ({detail}); \
-                 falling back to the default location"
-            );
-            push_startup_warning("config_unreadable");
-            RepoPathConfig::default()
+            ConfigState::Missing => RepoPathConfig::default(),
+            ConfigState::Invalid(detail) => {
+                log::error!(
+                    "central repo: config is unreadable ({detail}); \
+                     falling back to the default location"
+                );
+                push_startup_warning("config_unreadable");
+                RepoPathConfig::default()
+            }
         }
     };
 

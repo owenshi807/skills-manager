@@ -1,6 +1,24 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
+static HOME_DIR_OVERRIDE: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+
+pub(crate) fn set_runtime_home_dir_override(path: Option<PathBuf>) {
+    *HOME_DIR_OVERRIDE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = path;
+}
+
+pub(crate) fn runtime_home_dir_override() -> Option<PathBuf> {
+    HOME_DIR_OVERRIDE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .clone()
+}
 
 /// Top-level grouping for sidebar/overview display. Does not affect skill
 /// deployment, sync, or any other backend behavior — purely a UI taxonomy.
@@ -60,11 +78,21 @@ pub struct CustomToolDef {
 
 impl ToolAdapter {
     fn home() -> PathBuf {
+        if let Some(path) = runtime_home_dir_override() {
+            return path;
+        }
         dirs::home_dir().expect("Cannot determine home directory")
     }
 
     fn candidate_paths(relative: &str) -> Vec<PathBuf> {
         let mut candidates = vec![Self::home().join(relative)];
+
+        // An evaluation runtime supplies a complete synthetic home. Falling
+        // through to the machine's platform config directory would break the
+        // isolation boundary even when every relative root is absent there.
+        if runtime_home_dir_override().is_some() {
+            return candidates;
+        }
 
         if let Some(suffix) = relative.strip_prefix(".config/") {
             if let Some(config_dir) = dirs::config_dir() {
