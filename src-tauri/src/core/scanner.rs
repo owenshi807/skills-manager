@@ -160,6 +160,7 @@ fn collect_strict_skill_dirs(root: &DiscoveryRoot) -> Result<Vec<PathBuf>> {
     collect_strict_children(
         &root.path,
         root.traversal == Traversal::Recursive,
+        root.provenance.source_kind == DiscoverySourceKind::CodexPlugin,
         &mut visited,
         &mut results,
     )?;
@@ -169,6 +170,7 @@ fn collect_strict_skill_dirs(root: &DiscoveryRoot) -> Result<Vec<PathBuf>> {
 fn collect_strict_children(
     dir: &Path,
     recursive: bool,
+    reject_directory_symlinks: bool,
     visited: &mut HashSet<PathBuf>,
     results: &mut Vec<PathBuf>,
 ) -> Result<()> {
@@ -200,11 +202,12 @@ fn collect_strict_children(
         if file_type.is_symlink() {
             let target = std::fs::metadata(&path)
                 .with_context(|| format!("Broken discovery symlink {}", path.display()))?;
-            // Recursive roots are manifest-declared ownership boundaries. A
-            // directory symlink can point outside that boundary, including to
-            // an otherwise valid Skill, so reject it before Skill detection.
-            // Flat loose roots still accept Agent-facing Skill projections.
-            if recursive && target.is_dir() {
+            // Manifest-owned roots are ownership boundaries. A directory
+            // symlink can point outside that boundary, including to an
+            // otherwise valid Skill, so reject it before Skill detection.
+            // Loose roots still accept Agent-facing Skill projections even
+            // when an adapter uses recursive discovery (for example Hermes).
+            if reject_directory_symlinks && target.is_dir() {
                 bail!(
                     "Recursive inventory rejects directory symlink: {}",
                     path.display()
@@ -219,7 +222,7 @@ fn collect_strict_children(
             continue;
         }
         if recursive {
-            collect_strict_children(&path, true, visited, results)?;
+            collect_strict_children(&path, true, reject_directory_symlinks, visited, results)?;
         }
     }
     Ok(())
@@ -670,6 +673,33 @@ mod tests {
 
         assert!(error.to_string().contains("directory symlink"));
         assert!(error.to_string().contains("escaped-skill"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_recursive_loose_scan_accepts_agent_skill_projection() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let external_skill = tmp.path().join("external-skill");
+        fs::create_dir_all(&root).unwrap();
+        write_skill(&external_skill);
+        let projection = root.join("projected-skill");
+        std::os::unix::fs::symlink(&external_skill, &projection).unwrap();
+        let mut loose_root = discovery_root(&root, "hermes:root", Traversal::Recursive);
+        loose_root.provenance.source_kind = DiscoverySourceKind::Loose;
+
+        let plan = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![loose_root],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(plan.skills_found, 1);
+        assert_eq!(plan.discovered[0].found_path, projection.to_string_lossy());
+        assert!(plan.discovered[0].fingerprint.is_some());
     }
 
     #[cfg(unix)]
