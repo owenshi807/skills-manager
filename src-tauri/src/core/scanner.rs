@@ -224,6 +224,15 @@ fn collect_strict_children(
             continue;
         }
         if file_type.is_symlink() {
+            // Recursive loose collections may expose a category directory via
+            // symlink, not only a direct Skill projection. Follow that visible
+            // collection while relying on the canonical visited set for cycle
+            // safety. Manifest-owned directory links were rejected above.
+            let target = std::fs::metadata(&path)
+                .with_context(|| format!("Broken discovery symlink {}", path.display()))?;
+            if recursive && target.is_dir() {
+                collect_strict_children(&path, true, reject_directory_symlinks, visited, results)?;
+            }
             continue;
         }
         if recursive {
@@ -750,6 +759,37 @@ mod tests {
 
         assert_eq!(plan.skills_found, 1);
         assert_eq!(plan.discovered[0].found_path, projection.to_string_lossy());
+        assert!(plan.discovered[0].fingerprint.is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_recursive_loose_scan_follows_linked_skill_collection() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let external_collection = tmp.path().join("external-collection");
+        fs::create_dir_all(&root).unwrap();
+        let external_skill = external_collection.join("nested-skill");
+        write_skill(&external_skill);
+        let linked_collection = root.join("linked-category");
+        std::os::unix::fs::symlink(&external_collection, &linked_collection).unwrap();
+        let mut loose_root = discovery_root(&root, "hermes:root", Traversal::Recursive);
+        loose_root.provenance.source_kind = DiscoverySourceKind::Loose;
+
+        let plan = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![loose_root],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(plan.skills_found, 1);
+        assert_eq!(
+            plan.discovered[0].found_path,
+            linked_collection.join("nested-skill").to_string_lossy()
+        );
         assert!(plan.discovered[0].fingerprint.is_some());
     }
 
