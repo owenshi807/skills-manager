@@ -235,7 +235,7 @@ impl CodexHostDescriptor {
             return Ok(Vec::new());
         };
         let source_ref = path_text(&plugin_root, "Codex plugin source root")?;
-        let mut roots = Vec::new();
+        let mut roots: Vec<DiscoveryRoot> = Vec::new();
         let mut unique_roots = HashSet::new();
         for declared in skill_roots.into_vec() {
             let root = resolve_declared_root(&plugin_root, &declared)
@@ -243,6 +243,17 @@ impl CodexHostDescriptor {
             if !unique_roots.insert(root.clone()) {
                 continue;
             }
+            // All manifest roots are recursive. A declared ancestor already
+            // covers every nested root; normalize overlaps here so one Skill
+            // cannot become two observations for the same owner. Retaining
+            // only the shallowest root is order-independent.
+            if roots
+                .iter()
+                .any(|existing| root.starts_with(&existing.path))
+            {
+                continue;
+            }
+            roots.retain(|existing| !existing.path.starts_with(&root));
             roots.push(DiscoveryRoot {
                 host_key: "codex".to_string(),
                 path: root,
@@ -662,6 +673,30 @@ mod tests {
             .unwrap()
             .roots
             .is_empty());
+    }
+
+    #[test]
+    fn overlapping_declared_roots_keep_only_the_shallowest_recursive_root() {
+        let tmp = tempdir().unwrap();
+        let root = write_plugin(
+            tmp.path(),
+            "market",
+            "overlap",
+            "rev",
+            r#"{"name":"overlap","skills":["skills/foo","skills"]}"#,
+        );
+        fs::create_dir_all(root.join("skills/foo/bar")).unwrap();
+        let config = "[plugins.\"overlap@market\"]\nenabled = true\n";
+
+        let input = CodexHostDescriptor::new(tmp.path().to_path_buf())
+            .resolve_config_text(config)
+            .unwrap();
+
+        assert_eq!(input.roots.len(), 1);
+        assert_eq!(
+            input.roots[0].path,
+            fs::canonicalize(root.join("skills")).unwrap()
+        );
     }
 
     #[cfg(unix)]

@@ -151,7 +151,12 @@ fn collect_strict_skill_dirs(root: &DiscoveryRoot) -> Result<Vec<PathBuf>> {
     if !metadata.is_dir() {
         bail!("Discovery root is not a directory: {}", root.path.display());
     }
-    if is_strict_skill_dir(&root.path)? {
+    // A manifest may point directly at one Skill. Loose adapter roots are
+    // collections, however, so a stray root-level marker must not shadow all
+    // of their child Skills.
+    if root.provenance.source_kind == DiscoverySourceKind::CodexPlugin
+        && is_strict_skill_dir(&root.path)?
+    {
         return Ok(vec![root.path.clone()]);
     }
 
@@ -550,6 +555,52 @@ mod tests {
             plan.discovered[0].found_path,
             tmp.path().join("real-skill").to_string_lossy()
         );
+    }
+
+    #[test]
+    fn loose_collection_root_marker_does_not_shadow_child_skills() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("root");
+        write_skill(&root);
+        let child = root.join("child-skill");
+        write_skill(&child);
+        let mut loose_root = discovery_root(&root, "host:root", Traversal::Flat);
+        loose_root.provenance.source_kind = DiscoverySourceKind::Loose;
+
+        let plan = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![loose_root],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(plan.skills_found, 1);
+        assert_eq!(plan.discovered[0].found_path, child.to_string_lossy());
+    }
+
+    #[test]
+    fn manifest_root_can_point_directly_to_one_skill() {
+        let tmp = tempdir().unwrap();
+        let skill = tmp.path().join("direct-skill");
+        write_skill(&skill);
+
+        let plan = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![discovery_root(
+                    &skill,
+                    "plugin@market",
+                    Traversal::Recursive,
+                )],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(plan.skills_found, 1);
+        assert_eq!(plan.discovered[0].found_path, skill.to_string_lossy());
     }
 
     #[test]
