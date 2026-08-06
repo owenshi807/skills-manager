@@ -6,7 +6,8 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::core::{
-    error::AppError, installer, scanner, skill_store::SkillStore, sync_metadata, tool_adapters,
+    error::AppError, host_discovery, installer, scanner, skill_store::SkillStore, sync_metadata,
+    tool_adapters,
 };
 
 fn canonicalize_lossy(path: &str) -> PathBuf {
@@ -30,11 +31,24 @@ fn match_imported_skill_id(
         return Some(existing.id.clone());
     }
 
-    if let Some(fingerprint) = rec.fingerprint.as_deref() {
-        if let Some(existing) = managed_skills
-            .iter()
-            .find(|skill| skill.content_hash.as_deref() == Some(fingerprint))
-        {
+    if let Some(provenance) = rec.provenance.as_ref() {
+        let source_ref = canonicalize_lossy(&provenance.source_ref);
+        if let Some(existing) = managed_skills.iter().find(|skill| {
+            let same_source = skill.source_ref.as_deref().map(canonicalize_lossy).as_ref()
+                == Some(&source_ref)
+                || skill
+                    .source_ref_resolved
+                    .as_deref()
+                    .map(canonicalize_lossy)
+                    .as_ref()
+                    == Some(&source_ref);
+            same_source
+                && skill.source_subpath.as_deref()
+                    == provenance
+                        .source_subpath
+                        .as_deref()
+                        .filter(|value| *value != ".")
+        }) {
             return Some(existing.id.clone());
         }
     }
@@ -47,6 +61,7 @@ pub struct ScanResultDto {
     pub tools_scanned: usize,
     pub skills_found: usize,
     pub groups: Vec<scanner::DiscoveredGroup>,
+    pub diagnostics: Vec<host_discovery::DiscoveryDiagnostic>,
 }
 
 #[derive(Debug)]
@@ -168,26 +183,25 @@ pub async fn scan_local_skills(
         let managed_skills = store.get_all_skills().map_err(AppError::db)?;
 
         let adapters = tool_adapters::all_tool_adapters(&store);
-        let mut plan = scanner::scan_local_skills_with_adapters(&managed_paths, &adapters)
-            .map_err(AppError::io)?;
+        let input =
+            host_discovery::discovery_input_for_adapters(&adapters).map_err(AppError::io)?;
+        let mut plan =
+            scanner::scan_discovery_roots(&managed_paths, input).map_err(AppError::io)?;
 
         for rec in &mut plan.discovered {
             rec.imported_skill_id = match_imported_skill_id(rec, &managed_skills);
         }
 
-        // Clear and repopulate discovered
-        store.clear_discovered().map_err(AppError::db)?;
-        for rec in &plan.discovered {
-            store.insert_discovered(rec).map_err(AppError::db)?;
-        }
-
-        let all_discovered = store.get_all_discovered().map_err(AppError::db)?;
-        let groups = scanner::group_discovered(&all_discovered);
+        let groups = scanner::group_discovered(&plan.discovered);
+        store
+            .replace_discovered(&plan.discovered)
+            .map_err(AppError::db)?;
 
         Ok(ScanResultDto {
             tools_scanned: plan.tools_scanned,
             skills_found: plan.skills_found,
             groups,
+            diagnostics: plan.diagnostics,
         })
     })
     .await?
@@ -269,6 +283,7 @@ mod tests {
     use super::{import_all_discovered_unlocked, match_imported_skill_id};
     use crate::core::{
         central_repo,
+        host_discovery::{DiscoveryProvenance, DiscoverySourceKind},
         skill_store::{DiscoveredSkillRecord, SkillRecord, SkillStore},
     };
     use std::path::{Path, PathBuf};
@@ -351,6 +366,7 @@ mod tests {
             fingerprint: fingerprint.map(str::to_string),
             found_at: 0,
             imported_skill_id: None,
+            provenance: None,
         }
     }
 
@@ -368,6 +384,7 @@ mod tests {
             fingerprint: Some(fingerprint.to_string()),
             found_at: 0,
             imported_skill_id: None,
+            provenance: None,
         }
     }
 
@@ -403,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn marks_same_fingerprint_as_imported() {
+    fn does_not_mark_same_fingerprint_as_imported_without_lineage() {
         let rec = discovered("/tmp/local/foo", "same-name", Some("abc123"));
         let managed = vec![managed_skill(
             "skill-1",
@@ -413,10 +430,7 @@ mod tests {
             Some("abc123"),
         )];
 
-        assert_eq!(
-            match_imported_skill_id(&rec, &managed),
-            Some("skill-1".to_string())
-        );
+        assert_eq!(match_imported_skill_id(&rec, &managed), None);
     }
 
     #[test]
@@ -432,6 +446,34 @@ mod tests {
 
         assert_eq!(
             match_imported_skill_id(&rec, &managed),
+            Some("skill-1".to_string())
+        );
+    }
+
+    #[test]
+    fn marks_same_known_source_lineage_as_imported() {
+        let mut rec = discovered("/tmp/projected/foo", "foo", Some("new-digest"));
+        rec.provenance = Some(DiscoveryProvenance {
+            source_kind: DiscoverySourceKind::CodexPlugin,
+            owner_ref: "plugin@market".to_string(),
+            source_ref: "/tmp/plugin-revision".to_string(),
+            source_version: Some("1.0.0".to_string()),
+            source_revision: Some("rev-1".to_string()),
+            source_subpath: Some("skills/foo".to_string()),
+            declared_repository: None,
+            provenance_basis: "test".to_string(),
+            digest_algorithm: "scm-dir-v2".to_string(),
+        });
+        let mut managed = managed_skill(
+            "skill-1",
+            "foo",
+            Some("/tmp/plugin-revision"),
+            None,
+            Some("old-digest"),
+        );
+        managed.source_subpath = Some("skills/foo".to_string());
+        assert_eq!(
+            match_imported_skill_id(&rec, &[managed]),
             Some("skill-1".to_string())
         );
     }
