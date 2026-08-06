@@ -1,9 +1,25 @@
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-const IGNORED: &[&str] = &[".git", ".DS_Store", "Thumbs.db", ".gitignore", "__pycache__"];
+const IGNORED: &[&str] = &[
+    ".git",
+    ".DS_Store",
+    "Thumbs.db",
+    ".gitignore",
+    "__pycache__",
+];
+
+/// Canonical algorithm label for the strict, versioned foundation digest.
+///
+/// The legacy hash below remains byte-for-byte stable for update/diff callers.
+/// E0/B0 inventory code opts into this algorithm explicitly instead.
+pub const STRICT_DIRECTORY_DIGEST_ALGORITHM: &str = "scm-dir-v2";
+
+const STRICT_HASH_BUFFER_SIZE: usize = 64 * 1024;
 
 /// True for names excluded from a skill's content scope: the exact-match
 /// [`IGNORED`] entries plus compiled-Python artifacts (`*.pyc`). These are
@@ -14,10 +30,10 @@ fn is_ignored(name: &str) -> bool {
     IGNORED.contains(&name) || name.ends_with(".pyc")
 }
 
-/// One file in a skill's canonical "content scope" — the set of files that
-/// both [`hash_directory`] and the source-diff command operate on. Sharing
-/// this enumeration keeps the update badge and the diff from ever
-/// disagreeing about which files count.
+/// One file in the legacy managed-library content scope used by both
+/// [`hash_directory`] and the source-diff command. The strict foundation
+/// digest has a separate enumerator because it must preserve symlink kind and
+/// propagate every filesystem error without changing legacy hash bytes.
 pub struct ContentEntry {
     /// Path relative to the scanned directory, in the same lossy form the
     /// hash consumes (keeps the hashed byte stream stable).
@@ -130,10 +146,245 @@ pub fn hash_directory(dir: &Path) -> Result<String> {
     Ok(hash_entries(&list_content_files(dir)))
 }
 
+#[derive(Debug)]
+struct StrictContentEntry {
+    relative_path: String,
+    path: PathBuf,
+    link_target: Option<String>,
+}
+
+fn normalized_path_text(path: &Path, label: &str) -> Result<String> {
+    let value = path
+        .to_str()
+        .with_context(|| format!("{label} is not valid UTF-8: {}", path.display()))?;
+
+    #[cfg(windows)]
+    let value = value.replace('\\', "/");
+
+    Ok(value.to_string())
+}
+
+fn strict_field_header(hasher: &mut Sha256, tag: &[u8], value_len: u64) {
+    hasher.update((tag.len() as u32).to_be_bytes());
+    hasher.update(tag);
+    hasher.update(value_len.to_be_bytes());
+}
+
+fn strict_field(hasher: &mut Sha256, tag: &[u8], value: &[u8]) {
+    strict_field_header(hasher, tag, value.len() as u64);
+    hasher.update(value);
+}
+
+#[cfg(unix)]
+fn strict_exec_bits(metadata: &std::fs::Metadata) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o111
+}
+
+#[cfg(not(unix))]
+fn strict_exec_bits(_metadata: &std::fs::Metadata) -> u32 {
+    // Keep the encoding platform-neutral for ordinary files. A Unix file with
+    // no executable bits and the same file on Windows must hash identically.
+    0
+}
+
+fn strict_content_entries(dir: &Path) -> Result<Vec<StrictContentEntry>> {
+    // Canonicalizing only the entry root deliberately supports a Skill whose
+    // directory itself is a symlink. Internal directory symlinks remain visible
+    // to WalkDir and are rejected below.
+    let root = std::fs::canonicalize(dir)
+        .with_context(|| format!("Failed to resolve skill root {}", dir.display()))?;
+    if !std::fs::metadata(&root)
+        .with_context(|| format!("Failed to inspect skill root {}", root.display()))?
+        .is_dir()
+    {
+        bail!("Skill root is not a directory: {}", dir.display());
+    }
+
+    strict_content_entries_at_root(&root)
+}
+
+fn strict_content_entries_at_root(root: &Path) -> Result<Vec<StrictContentEntry>> {
+    let mut entries = Vec::new();
+    let walker = WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
+            entry.depth() == 0 || !is_ignored(&entry.file_name().to_string_lossy())
+        });
+
+    for item in walker {
+        let entry = item.with_context(|| format!("Failed to walk {}", root.display()))?;
+        if entry.depth() == 0 {
+            continue;
+        }
+
+        let file_type = entry.file_type();
+        if file_type.is_dir() {
+            continue;
+        }
+
+        let relative = entry.path().strip_prefix(root).with_context(|| {
+            format!(
+                "Content path {} escaped skill root {}",
+                entry.path().display(),
+                root.display()
+            )
+        })?;
+        let relative_path = normalized_path_text(relative, "Relative content path")?;
+
+        if file_type.is_symlink() {
+            let target = std::fs::read_link(entry.path()).with_context(|| {
+                format!("Failed to read file symlink {}", entry.path().display())
+            })?;
+            let target_text = normalized_path_text(&target, "Symlink target")?;
+            let target_metadata = std::fs::metadata(entry.path()).with_context(|| {
+                format!(
+                    "Broken or unreadable file symlink {} -> {}",
+                    entry.path().display(),
+                    target.display()
+                )
+            })?;
+            if target_metadata.is_dir() {
+                bail!(
+                    "Directory symlinks are not supported by {}: {} -> {}",
+                    STRICT_DIRECTORY_DIGEST_ALGORITHM,
+                    entry.path().display(),
+                    target.display()
+                );
+            }
+            if !target_metadata.is_file() {
+                bail!(
+                    "Unsupported symlink target in skill content: {} -> {}",
+                    entry.path().display(),
+                    target.display()
+                );
+            }
+            entries.push(StrictContentEntry {
+                relative_path,
+                path: entry.into_path(),
+                link_target: Some(target_text),
+            });
+        } else if file_type.is_file() {
+            entries.push(StrictContentEntry {
+                relative_path,
+                path: entry.into_path(),
+                link_target: None,
+            });
+        } else {
+            bail!(
+                "Unsupported filesystem entry in skill content: {}",
+                entry.path().display()
+            );
+        }
+    }
+
+    entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    Ok(entries)
+}
+
+fn hash_strict_file_contents(hasher: &mut Sha256, path: &Path, expected_len: u64) -> Result<()> {
+    let mut file = File::open(path)
+        .with_context(|| format!("Failed to open skill content {}", path.display()))?;
+    hash_strict_reader_contents(hasher, &mut file, path, expected_len)
+}
+
+fn hash_strict_reader_contents<R: Read>(
+    hasher: &mut Sha256,
+    reader: &mut R,
+    path: &Path,
+    expected_len: u64,
+) -> Result<()> {
+    strict_field_header(hasher, b"content", expected_len);
+    let mut buffer = [0u8; STRICT_HASH_BUFFER_SIZE];
+    let mut total = 0u64;
+
+    loop {
+        let read = reader
+            .read(&mut buffer)
+            .with_context(|| format!("Failed to read skill content {}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        total = total
+            .checked_add(read as u64)
+            .context("Skill content length overflow while hashing")?;
+        if total > expected_len {
+            bail!("Skill content changed while hashing: {}", path.display());
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    if total != expected_len {
+        bail!("Skill content changed while hashing: {}", path.display());
+    }
+    Ok(())
+}
+
+/// Strict, streaming whole-directory digest for foundation inventory.
+///
+/// Encoding contract (all fields are domain-tagged and length-prefixed):
+///
+/// ```text
+/// format(scm-dir-v2)
+///   └─ entry(kind, relative-path, [link-target], exec-bits, content-bytes)*
+/// ```
+///
+/// Any walk, metadata, symlink, open or read error fails the whole digest. A
+/// symlinked root is supported; file symlinks include both their target text
+/// and target bytes; internal directory symlinks fail closed. Relative paths
+/// and symlink target text must be valid UTF-8 or the digest fails closed.
+pub fn hash_directory_strict_v2(dir: &Path) -> Result<String> {
+    let entries = strict_content_entries(dir)?;
+    let mut hasher = Sha256::new();
+    strict_field(
+        &mut hasher,
+        b"format",
+        STRICT_DIRECTORY_DIGEST_ALGORITHM.as_bytes(),
+    );
+
+    for entry in entries {
+        strict_field(&mut hasher, b"entry", b"begin");
+        strict_field(&mut hasher, b"path", entry.relative_path.as_bytes());
+
+        if let Some(expected_target) = entry.link_target.as_deref() {
+            let current_target = std::fs::read_link(&entry.path).with_context(|| {
+                format!("Failed to re-read file symlink {}", entry.path.display())
+            })?;
+            let current_target = normalized_path_text(&current_target, "Symlink target")?;
+            if current_target != expected_target {
+                bail!(
+                    "File symlink changed while hashing: {}",
+                    entry.path.display()
+                );
+            }
+            strict_field(&mut hasher, b"kind", b"file-symlink");
+            strict_field(&mut hasher, b"link-target", expected_target.as_bytes());
+        } else {
+            strict_field(&mut hasher, b"kind", b"file");
+        }
+
+        let metadata = std::fs::metadata(&entry.path)
+            .with_context(|| format!("Failed to inspect content {}", entry.path.display()))?;
+        if !metadata.is_file() {
+            bail!("Content is no longer a file: {}", entry.path.display());
+        }
+
+        let exec_bits = strict_exec_bits(&metadata);
+        strict_field(&mut hasher, b"exec-bits", &exec_bits.to_be_bytes());
+
+        hash_strict_file_contents(&mut hasher, &entry.path, metadata.len())?;
+        strict_field(&mut hasher, b"entry", b"end");
+    }
+
+    Ok(hex::encode(hasher.finalize()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
+    use std::io::{self, Cursor};
     use tempfile::tempdir;
 
     /// Project-workspace skills may now be symlinks to the central library
@@ -333,5 +584,226 @@ mod tests {
         let by_name = |name: &str| entries.iter().find(|e| e.relative_path == name).unwrap();
         assert!(by_name("run.sh").is_executable());
         assert!(!by_name("plain.txt").is_executable());
+    }
+
+    #[test]
+    fn strict_v2_is_framed_against_path_content_collisions() {
+        let first = tempdir().unwrap();
+        fs::write(first.path().join("a"), "bc").unwrap();
+        let second = tempdir().unwrap();
+        fs::write(second.path().join("ab"), "c").unwrap();
+
+        // The legacy stream concatenates path+content and therefore collides.
+        assert_eq!(
+            hash_directory(first.path()).unwrap(),
+            hash_directory(second.path()).unwrap()
+        );
+        assert_ne!(
+            hash_directory_strict_v2(first.path()).unwrap(),
+            hash_directory_strict_v2(second.path()).unwrap()
+        );
+    }
+
+    #[test]
+    fn strict_v2_is_deterministic_and_ignores_ephemeral_files() {
+        let first = tempdir().unwrap();
+        fs::create_dir(first.path().join("nested")).unwrap();
+        fs::write(first.path().join("SKILL.md"), "# demo").unwrap();
+        fs::write(first.path().join("nested/run.py"), "print('ok')").unwrap();
+
+        let second = tempdir().unwrap();
+        fs::create_dir(second.path().join("nested")).unwrap();
+        fs::write(second.path().join("SKILL.md"), "# demo").unwrap();
+        fs::write(second.path().join("nested/run.py"), "print('ok')").unwrap();
+        fs::write(second.path().join(".DS_Store"), "ignored").unwrap();
+        fs::create_dir(second.path().join("__pycache__")).unwrap();
+        fs::write(second.path().join("__pycache__/run.pyc"), "ignored").unwrap();
+
+        assert_eq!(
+            hash_directory_strict_v2(first.path()).unwrap(),
+            hash_directory_strict_v2(second.path()).unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_v2_hashes_file_symlink_target_and_content() {
+        let tmp = tempdir().unwrap();
+        let first_target = tmp.path().join("first.md");
+        let second_target = tmp.path().join("second.md");
+        fs::write(&first_target, "same bytes").unwrap();
+        fs::write(&second_target, "same bytes").unwrap();
+        let skill = tmp.path().join("skill");
+        fs::create_dir(&skill).unwrap();
+        let marker = skill.join("SKILL.md");
+        std::os::unix::fs::symlink(&first_target, &marker).unwrap();
+
+        let original = hash_directory_strict_v2(&skill).unwrap();
+        fs::write(&first_target, "changed bytes").unwrap();
+        let content_changed = hash_directory_strict_v2(&skill).unwrap();
+        assert_ne!(original, content_changed);
+
+        fs::write(&first_target, "same bytes").unwrap();
+        fs::remove_file(&marker).unwrap();
+        std::os::unix::fs::symlink(&second_target, &marker).unwrap();
+        let target_changed = hash_directory_strict_v2(&skill).unwrap();
+        assert_ne!(original, target_changed);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_v2_rejects_broken_and_directory_symlinks() {
+        let tmp = tempdir().unwrap();
+        let skill = tmp.path().join("skill");
+        fs::create_dir(&skill).unwrap();
+        let broken = skill.join("SKILL.md");
+        std::os::unix::fs::symlink(tmp.path().join("missing.md"), &broken).unwrap();
+        assert!(hash_directory_strict_v2(&skill).is_err());
+
+        fs::remove_file(&broken).unwrap();
+        fs::write(skill.join("SKILL.md"), "# demo").unwrap();
+        let directory = tmp.path().join("linked-dir");
+        fs::create_dir(&directory).unwrap();
+        std::os::unix::fs::symlink(&directory, skill.join("nested")).unwrap();
+        let error = hash_directory_strict_v2(&skill).unwrap_err();
+        assert!(
+            error.to_string().contains("Directory symlinks"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_v2_supports_symlinked_root_and_hashes_exec_bits() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempdir().unwrap();
+        let real = tmp.path().join("skill");
+        fs::create_dir(&real).unwrap();
+        let script = real.join("run.sh");
+        fs::write(&script, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o644)).unwrap();
+        let link = tmp.path().join("linked-skill");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let initial = hash_directory_strict_v2(&real).unwrap();
+        assert_eq!(initial, hash_directory_strict_v2(&link).unwrap());
+
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_ne!(initial, hash_directory_strict_v2(&real).unwrap());
+    }
+
+    #[test]
+    fn strict_v2_rejects_missing_or_non_directory_roots() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("not-a-directory");
+        fs::write(&file, "content").unwrap();
+
+        assert!(hash_directory_strict_v2(&file).is_err());
+        assert!(hash_directory_strict_v2(&tmp.path().join("missing")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_v2_rejects_non_utf8_relative_paths() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let invalid_name = std::ffi::OsString::from_vec(vec![b'n', b'a', b'm', b'e', 0xff]);
+        let invalid_path = PathBuf::from(invalid_name);
+        let error = normalized_path_text(&invalid_path, "Relative path").unwrap_err();
+        assert!(
+            error.to_string().contains("not valid UTF-8"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn strict_v2_propagates_open_and_read_errors() {
+        let tmp = tempdir().unwrap();
+        let missing = tmp.path().join("missing.md");
+        let open_error = hash_strict_file_contents(&mut Sha256::new(), &missing, 1).unwrap_err();
+        assert!(
+            open_error
+                .to_string()
+                .contains("Failed to open skill content"),
+            "unexpected error: {open_error}"
+        );
+
+        struct FailingReader {
+            returned_bytes: bool,
+        }
+
+        impl Read for FailingReader {
+            fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+                if self.returned_bytes {
+                    return Err(io::Error::other("injected read failure"));
+                }
+                self.returned_bytes = true;
+                buffer[..3].copy_from_slice(b"abc");
+                Ok(3)
+            }
+        }
+
+        let mut reader = FailingReader {
+            returned_bytes: false,
+        };
+        let read_error = hash_strict_reader_contents(
+            &mut Sha256::new(),
+            &mut reader,
+            Path::new("injected.md"),
+            4,
+        )
+        .unwrap_err();
+        assert!(
+            read_error
+                .to_string()
+                .contains("Failed to read skill content"),
+            "unexpected error: {read_error}"
+        );
+    }
+
+    #[test]
+    fn strict_v2_propagates_directory_walk_errors() {
+        let tmp = tempdir().unwrap();
+        let removed_root = tmp.path().join("removed-before-walk");
+        fs::create_dir(&removed_root).unwrap();
+        let canonical_root = fs::canonicalize(&removed_root).unwrap();
+        fs::remove_dir(&removed_root).unwrap();
+
+        let error = strict_content_entries_at_root(&canonical_root).unwrap_err();
+        assert!(
+            error.to_string().contains("Failed to walk"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn strict_streaming_matches_direct_framing_across_buffer_boundaries() {
+        for size in [
+            0,
+            STRICT_HASH_BUFFER_SIZE - 1,
+            STRICT_HASH_BUFFER_SIZE,
+            STRICT_HASH_BUFFER_SIZE + 1,
+            STRICT_HASH_BUFFER_SIZE * 2 + 1,
+        ] {
+            let bytes = vec![0x5a; size];
+            let mut reader = Cursor::new(bytes.as_slice());
+            let mut streamed = Sha256::new();
+            hash_strict_reader_contents(
+                &mut streamed,
+                &mut reader,
+                Path::new("boundary.bin"),
+                size as u64,
+            )
+            .unwrap();
+
+            let mut direct = Sha256::new();
+            strict_field(&mut direct, b"content", &bytes);
+            assert_eq!(
+                streamed.finalize(),
+                direct.finalize(),
+                "stream framing differed at {size} bytes"
+            );
+        }
     }
 }

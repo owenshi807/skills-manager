@@ -5,10 +5,28 @@ pub struct SkillMeta {
     pub description: Option<String>,
 }
 
-fn read_named_file_exact(dir: &Path, target_name: &str) -> Option<String> {
+fn is_marker_file(entry: &std::fs::DirEntry, follow_file_symlinks: bool) -> bool {
+    if follow_file_symlinks {
+        // Agent installers may link only SKILL.md. Path::is_file follows a
+        // readable file symlink while still rejecting directories and broken
+        // links, matching what the Agent itself can consume.
+        entry.path().is_file()
+    } else {
+        entry
+            .file_type()
+            .map(|file_type| file_type.is_file())
+            .unwrap_or(false)
+    }
+}
+
+fn read_named_file_exact(
+    dir: &Path,
+    target_name: &str,
+    follow_file_symlinks: bool,
+) -> Option<String> {
     let entries = std::fs::read_dir(dir).ok()?;
     for entry in entries.flatten() {
-        if !entry.file_type().ok()?.is_file() {
+        if !is_marker_file(&entry, follow_file_symlinks) {
             continue;
         }
         if entry.file_name().to_string_lossy() == target_name {
@@ -18,23 +36,34 @@ fn read_named_file_exact(dir: &Path, target_name: &str) -> Option<String> {
     None
 }
 
-fn has_named_file_exact(dir: &Path, target_name: &str) -> bool {
+fn has_named_file_exact(dir: &Path, target_name: &str, follow_file_symlinks: bool) -> bool {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return false;
     };
     entries.flatten().any(|entry| {
-        entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
+        is_marker_file(&entry, follow_file_symlinks)
             && entry.file_name().to_string_lossy() == target_name
     })
 }
 
 pub fn parse_skill_md(dir: &Path) -> SkillMeta {
-    parse_skill_md_with_candidates(dir, &["SKILL.md", "skill.md"])
+    parse_skill_md_with_candidates(dir, &["SKILL.md", "skill.md"], false)
 }
 
-fn parse_skill_md_with_candidates(dir: &Path, candidates: &[&str]) -> SkillMeta {
+/// Parse metadata for the strict discovery path, where a readable file
+/// symlink is a valid Agent-consumable marker. Legacy callers intentionally
+/// stay on [`parse_skill_md`] until they also adopt `scm-dir-v2` identity.
+pub fn parse_skill_md_with_file_symlinks(dir: &Path) -> SkillMeta {
+    parse_skill_md_with_candidates(dir, &["SKILL.md", "skill.md"], true)
+}
+
+fn parse_skill_md_with_candidates(
+    dir: &Path,
+    candidates: &[&str],
+    follow_file_symlinks: bool,
+) -> SkillMeta {
     for candidate in candidates {
-        if let Some(content) = read_named_file_exact(dir, candidate) {
+        if let Some(content) = read_named_file_exact(dir, candidate, follow_file_symlinks) {
             return parse_frontmatter(&content);
         }
     }
@@ -84,7 +113,17 @@ pub fn is_valid_skill_dir(dir: &Path) -> bool {
     dir.is_dir()
         && SKILL_DIR_MARKERS
             .iter()
-            .any(|name| has_named_file_exact(dir, name))
+            .any(|name| has_named_file_exact(dir, name, false))
+}
+
+/// Strict discovery predicate that accepts a readable file-symlink marker.
+/// It is deliberately side-by-side with the legacy predicate so PR1 cannot
+/// expose linked markers to the lossy legacy fingerprint/identity pipeline.
+pub fn is_valid_skill_dir_with_file_symlinks(dir: &Path) -> bool {
+    dir.is_dir()
+        && SKILL_DIR_MARKERS
+            .iter()
+            .any(|name| has_named_file_exact(dir, name, true))
 }
 
 /// Characters that are invalid in Windows file/directory names.
@@ -247,6 +286,44 @@ mod tests {
         let meta = parse_skill_md(tmp.path());
         assert_eq!(meta.name.as_deref(), Some("from-lowercase"));
         assert_eq!(meta.description.as_deref(), Some("desc"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_metadata_path_accepts_file_symlink_without_widening_legacy_scanner() {
+        let tmp = tempdir().unwrap();
+        let source = tmp.path().join("source.md");
+        fs::write(
+            &source,
+            "---\nname: linked-skill\ndescription: linked\n---\n",
+        )
+        .unwrap();
+        let skill = tmp.path().join("skill");
+        fs::create_dir(&skill).unwrap();
+        std::os::unix::fs::symlink(&source, skill.join("SKILL.md")).unwrap();
+
+        assert!(!is_valid_skill_dir(&skill));
+        assert_eq!(parse_skill_md(&skill).name, None);
+
+        assert!(is_valid_skill_dir_with_file_symlinks(&skill));
+        let meta = parse_skill_md_with_file_symlinks(&skill);
+        assert_eq!(meta.name.as_deref(), Some("linked-skill"));
+        assert_eq!(meta.description.as_deref(), Some("linked"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn broken_skill_md_file_symlink_is_not_a_valid_marker() {
+        let tmp = tempdir().unwrap();
+        std::os::unix::fs::symlink(tmp.path().join("missing.md"), tmp.path().join("SKILL.md"))
+            .unwrap();
+
+        assert!(!is_valid_skill_dir(tmp.path()));
+        assert!(!is_valid_skill_dir_with_file_symlinks(tmp.path()));
+        let meta = parse_skill_md(tmp.path());
+        assert_eq!(meta.name, None);
+        assert_eq!(meta.description, None);
+        assert_eq!(parse_skill_md_with_file_symlinks(tmp.path()).name, None);
     }
 
     #[test]
