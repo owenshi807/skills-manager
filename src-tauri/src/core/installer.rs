@@ -138,11 +138,58 @@ pub fn install_from_git_dir(source: &Path, name: Option<&str>) -> Result<Install
     install_from_local(source, name)
 }
 
+/// Fail closed when the legacy copier cannot preserve the source tree.
+///
+/// `copy_skill_dir` intentionally skips symlinks to prevent exfiltration. A
+/// silent skip is not a valid Import, though: it can create a managed Skill
+/// without its linked `SKILL.md` or another required file. This read-only
+/// preflight therefore runs before any destination deletion/creation.
+pub fn preflight_copy_source(source: &Path) -> Result<()> {
+    let root_metadata = std::fs::symlink_metadata(source)
+        .with_context(|| format!("Failed to inspect import source {}", source.display()))?;
+    if root_metadata.file_type().is_symlink() {
+        bail!(
+            "Import source is a symlink and current copy mode cannot preserve it: {}",
+            source.display()
+        );
+    }
+    if !root_metadata.is_dir() {
+        bail!("Import source is not a directory: {}", source.display());
+    }
+
+    for item in WalkDir::new(source)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| entry.depth() == 0 || !is_ignored_copy_entry(entry.file_name()))
+    {
+        let entry =
+            item.with_context(|| format!("Failed to inspect import source {}", source.display()))?;
+        if entry.depth() == 0 {
+            continue;
+        }
+        let file_type = entry.file_type();
+        if file_type.is_symlink() {
+            bail!(
+                "Import source contains a symlink that current copy mode cannot preserve: {}",
+                entry.path().display()
+            );
+        }
+        if !file_type.is_dir() && !file_type.is_file() {
+            bail!(
+                "Import source contains an unsupported filesystem entry that current copy mode cannot preserve: {}",
+                entry.path().display()
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn install_skill_dir_to_destination(
     source: &Path,
     name: &str,
     destination: &Path,
 ) -> Result<InstallResult> {
+    preflight_copy_source(source)?;
     let meta = skill_metadata::parse_skill_md(source);
 
     sync_engine::ensure_dst_not_inside_src(source, destination)?;
@@ -169,6 +216,17 @@ pub fn install_skill_dir_to_destination(
 fn safe_extract(archive: &mut zip::ZipArchive<std::fs::File>, dest: &Path) -> Result<()> {
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
+
+        if entry
+            .unix_mode()
+            .map(|mode| mode & 0o170000 == 0o120000)
+            .unwrap_or(false)
+        {
+            bail!(
+                "Archive contains a symlink that current copy mode cannot preserve: {}",
+                entry.name()
+            );
+        }
 
         // enclosed_name() returns None for absolute paths and entries that
         // contain `..` components, so those are silently skipped.
@@ -237,15 +295,17 @@ fn unique_skill_dest(parent: &Path, sanitized_name: &str, source: &Path) -> Resu
     Ok(parent.join(sanitized_name))
 }
 
+fn is_ignored_copy_entry(name: &std::ffi::OsStr) -> bool {
+    name == ".git" || name == ".DS_Store"
+}
+
 fn copy_skill_dir(src: &Path, dst: &Path) -> Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let ft = entry.file_type()?;
         let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        if name_str == ".git" || name_str == ".DS_Store" {
+        if is_ignored_copy_entry(&name) {
             continue;
         }
 
@@ -345,6 +405,98 @@ mod tests {
         assert!(!destination.exists());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn install_rejects_symlink_source_before_destination_mutation() {
+        let tmp = tempdir().unwrap();
+        let target = tmp.path().join("marker.md");
+        std::fs::write(&target, "---\nname: linked\n---\n").unwrap();
+        let source = tmp.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        std::os::unix::fs::symlink(&target, source.join("SKILL.md")).unwrap();
+
+        let destination = tmp.path().join("destination");
+        std::fs::create_dir(&destination).unwrap();
+        std::fs::write(destination.join("sentinel.txt"), "keep me").unwrap();
+
+        let error = install_skill_dir_to_destination(&source, "linked", &destination)
+            .err()
+            .expect("expected symlink refusal");
+        assert!(
+            error.to_string().contains("cannot preserve"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(destination.join("sentinel.txt")).unwrap(),
+            "keep me"
+        );
+        assert!(!destination.join("SKILL.md").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preflight_rejects_symlinked_root_and_nested_symlink() {
+        let tmp = tempdir().unwrap();
+        let source = make_skill_dir(tmp.path(), "source", Some("source"));
+        let source_link = tmp.path().join("source-link");
+        std::os::unix::fs::symlink(&source, &source_link).unwrap();
+        assert!(preflight_copy_source(&source_link).is_err());
+
+        let nested_target = tmp.path().join("nested-target.txt");
+        std::fs::write(&nested_target, "target").unwrap();
+        std::fs::create_dir(source.join("nested")).unwrap();
+        std::os::unix::fs::symlink(&nested_target, source.join("nested/link.txt")).unwrap();
+        assert!(preflight_copy_source(&source).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_rejects_special_entry_before_destination_mutation() {
+        let tmp = tempdir().unwrap();
+        let source = make_skill_dir(tmp.path(), "source", Some("source"));
+        let fifo = source.join("runtime.fifo");
+        let status = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let destination = tmp.path().join("destination");
+        std::fs::create_dir(&destination).unwrap();
+        std::fs::write(destination.join("sentinel.txt"), "keep me").unwrap();
+
+        let error = install_skill_dir_to_destination(&source, "source", &destination)
+            .err()
+            .expect("expected special-file refusal");
+        assert!(
+            error.to_string().contains("unsupported filesystem entry"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(destination.join("sentinel.txt")).unwrap(),
+            "keep me"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preflight_and_copy_share_the_same_ignored_entry_scope() {
+        let tmp = tempdir().unwrap();
+        let source = make_skill_dir(tmp.path(), "source", Some("source"));
+        let git_dir = source.join(".git");
+        std::fs::create_dir(&git_dir).unwrap();
+        let outside = tmp.path().join("outside.txt");
+        std::fs::write(&outside, "outside").unwrap();
+        std::os::unix::fs::symlink(&outside, git_dir.join("linked-object")).unwrap();
+        std::fs::write(source.join(".DS_Store"), "ignored").unwrap();
+
+        let destination = tmp.path().join("destination");
+        install_skill_dir_to_destination(&source, "source", &destination).unwrap();
+
+        assert!(destination.join("SKILL.md").is_file());
+        assert!(!destination.join(".git").exists());
+        assert!(!destination.join(".DS_Store").exists());
+    }
+
     #[test]
     fn unique_dest_legacy_no_metadata_base_can_reinstall_if_content_matches() {
         let tmp = tempdir().unwrap();
@@ -396,5 +548,29 @@ mod tests {
         let second_hash = hash_local_source(&archive).unwrap();
 
         assert_ne!(first_hash, second_hash);
+    }
+
+    #[test]
+    fn archive_import_rejects_symlink_entries() {
+        let tmp = tempdir().unwrap();
+        let archive_path = tmp.path().join("linked.skill");
+        let file = std::fs::File::create(&archive_path).unwrap();
+        let mut archive = zip::ZipWriter::new(file);
+        archive
+            .add_symlink(
+                "demo-skill/SKILL.md",
+                "../outside.md",
+                SimpleFileOptions::default(),
+            )
+            .unwrap();
+        archive.finish().unwrap();
+
+        let error = install_from_local(&archive_path, None)
+            .err()
+            .expect("expected archive symlink refusal");
+        assert!(
+            error.to_string().contains("Archive contains a symlink"),
+            "unexpected error: {error}"
+        );
     }
 }
