@@ -68,6 +68,7 @@ pub struct DiscoveryRoot {
 pub struct DiscoveryDiagnostic {
     pub code: String,
     pub owner_ref: Option<String>,
+    pub found_path: Option<String>,
     pub message: String,
 }
 

@@ -34,6 +34,7 @@ pub struct DiscoveredLocation {
     pub tool: String,
     pub found_path: String,
     pub provenance: Option<DiscoveryProvenance>,
+    pub content_error: Option<String>,
 }
 
 /// Directories to skip during recursive scans (internal/tool-specific metadata).
@@ -104,21 +105,25 @@ pub fn scan_local_skills_with_adapters(
     scan_discovery_roots(managed_paths, input)
 }
 
-/// Scan a frozen set of host roots with strict, versioned content identity.
-/// Any filesystem or digest error aborts before a snapshot can be persisted.
+/// Scan frozen host roots with strict, versioned content identity. Discovery
+/// errors abort the snapshot; a known Skill whose content cannot be proven is
+/// retained with no digest and an explicit diagnostic.
 pub fn scan_discovery_roots(managed_paths: &[String], input: DiscoveryInput) -> Result<ScanPlan> {
     let managed = canonical_managed_paths(managed_paths)?;
-    let tools_scanned = input
-        .roots
+    let DiscoveryInput {
+        roots,
+        mut diagnostics,
+    } = input;
+    let tools_scanned = roots
         .iter()
         .map(|root| root.host_key.as_str())
         .collect::<BTreeSet<_>>()
         .len();
     let mut discovered = Vec::new();
 
-    for root in &input.roots {
+    for root in &roots {
         for path in collect_strict_skill_dirs(root)? {
-            push_strict_discovered(root, path, &managed, &mut discovered)?;
+            push_strict_discovered(root, path, &managed, &mut discovered, &mut diagnostics)?;
         }
     }
 
@@ -127,7 +132,7 @@ pub fn scan_discovery_roots(managed_paths: &[String], input: DiscoveryInput) -> 
         tools_scanned,
         skills_found,
         discovered,
-        diagnostics: input.diagnostics,
+        diagnostics,
     })
 }
 
@@ -191,9 +196,6 @@ fn collect_strict_children(
         if !file_type.is_dir() && !file_type.is_symlink() {
             continue;
         }
-        if is_symlink_to_central(&path) {
-            continue;
-        }
         if is_strict_skill_dir(&path)? {
             results.push(path);
             continue;
@@ -243,15 +245,10 @@ fn is_strict_skill_dir(path: &Path) -> Result<bool> {
             return Ok(true);
         }
         if file_type.is_symlink() {
-            let target = std::fs::metadata(entry.path()).with_context(|| {
-                format!(
-                    "Broken or unreadable Skill marker {}",
-                    entry.path().display()
-                )
-            })?;
-            if target.is_file() {
-                return Ok(true);
-            }
+            // The exact marker symlink is itself enough to identify a broken
+            // Skill projection. Content proof below determines whether the
+            // Agent-readable target is complete and records Unknown if not.
+            return Ok(true);
         }
     }
     Ok(false)
@@ -262,6 +259,7 @@ fn push_strict_discovered(
     path: PathBuf,
     managed_paths: &HashSet<PathBuf>,
     discovered: &mut Vec<DiscoveredSkillRecord>,
+    diagnostics: &mut Vec<DiscoveryDiagnostic>,
 ) -> Result<()> {
     let canonical = std::fs::canonicalize(&path)
         .with_context(|| format!("Cannot resolve discovered Skill {}", path.display()))?;
@@ -303,12 +301,27 @@ fn push_strict_discovered(
         .with_context(|| format!("Invalid modification time for {}", path.display()))?
         .as_millis() as i64;
 
+    let (fingerprint, content_error) = match content_hash::hash_directory_strict_v2(&path) {
+        Ok(digest) => (Some(digest), None),
+        Err(error) => {
+            let message = format!("Cannot prove complete Skill content at {path_text}: {error:#}");
+            diagnostics.push(DiscoveryDiagnostic {
+                code: "content_unverifiable".to_string(),
+                owner_ref: Some(provenance.owner_ref.clone()),
+                found_path: Some(path_text.clone()),
+                message: message.clone(),
+            });
+            (None, Some(message))
+        }
+    };
+
     discovered.push(DiscoveredSkillRecord {
         id: uuid::Uuid::new_v4().to_string(),
         tool: root.host_key.clone(),
         found_path: path_text,
         name_guess: Some(skill_metadata::infer_skill_name_with_file_symlinks(&path)),
-        fingerprint: Some(content_hash::hash_directory_strict_v2(&path)?),
+        fingerprint,
+        content_error,
         found_at,
         imported_skill_id: None,
         provenance: Some(provenance),
@@ -366,6 +379,7 @@ pub fn group_discovered(records: &[DiscoveredSkillRecord]) -> Vec<DiscoveredGrou
             tool: rec.tool.clone(),
             found_path: rec.found_path.clone(),
             provenance: rec.provenance.clone(),
+            content_error: rec.content_error.clone(),
         });
     }
 
@@ -615,6 +629,57 @@ mod tests {
         assert!(error.to_string().contains("non-Skill directory symlink"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn known_skill_with_unverifiable_content_is_retained_as_unknown() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let skill = root.join("linked-content");
+        let target = tmp.path().join("external-bin");
+        write_skill(&skill);
+        fs::create_dir_all(&target).unwrap();
+        fs::write(target.join("tool"), "binary").unwrap();
+        std::os::unix::fs::symlink(&target, skill.join("bin")).unwrap();
+
+        let plan = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![discovery_root(&root, "plugin@market", Traversal::Flat)],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap();
+        assert_eq!(plan.skills_found, 1);
+        assert_eq!(plan.discovered[0].fingerprint, None);
+        assert!(plan.discovered[0].content_error.is_some());
+        assert_eq!(plan.diagnostics.len(), 1);
+        assert_eq!(plan.diagnostics[0].code, "content_unverifiable");
+        assert_eq!(plan.diagnostics[0].found_path.as_deref(), skill.to_str());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn broken_marker_projection_is_retained_as_unknown() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let skill = root.join("broken-marker");
+        fs::create_dir_all(&skill).unwrap();
+        std::os::unix::fs::symlink(tmp.path().join("missing-skill.md"), skill.join("SKILL.md"))
+            .unwrap();
+        let plan = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![discovery_root(&root, "plugin@market", Traversal::Flat)],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap();
+        assert_eq!(plan.skills_found, 1);
+        assert_eq!(plan.discovered[0].fingerprint, None);
+        assert!(plan.discovered[0].content_error.is_some());
+        assert_eq!(plan.diagnostics[0].code, "content_unverifiable");
+    }
+
     #[test]
     fn grouping_keeps_same_name_different_fingerprint_separate() {
         let records = vec![
@@ -624,6 +689,7 @@ mod tests {
                 found_path: "/tmp/one".into(),
                 name_guess: Some("shared".into()),
                 fingerprint: Some("hash-a".into()),
+                content_error: None,
                 found_at: 10,
                 imported_skill_id: None,
                 provenance: None,
@@ -634,6 +700,7 @@ mod tests {
                 found_path: "/tmp/two".into(),
                 name_guess: Some("shared".into()),
                 fingerprint: Some("hash-b".into()),
+                content_error: None,
                 found_at: 20,
                 imported_skill_id: None,
                 provenance: None,
@@ -653,6 +720,7 @@ mod tests {
                 found_path: "/tmp/one".into(),
                 name_guess: Some("shared".into()),
                 fingerprint: Some("hash-a".into()),
+                content_error: None,
                 found_at: 10,
                 imported_skill_id: None,
                 provenance: None,
@@ -663,6 +731,7 @@ mod tests {
                 found_path: "/tmp/two".into(),
                 name_guess: Some("shared".into()),
                 fingerprint: Some("hash-a".into()),
+                content_error: None,
                 found_at: 20,
                 imported_skill_id: None,
                 provenance: None,
@@ -682,6 +751,7 @@ mod tests {
             found_path: "/tmp/one".into(),
             name_guess: Some("shared".into()),
             fingerprint: Some("same-digest".into()),
+            content_error: None,
             found_at: 10,
             imported_skill_id: None,
             provenance: Some(discovery_root(tmp.path(), "one@market", Traversal::Flat).provenance),
@@ -703,11 +773,12 @@ mod tests {
         use crate::core::host_discovery::DiscoverySourceKind;
         use crate::core::skill_store::SkillStore;
 
-        let codex = tool_adapters::default_tool_adapters()
+        let adapters = tool_adapters::default_tool_adapters()
             .into_iter()
-            .find(|adapter| adapter.key == "codex")
-            .expect("default Codex adapter");
-        let input = crate::core::host_discovery::discovery_input_for_adapters(&[codex]).unwrap();
+            .filter(|adapter| matches!(adapter.key.as_str(), "claude_code" | "codex"))
+            .collect::<Vec<_>>();
+        assert_eq!(adapters.len(), 2);
+        let input = crate::core::host_discovery::discovery_input_for_adapters(&adapters).unwrap();
         let enabled_owners = input
             .roots
             .iter()
@@ -726,15 +797,55 @@ mod tests {
                 })
                 .count();
         let plugin = plan.skills_found - loose;
+        let loose_by_source = plan
+            .discovered
+            .iter()
+            .filter_map(|record| record.provenance.as_ref())
+            .filter(|provenance| provenance.source_kind == DiscoverySourceKind::Loose)
+            .fold(
+                std::collections::BTreeMap::new(),
+                |mut counts, provenance| {
+                    *counts
+                        .entry(provenance.source_ref.clone())
+                        .or_insert(0usize) += 1;
+                    counts
+                },
+            );
 
         let tmp = tempdir().unwrap();
         let store = SkillStore::new(&tmp.path().join("acceptance.db")).unwrap();
         store.replace_discovered(&plan.discovered).unwrap();
-        assert_eq!(store.get_all_discovered().unwrap().len(), plan.skills_found);
-        assert!(plan.diagnostics.is_empty());
+        let persisted = store.get_all_discovered().unwrap();
+        assert_eq!(persisted.len(), plan.skills_found);
+        eprintln!("E0 live diagnostics: {:#?}", plan.diagnostics);
         assert_eq!(enabled_owners, 16);
-        assert_eq!(loose, 357);
+        assert_eq!(loose, 493);
         assert_eq!(plugin, 66);
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(
+            loose_by_source.get(&home.join(".agents/skills").to_string_lossy().to_string()),
+            Some(&110)
+        );
+        assert_eq!(
+            loose_by_source.get(&home.join(".claude/skills").to_string_lossy().to_string()),
+            Some(&168)
+        );
+        assert_eq!(
+            loose_by_source.get(&home.join(".codex/skills").to_string_lossy().to_string()),
+            Some(&215)
+        );
+        assert_eq!(plan.diagnostics.len(), 11);
+        assert!(plan
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code == "content_unverifiable"));
+        assert_eq!(
+            persisted
+                .iter()
+                .filter(|record| record.content_error.is_some())
+                .count(),
+            11
+        );
         eprintln!(
             "E0 live acceptance: {loose} loose + {plugin} plugin projections from {enabled_owners} owners"
         );

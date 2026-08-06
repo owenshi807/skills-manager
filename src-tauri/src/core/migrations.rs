@@ -120,7 +120,8 @@ fn migrate_v0_to_v1(conn: &Connection) -> Result<()> {
             discovery_source_subpath TEXT,
             declared_repository TEXT,
             provenance_basis TEXT,
-            digest_algorithm TEXT
+            digest_algorithm TEXT,
+            content_error TEXT
         );
 
         CREATE TABLE IF NOT EXISTS settings (
@@ -330,6 +331,7 @@ fn migrate_v7_to_v8(conn: &Connection) -> Result<()> {
         ("declared_repository", "TEXT"),
         ("provenance_basis", "TEXT"),
         ("digest_algorithm", "TEXT"),
+        ("content_error", "TEXT"),
     ] {
         add_column_if_missing(conn, "discovered_skills", column, definition)?;
     }
@@ -406,6 +408,7 @@ mod tests {
         assert!(tables.contains(&"audit_log".to_string()));
         assert!(has_column(&conn, "discovered_skills", "owner_ref").unwrap());
         assert!(has_column(&conn, "discovered_skills", "digest_algorithm").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "content_error").unwrap());
     }
 
     #[test]
@@ -457,6 +460,14 @@ mod tests {
             )
             .unwrap();
         assert_eq!(owner, None);
+        let content_error: Option<String> = conn
+            .query_row(
+                "SELECT content_error FROM discovered_skills WHERE id = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(content_error, None);
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();

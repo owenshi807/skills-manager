@@ -72,6 +72,7 @@ pub struct DiscoveredSkillRecord {
     pub found_path: String,
     pub name_guess: Option<String>,
     pub fingerprint: Option<String>,
+    pub content_error: Option<String>,
     pub found_at: i64,
     pub imported_skill_id: Option<String>,
     pub provenance: Option<DiscoveryProvenance>,
@@ -553,7 +554,7 @@ impl SkillStore {
             "SELECT id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id,
                     source_kind, owner_ref, discovery_source_ref, discovery_source_version,
                     discovery_source_revision, discovery_source_subpath, declared_repository,
-                    provenance_basis, digest_algorithm
+                    provenance_basis, digest_algorithm, content_error
              FROM discovered_skills ORDER BY id",
         )?;
         let rows = stmt.query_map([], map_discovered_row)?;
@@ -1520,8 +1521,8 @@ const DISCOVERED_INSERT_SQL: &str = "
         id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id,
         source_kind, owner_ref, discovery_source_ref, discovery_source_version,
         discovery_source_revision, discovery_source_subpath, declared_repository,
-        provenance_basis, digest_algorithm
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)";
+        provenance_basis, digest_algorithm, content_error
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)";
 
 fn insert_discovered_row(conn: &Connection, record: &DiscoveredSkillRecord) -> Result<()> {
     let mut stmt = conn.prepare(DISCOVERED_INSERT_SQL)?;
@@ -1551,6 +1552,7 @@ fn execute_discovered_insert(
         provenance.and_then(|value| value.declared_repository.as_deref()),
         provenance.map(|value| value.provenance_basis.as_str()),
         provenance.map(|value| value.digest_algorithm.as_str()),
+        record.content_error,
     ])
 }
 
@@ -1621,6 +1623,7 @@ fn map_discovered_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DiscoveredSki
         found_at: row.get(5)?,
         imported_skill_id: row.get(6)?,
         provenance,
+        content_error: row.get(16)?,
     })
 }
 
@@ -1637,6 +1640,7 @@ mod discovered_snapshot_tests {
             found_path: format!("/tmp/{id}"),
             name_guess: Some(id.to_string()),
             fingerprint: Some(format!("digest-{id}")),
+            content_error: None,
             found_at: 42,
             imported_skill_id: None,
             provenance: Some(DiscoveryProvenance {
@@ -1657,12 +1661,15 @@ mod discovered_snapshot_tests {
     fn discovered_provenance_round_trips() {
         let tmp = tempdir().unwrap();
         let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
-        let expected = record("alpha", "plugin@market");
+        let mut expected = record("alpha", "plugin@market");
+        expected.fingerprint = None;
+        expected.content_error = Some("content unavailable".to_string());
         store.insert_discovered(&expected).unwrap();
         let rows = store.get_all_discovered().unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].id, expected.id);
         assert_eq!(rows[0].provenance, expected.provenance);
+        assert_eq!(rows[0].content_error, expected.content_error);
     }
 
     #[test]
