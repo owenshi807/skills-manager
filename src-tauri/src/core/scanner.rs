@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 
 use super::content_hash;
 use super::host_discovery::{
-    DiscoveryDiagnostic, DiscoveryInput, DiscoveryProvenance, DiscoveryRoot, Traversal,
+    DiscoveryDiagnostic, DiscoveryInput, DiscoveryProvenance, DiscoveryRoot, DiscoverySourceKind,
+    Traversal,
 };
 use super::skill_metadata;
 use super::skill_store::DiscoveredSkillRecord;
@@ -196,19 +197,25 @@ fn collect_strict_children(
         if !file_type.is_dir() && !file_type.is_symlink() {
             continue;
         }
+        if file_type.is_symlink() {
+            let target = std::fs::metadata(&path)
+                .with_context(|| format!("Broken discovery symlink {}", path.display()))?;
+            // Recursive roots are manifest-declared ownership boundaries. A
+            // directory symlink can point outside that boundary, including to
+            // an otherwise valid Skill, so reject it before Skill detection.
+            // Flat loose roots still accept Agent-facing Skill projections.
+            if recursive && target.is_dir() {
+                bail!(
+                    "Recursive inventory rejects directory symlink: {}",
+                    path.display()
+                );
+            }
+        }
         if is_strict_skill_dir(&path)? {
             results.push(path);
             continue;
         }
         if file_type.is_symlink() {
-            let target = std::fs::metadata(&path)
-                .with_context(|| format!("Broken discovery symlink {}", path.display()))?;
-            if recursive && target.is_dir() {
-                bail!(
-                    "Recursive inventory rejects non-Skill directory symlink: {}",
-                    path.display()
-                );
-            }
             continue;
         }
         if recursive {
@@ -345,18 +352,31 @@ pub fn group_discovered(records: &[DiscoveredSkillRecord]) -> Vec<DiscoveredGrou
 
     for rec in records {
         let name = rec.name_guess.clone().unwrap_or_else(|| "unknown".into());
-        // Content equality is evidence, never ownership. Group only when the
-        // same declared lineage identifies the same source subpath; legacy
-        // rows without provenance remain path-scoped.
-        let group_key = rec.provenance.as_ref().map_or_else(
-            || GroupKey::Path(rec.found_path.clone()),
-            |provenance| GroupKey::Lineage {
+        // Content equality is evidence, never ownership. Versioned package
+        // sources group only by declared lineage; loose and legacy records
+        // group by physical path because several Hosts can consume one shared
+        // directory without creating another import candidate.
+        let canonical_path = || {
+            std::fs::canonicalize(&rec.found_path)
+                .unwrap_or_else(|_| PathBuf::from(&rec.found_path))
+                .to_string_lossy()
+                .to_string()
+        };
+        let group_key = match rec.provenance.as_ref() {
+            // A shared loose directory can be consumed by multiple Hosts. The
+            // physical location is one import candidate even though every Host
+            // observation remains visible in `locations`.
+            Some(provenance) if provenance.source_kind == DiscoverySourceKind::Loose => {
+                GroupKey::Path(canonical_path())
+            }
+            Some(provenance) => GroupKey::Lineage {
                 owner_ref: provenance.owner_ref.clone(),
                 source_ref: provenance.source_ref.clone(),
                 source_revision: provenance.source_revision.clone(),
                 source_subpath: provenance.source_subpath.clone(),
             },
-        );
+            None => GroupKey::Path(canonical_path()),
+        };
         let entry = groups.entry(group_key).or_insert_with(|| DiscoveredGroup {
             name,
             fingerprint: rec.fingerprint.clone(),
@@ -626,7 +646,30 @@ mod tests {
             },
         )
         .unwrap_err();
-        assert!(error.to_string().contains("non-Skill directory symlink"));
+        assert!(error.to_string().contains("directory symlink"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn strict_recursive_scan_rejects_skill_directory_symlink_before_acceptance() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let external_skill = tmp.path().join("external-skill");
+        fs::create_dir_all(&root).unwrap();
+        write_skill(&external_skill);
+        std::os::unix::fs::symlink(&external_skill, root.join("escaped-skill")).unwrap();
+
+        let error = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![discovery_root(&root, "plugin@market", Traversal::Recursive)],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("directory symlink"));
+        assert!(error.to_string().contains("escaped-skill"));
     }
 
     #[cfg(unix)]
@@ -762,6 +805,37 @@ mod tests {
         second.found_path = "/tmp/two".into();
         second.provenance.as_mut().unwrap().owner_ref = "two@market".into();
         assert_eq!(group_discovered(&[first, second]).len(), 2);
+    }
+
+    #[test]
+    fn grouping_merges_shared_loose_path_across_host_observations() {
+        let tmp = tempdir().unwrap();
+        let skill = tmp.path().join("shared");
+        write_skill(&skill);
+        let mut first = DiscoveredSkillRecord {
+            id: "1".into(),
+            tool: "codex".into(),
+            found_path: skill.to_string_lossy().to_string(),
+            name_guess: Some("shared".into()),
+            fingerprint: Some("same-digest".into()),
+            content_error: None,
+            found_at: 10,
+            imported_skill_id: None,
+            provenance: Some(
+                discovery_root(tmp.path(), "codex:shared", Traversal::Flat).provenance,
+            ),
+        };
+        first.provenance.as_mut().unwrap().source_kind = DiscoverySourceKind::Loose;
+        first.provenance.as_mut().unwrap().source_subpath = Some("shared".into());
+        let mut second = first.clone();
+        second.id = "2".into();
+        second.tool = "github_copilot".into();
+        second.provenance.as_mut().unwrap().owner_ref = "github_copilot:shared".into();
+
+        let groups = group_discovered(&[first, second]);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].locations.len(), 2);
     }
 
     /// Explicit live gate: reads the current Codex/Agent roots but persists
