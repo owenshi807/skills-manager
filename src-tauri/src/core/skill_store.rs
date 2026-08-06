@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 use super::audit_log::{AuditDraft, AuditEntry, MAX_ENTRIES as AUDIT_MAX_ENTRIES};
 use super::crypto;
+use super::host_discovery::{DiscoveryProvenance, DiscoverySourceKind};
 
 /// Settings keys whose values are encrypted at rest with AES-256-GCM.
 const SENSITIVE_KEYS: &[&str] = &["proxy_url", "git_backup_remote_url"];
@@ -71,8 +72,10 @@ pub struct DiscoveredSkillRecord {
     pub found_path: String,
     pub name_guess: Option<String>,
     pub fingerprint: Option<String>,
+    pub content_error: Option<String>,
     pub found_at: i64,
     pub imported_skill_id: Option<String>,
+    pub provenance: Option<DiscoveryProvenance>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -525,39 +528,37 @@ impl SkillStore {
 
     pub fn insert_discovered(&self, rec: &DiscoveredSkillRecord) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "INSERT INTO discovered_skills (id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![
-                rec.id,
-                rec.tool,
-                rec.found_path,
-                rec.name_guess,
-                rec.fingerprint,
-                rec.found_at,
-                rec.imported_skill_id,
-            ],
-        )?;
+        insert_discovered_row(&conn, rec)?;
+        Ok(())
+    }
+
+    /// Replace the complete discovered snapshot atomically. Any failed insert
+    /// rolls back the delete and leaves the previous snapshot intact.
+    pub fn replace_discovered(&self, records: &[DiscoveredSkillRecord]) -> Result<()> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        tx.execute("DELETE FROM discovered_skills", [])?;
+        {
+            let mut stmt = tx.prepare(DISCOVERED_INSERT_SQL)?;
+            for record in records {
+                execute_discovered_insert(&mut stmt, record)?;
+            }
+        }
+        tx.commit()?;
         Ok(())
     }
 
     pub fn get_all_discovered(&self) -> Result<Vec<DiscoveredSkillRecord>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id FROM discovered_skills",
+            "SELECT id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id,
+                    source_kind, owner_ref, discovery_source_ref, discovery_source_version,
+                    discovery_source_revision, discovery_source_subpath, declared_repository,
+                    provenance_basis, digest_algorithm, content_error
+             FROM discovered_skills ORDER BY id",
         )?;
-        let rows = stmt.query_map([], |row| {
-            Ok(DiscoveredSkillRecord {
-                id: row.get(0)?,
-                tool: row.get(1)?,
-                found_path: row.get(2)?,
-                name_guess: row.get(3)?,
-                fingerprint: row.get(4)?,
-                found_at: row.get(5)?,
-                imported_skill_id: row.get(6)?,
-            })
-        })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        let rows = stmt.query_map([], map_discovered_row)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     // ── Cache ──
@@ -595,7 +596,12 @@ impl SkillStore {
                 "INSERT OR REPLACE INTO pending_conflicts
                  (skill_id, theirs_commit, theirs_path, detected_at)
                  VALUES (?1, ?2, ?3, ?4)",
-                params![row.skill_id, row.theirs_commit, row.theirs_path, row.detected_at],
+                params![
+                    row.skill_id,
+                    row.theirs_commit,
+                    row.theirs_path,
+                    row.detected_at
+                ],
             )?;
         }
         tx.commit()?;
@@ -1472,22 +1478,23 @@ mod scenario_membership_tests {
         let tmp = tempdir().unwrap();
         let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
 
-        store.insert_scenario(&ScenarioRecord {
-            id: "s1".to_string(),
-            name: "S1".to_string(),
-            description: None,
-            icon: None,
-            sort_order: 0,
-            created_at: 1,
-            updated_at: 1,
-        })
-        .unwrap();
+        store
+            .insert_scenario(&ScenarioRecord {
+                id: "s1".to_string(),
+                name: "S1".to_string(),
+                description: None,
+                icon: None,
+                sort_order: 0,
+                created_at: 1,
+                updated_at: 1,
+            })
+            .unwrap();
         store.upsert_skill(&sample_skill("k1")).unwrap();
 
         let memberships = vec![
-            membership("s1", "k1"),       // valid
-            membership("s1", "ghost"),    // skill missing
-            membership("ghost-s", "k1"),  // scenario missing
+            membership("s1", "k1"),      // valid
+            membership("s1", "ghost"),   // skill missing
+            membership("ghost-s", "k1"), // scenario missing
         ];
 
         // Must not panic with a FOREIGN KEY constraint failure.
@@ -1497,13 +1504,226 @@ mod scenario_membership_tests {
 
         assert_eq!(store.get_skill_ids_for_scenario("s1").unwrap(), vec!["k1"]);
         assert_eq!(
-            store.get_enabled_tools_for_scenario_skill("s1", "k1").unwrap(),
+            store
+                .get_enabled_tools_for_scenario_skill("s1", "k1")
+                .unwrap(),
             vec!["ToolA"]
         );
         assert!(store
             .get_enabled_tools_for_scenario_skill("ghost-s", "k1")
             .unwrap()
             .is_empty());
+    }
+}
+
+const DISCOVERED_INSERT_SQL: &str = "
+    INSERT INTO discovered_skills (
+        id, tool, found_path, name_guess, fingerprint, found_at, imported_skill_id,
+        source_kind, owner_ref, discovery_source_ref, discovery_source_version,
+        discovery_source_revision, discovery_source_subpath, declared_repository,
+        provenance_basis, digest_algorithm, content_error
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)";
+
+fn insert_discovered_row(conn: &Connection, record: &DiscoveredSkillRecord) -> Result<()> {
+    let mut stmt = conn.prepare(DISCOVERED_INSERT_SQL)?;
+    execute_discovered_insert(&mut stmt, record)?;
+    Ok(())
+}
+
+fn execute_discovered_insert(
+    stmt: &mut rusqlite::Statement<'_>,
+    record: &DiscoveredSkillRecord,
+) -> rusqlite::Result<usize> {
+    let provenance = record.provenance.as_ref();
+    stmt.execute(params![
+        record.id,
+        record.tool,
+        record.found_path,
+        record.name_guess,
+        record.fingerprint,
+        record.found_at,
+        record.imported_skill_id,
+        provenance.map(|value| value.source_kind.as_str()),
+        provenance.map(|value| value.owner_ref.as_str()),
+        provenance.map(|value| value.source_ref.as_str()),
+        provenance.and_then(|value| value.source_version.as_deref()),
+        provenance.and_then(|value| value.source_revision.as_deref()),
+        provenance.and_then(|value| value.source_subpath.as_deref()),
+        provenance.and_then(|value| value.declared_repository.as_deref()),
+        provenance.map(|value| value.provenance_basis.as_str()),
+        provenance.map(|value| value.digest_algorithm.as_str()),
+        record.content_error,
+    ])
+}
+
+fn discovered_decode_error(index: usize, message: impl Into<String>) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(
+        index,
+        rusqlite::types::Type::Text,
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            message.into(),
+        )),
+    )
+}
+
+fn map_discovered_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DiscoveredSkillRecord> {
+    let source_kind: Option<String> = row.get(7)?;
+    let owner_ref: Option<String> = row.get(8)?;
+    let source_ref: Option<String> = row.get(9)?;
+    let source_version: Option<String> = row.get(10)?;
+    let source_revision: Option<String> = row.get(11)?;
+    let source_subpath: Option<String> = row.get(12)?;
+    let declared_repository: Option<String> = row.get(13)?;
+    let provenance_basis: Option<String> = row.get(14)?;
+    let digest_algorithm: Option<String> = row.get(15)?;
+    let any_provenance = source_kind.is_some()
+        || owner_ref.is_some()
+        || source_ref.is_some()
+        || source_version.is_some()
+        || source_revision.is_some()
+        || source_subpath.is_some()
+        || declared_repository.is_some()
+        || provenance_basis.is_some()
+        || digest_algorithm.is_some();
+    let provenance = if any_provenance {
+        let kind_text = source_kind
+            .as_deref()
+            .ok_or_else(|| discovered_decode_error(7, "provenance source_kind is missing"))?;
+        let source_kind = DiscoverySourceKind::parse(kind_text).ok_or_else(|| {
+            discovered_decode_error(7, format!("unknown provenance source_kind: {kind_text}"))
+        })?;
+        Some(DiscoveryProvenance {
+            source_kind,
+            owner_ref: owner_ref
+                .ok_or_else(|| discovered_decode_error(8, "provenance owner_ref is missing"))?,
+            source_ref: source_ref
+                .ok_or_else(|| discovered_decode_error(9, "provenance source_ref is missing"))?,
+            source_version,
+            source_revision,
+            source_subpath,
+            declared_repository,
+            provenance_basis: provenance_basis.ok_or_else(|| {
+                discovered_decode_error(14, "provenance provenance_basis is missing")
+            })?,
+            digest_algorithm: digest_algorithm.ok_or_else(|| {
+                discovered_decode_error(15, "provenance digest_algorithm is missing")
+            })?,
+        })
+    } else {
+        None
+    };
+
+    Ok(DiscoveredSkillRecord {
+        id: row.get(0)?,
+        tool: row.get(1)?,
+        found_path: row.get(2)?,
+        name_guess: row.get(3)?,
+        fingerprint: row.get(4)?,
+        found_at: row.get(5)?,
+        imported_skill_id: row.get(6)?,
+        provenance,
+        content_error: row.get(16)?,
+    })
+}
+
+#[cfg(test)]
+mod discovered_snapshot_tests {
+    use super::*;
+    use crate::core::host_discovery::{DiscoveryProvenance, DiscoverySourceKind};
+    use tempfile::tempdir;
+
+    fn record(id: &str, owner: &str) -> DiscoveredSkillRecord {
+        DiscoveredSkillRecord {
+            id: id.to_string(),
+            tool: "codex".to_string(),
+            found_path: format!("/tmp/{id}"),
+            name_guess: Some(id.to_string()),
+            fingerprint: Some(format!("digest-{id}")),
+            content_error: None,
+            found_at: 42,
+            imported_skill_id: None,
+            provenance: Some(DiscoveryProvenance {
+                source_kind: DiscoverySourceKind::CodexPlugin,
+                owner_ref: owner.to_string(),
+                source_ref: "/tmp/plugin".to_string(),
+                source_version: Some("1.2.3".to_string()),
+                source_revision: Some("rev-1".to_string()),
+                source_subpath: Some(format!("skills/{id}")),
+                declared_repository: Some("https://example.test/repo".to_string()),
+                provenance_basis: "test".to_string(),
+                digest_algorithm: "scm-dir-v2".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn discovered_provenance_round_trips() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut expected = record("alpha", "plugin@market");
+        expected.fingerprint = None;
+        expected.content_error = Some("content unavailable".to_string());
+        store.insert_discovered(&expected).unwrap();
+        let rows = store.get_all_discovered().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, expected.id);
+        assert_eq!(rows[0].provenance, expected.provenance);
+        assert_eq!(rows[0].content_error, expected.content_error);
+    }
+
+    #[test]
+    fn replace_discovered_commits_complete_snapshot() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store
+            .insert_discovered(&record("old", "old@market"))
+            .unwrap();
+        store
+            .replace_discovered(&[record("alpha", "a@market"), record("beta", "b@market")])
+            .unwrap();
+        let ids = store
+            .get_all_discovered()
+            .unwrap()
+            .into_iter()
+            .map(|row| row.id)
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec!["alpha", "beta"]);
+    }
+
+    #[test]
+    fn failed_replace_rolls_back_previous_snapshot() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store
+            .insert_discovered(&record("old", "old@market"))
+            .unwrap();
+        assert!(store
+            .replace_discovered(&[
+                record("duplicate", "a@market"),
+                record("duplicate", "b@market"),
+            ])
+            .is_err());
+        let rows = store.get_all_discovered().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "old");
+    }
+
+    #[test]
+    fn partial_provenance_fails_strict_row_collection() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        {
+            let conn = store.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO discovered_skills
+                 (id, tool, found_path, found_at, source_kind)
+                 VALUES ('bad', 'codex', '/tmp/bad', 1, 'codex_plugin')",
+                [],
+            )
+            .unwrap();
+        }
+        assert!(store.get_all_discovered().is_err());
     }
 }
 

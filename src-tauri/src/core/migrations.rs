@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
 /// Current schema version. Bump this when adding a new migration.
-const LATEST_VERSION: u32 = 7;
+const LATEST_VERSION: u32 = 8;
 
 /// Run all pending migrations on the database.
 ///
@@ -54,6 +54,7 @@ fn migrate_step(conn: &Connection, from_version: u32) -> Result<()> {
         4 => migrate_v4_to_v5(conn),
         5 => migrate_v5_to_v6(conn),
         6 => migrate_v6_to_v7(conn),
+        7 => migrate_v7_to_v8(conn),
         _ => bail!("unknown migration version: {from_version}"),
     }
 }
@@ -110,7 +111,17 @@ fn migrate_v0_to_v1(conn: &Connection) -> Result<()> {
             name_guess TEXT,
             fingerprint TEXT,
             found_at INTEGER NOT NULL,
-            imported_skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL
+            imported_skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL,
+            source_kind TEXT,
+            owner_ref TEXT,
+            discovery_source_ref TEXT,
+            discovery_source_version TEXT,
+            discovery_source_revision TEXT,
+            discovery_source_subpath TEXT,
+            declared_repository TEXT,
+            provenance_basis TEXT,
+            digest_algorithm TEXT,
+            content_error TEXT
         );
 
         CREATE TABLE IF NOT EXISTS settings (
@@ -294,6 +305,39 @@ fn migrate_v6_to_v7(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v7 → v8: additive provenance for the read-only discovered inventory.
+/// Existing rows remain valid legacy observations with all columns NULL.
+fn migrate_v7_to_v8(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS discovered_skills (
+            id TEXT PRIMARY KEY,
+            tool TEXT NOT NULL,
+            found_path TEXT NOT NULL,
+            name_guess TEXT,
+            fingerprint TEXT,
+            found_at INTEGER NOT NULL,
+            imported_skill_id TEXT REFERENCES skills(id) ON DELETE SET NULL
+        );
+        ",
+    )?;
+    for (column, definition) in [
+        ("source_kind", "TEXT"),
+        ("owner_ref", "TEXT"),
+        ("discovery_source_ref", "TEXT"),
+        ("discovery_source_version", "TEXT"),
+        ("discovery_source_revision", "TEXT"),
+        ("discovery_source_subpath", "TEXT"),
+        ("declared_repository", "TEXT"),
+        ("provenance_basis", "TEXT"),
+        ("digest_algorithm", "TEXT"),
+        ("content_error", "TEXT"),
+    ] {
+        add_column_if_missing(conn, "discovered_skills", column, definition)?;
+    }
+    Ok(())
+}
+
 // ── Helpers ──
 
 fn add_column_if_missing(
@@ -362,6 +406,9 @@ mod tests {
         assert!(tables.contains(&"skill_tags".to_string()));
         assert!(tables.contains(&"scenario_skill_tools".to_string()));
         assert!(tables.contains(&"audit_log".to_string()));
+        assert!(has_column(&conn, "discovered_skills", "owner_ref").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "digest_algorithm").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "content_error").unwrap());
     }
 
     #[test]
@@ -373,6 +420,54 @@ mod tests {
         // Running again should be a no-op
         run_migrations(&conn).unwrap();
 
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, LATEST_VERSION);
+    }
+
+    #[test]
+    fn test_v7_database_upgrades_to_v8_with_nullable_provenance() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE discovered_skills (
+                id TEXT PRIMARY KEY,
+                tool TEXT NOT NULL,
+                found_path TEXT NOT NULL,
+                name_guess TEXT,
+                fingerprint TEXT,
+                found_at INTEGER NOT NULL,
+                imported_skill_id TEXT
+            );
+            INSERT INTO discovered_skills
+                (id, tool, found_path, name_guess, fingerprint, found_at)
+            VALUES ('legacy', 'codex', '/tmp/legacy', 'legacy', 'hash', 1);
+            PRAGMA user_version = 7;
+            ",
+        )
+        .unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        assert!(has_column(&conn, "discovered_skills", "source_kind").unwrap());
+        assert!(has_column(&conn, "discovered_skills", "declared_repository").unwrap());
+        let owner: Option<String> = conn
+            .query_row(
+                "SELECT owner_ref FROM discovered_skills WHERE id = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(owner, None);
+        let content_error: Option<String> = conn
+            .query_row(
+                "SELECT content_error FROM discovered_skills WHERE id = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(content_error, None);
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();

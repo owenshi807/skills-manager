@@ -205,6 +205,21 @@ pub fn infer_skill_name(dir: &Path) -> String {
         .unwrap_or_else(|| "unknown-skill".to_string())
 }
 
+/// Infer the display name for strict inventory while accepting an
+/// Agent-consumable `SKILL.md` file symlink. The fallback remains the visible
+/// directory name so inventory never invents identity from content bytes.
+pub fn infer_skill_name_with_file_symlinks(dir: &Path) -> String {
+    let meta = parse_skill_md_with_file_symlinks(dir);
+    if let Some(name) = meta.name {
+        if let Some(sanitized) = sanitize_skill_name(&name) {
+            return sanitized;
+        }
+    }
+    dir.file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown-skill".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
