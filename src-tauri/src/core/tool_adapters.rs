@@ -811,6 +811,16 @@ pub fn default_tool_adapters() -> Vec<ToolAdapter> {
 
 /// Read custom tool path overrides from store.
 pub fn custom_tool_paths(store: &crate::core::skill_store::SkillStore) -> HashMap<String, String> {
+    custom_tool_paths_for_runtime(store, runtime_home_dir_override().is_some())
+}
+
+fn custom_tool_paths_for_runtime(
+    store: &crate::core::skill_store::SkillStore,
+    evaluation_runtime_active: bool,
+) -> HashMap<String, String> {
+    if evaluation_runtime_active {
+        return HashMap::new();
+    }
     store
         .get_setting("custom_tool_paths")
         .ok()
@@ -825,6 +835,16 @@ pub fn custom_tool_paths(store: &crate::core::skill_store::SkillStore) -> HashMa
 pub fn custom_tool_project_paths(
     store: &crate::core::skill_store::SkillStore,
 ) -> HashMap<String, String> {
+    custom_tool_project_paths_for_runtime(store, runtime_home_dir_override().is_some())
+}
+
+fn custom_tool_project_paths_for_runtime(
+    store: &crate::core::skill_store::SkillStore,
+    evaluation_runtime_active: bool,
+) -> HashMap<String, String> {
+    if evaluation_runtime_active {
+        return HashMap::new();
+    }
     store
         .get_setting("custom_tool_project_paths")
         .ok()
@@ -835,6 +855,16 @@ pub fn custom_tool_project_paths(
 
 /// Read user-defined custom tools from store.
 pub fn custom_tools(store: &crate::core::skill_store::SkillStore) -> Vec<CustomToolDef> {
+    custom_tools_for_runtime(store, runtime_home_dir_override().is_some())
+}
+
+fn custom_tools_for_runtime(
+    store: &crate::core::skill_store::SkillStore,
+    evaluation_runtime_active: bool,
+) -> Vec<CustomToolDef> {
+    if evaluation_runtime_active {
+        return Vec::new();
+    }
     store
         .get_setting("custom_tools")
         .ok()
@@ -940,7 +970,8 @@ pub fn enabled_installed_adapters(
 #[cfg(test)]
 mod tests {
     use super::{
-        CustomToolDef, ToolCategory, all_tool_adapters, default_tool_adapters,
+        CustomToolDef, ToolCategory, all_tool_adapters, custom_tool_paths_for_runtime,
+        custom_tool_project_paths_for_runtime, custom_tools_for_runtime, default_tool_adapters,
         find_adapter_with_store,
     };
     use crate::core::skill_store::SkillStore;
@@ -1046,6 +1077,37 @@ mod tests {
         assert_eq!(found.relative_skills_dir, ".omp/agent/skills");
         assert_eq!(found.relative_detect_dir, ".omp/agent");
         assert_eq!(found.project_relative_skills_dir(), ".omp/skills");
+    }
+
+    #[test]
+    fn evaluation_runtime_ignores_all_persisted_tool_paths() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store
+            .set_setting(
+                "custom_tool_paths",
+                r#"{"codex":"/Users/example/.codex/skills"}"#,
+            )
+            .unwrap();
+        store
+            .set_setting(
+                "custom_tool_project_paths",
+                r#"{"codex":"/Users/example/project-skills"}"#,
+            )
+            .unwrap();
+        store
+            .set_setting(
+                "custom_tools",
+                r#"[{"key":"outside","display_name":"Outside","skills_dir":"/Users/example/outside","project_relative_skills_dir":null}]"#,
+            )
+            .unwrap();
+
+        assert!(custom_tool_paths_for_runtime(&store, true).is_empty());
+        assert!(custom_tool_project_paths_for_runtime(&store, true).is_empty());
+        assert!(custom_tools_for_runtime(&store, true).is_empty());
+        assert_eq!(custom_tool_paths_for_runtime(&store, false).len(), 1);
+        assert_eq!(custom_tool_project_paths_for_runtime(&store, false).len(), 1);
+        assert_eq!(custom_tools_for_runtime(&store, false).len(), 1);
     }
 
     #[test]

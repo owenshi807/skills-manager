@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use walkdir::WalkDir;
 
@@ -10,6 +11,7 @@ const CONFIG_FILE_NAME: &str = "repo-config.json";
 
 static BASE_DIR_OVERRIDE: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 static SKILLS_DIR_OVERRIDE: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+static RUNTIME_REPO_CONFIG_DISABLED: AtomicBool = AtomicBool::new(false);
 static STARTUP_WARNINGS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 static STARTUP_ERROR_LOG: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
@@ -170,6 +172,9 @@ fn normalize_path(raw: &str) -> Result<PathBuf> {
 }
 
 pub fn configured_base_dir() -> Option<PathBuf> {
+    if RUNTIME_REPO_CONFIG_DISABLED.load(Ordering::SeqCst) {
+        return None;
+    }
     load_config()
         .repo_path
         .and_then(|path| normalize_path(&path).ok())
@@ -211,6 +216,16 @@ pub fn set_runtime_skills_dir_override(path: Option<PathBuf>) {
         .get_or_init(|| Mutex::new(None))
         .lock()
         .unwrap() = path;
+}
+
+/// Disable all reads and writes of the process-wide repository configuration.
+///
+/// The debug-only product-evaluation runtime has a fixed, marker-validated
+/// repository root. Letting Settings or CLI repo commands inspect or mutate the
+/// real `repo-config.json` would break that isolation even while `base_dir()`
+/// itself remains overridden.
+pub fn set_runtime_repo_config_disabled(disabled: bool) {
+    RUNTIME_REPO_CONFIG_DISABLED.store(disabled, Ordering::SeqCst);
 }
 
 #[cfg(test)]
@@ -332,6 +347,11 @@ pub fn db_path() -> PathBuf {
 }
 
 pub fn set_base_dir_override(path: Option<String>) -> Result<PathBuf> {
+    if RUNTIME_REPO_CONFIG_DISABLED.load(Ordering::SeqCst) {
+        return Err(anyhow!(
+            "Central repository changes are disabled in the isolated evaluation runtime"
+        ));
+    }
     let current = base_dir();
     let mut config = load_config();
 

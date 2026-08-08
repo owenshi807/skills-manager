@@ -49,6 +49,7 @@ pub fn apply_from_env() -> Result<Option<EvaluationRuntime>> {
         let runtime = resolve_runtime(&raw_root)?;
         central_repo::set_runtime_base_dir_override(Some(runtime.base_dir.clone()));
         central_repo::set_runtime_skills_dir_override(None);
+        central_repo::set_runtime_repo_config_disabled(true);
         tool_adapters::set_runtime_home_dir_override(Some(runtime.home_dir.clone()));
         Ok(Some(runtime))
     }
@@ -90,6 +91,7 @@ fn resolve_runtime(raw_root: &OsStr) -> Result<EvaluationRuntime> {
     checked_directory(&root, "central/skills")?;
     checked_directory(&root, "home/.codex")?;
     checked_directory(&root, "home/.codex/skills")?;
+    checked_optional_regular_file(&root, "central/skills-manager.db")?;
 
     Ok(EvaluationRuntime {
         root,
@@ -97,6 +99,28 @@ fn resolve_runtime(raw_root: &OsStr) -> Result<EvaluationRuntime> {
         home_dir,
         sample: marker.sample,
     })
+}
+
+fn checked_optional_regular_file(root: &Path, relative: &str) -> Result<Option<PathBuf>> {
+    let declared = root.join(relative);
+    let metadata = match fs::symlink_metadata(&declared) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!("Cannot inspect evaluation file: {}", declared.display())
+            });
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        bail!("Evaluation file must be regular: {}", declared.display());
+    }
+    let canonical = fs::canonicalize(&declared)
+        .with_context(|| format!("Cannot canonicalize evaluation file: {relative}"))?;
+    if !canonical.starts_with(root) {
+        bail!("Evaluation file escapes runtime root: {relative}");
+    }
+    Ok(Some(canonical))
 }
 
 fn checked_directory(root: &Path, relative: &str) -> Result<PathBuf> {
@@ -179,5 +203,21 @@ mod tests {
         let alias = alias_parent.path().join("alias");
         std::os::unix::fs::symlink(temp.path(), &alias).unwrap();
         assert!(resolve_runtime(alias.as_os_str()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlinked_database_is_rejected() {
+        let temp = valid_runtime();
+        let external = tempdir().unwrap();
+        let external_db = external.path().join("skills-manager.db");
+        fs::write(&external_db, b"not-a-real-database").unwrap();
+        std::os::unix::fs::symlink(
+            &external_db,
+            temp.path().join("central/skills-manager.db"),
+        )
+        .unwrap();
+
+        assert!(resolve_runtime(temp.path().as_os_str()).is_err());
     }
 }
