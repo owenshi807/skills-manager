@@ -4,6 +4,7 @@
   },
   "sidebar": {
     "dashboard": "Dashboard",
+    "organizeSkills": "Organize",
     "mySkills": "Library",
     "globalWorkspace": "Global Workspace",
     "lobsterAgents": "Lobster Agents",
@@ -15,10 +16,51 @@
     "addProject": "Link Project",
     "settings": "Settings"
   },
+  "organize": {
+    "eyebrow": "Foundation · Step 1",
+    "title": "Start by making scattered skills clear",
+    "subtitle": "Scan skills across agents and known sources, identify pending items, duplicates, and conflicts, then decide what enters the managed library. This page does not use decks or delete or deploy skills for you.",
+    "openLibrary": "Open library",
+    "steps": {
+      "scan": { "title": "Scan this device", "detail": "See where skills are located" },
+      "collect": { "title": "Review and collect", "detail": "Check duplicates, conflicts, and sources" },
+      "deliver": { "title": "Deploy to agents", "detail": "Choose agent visibility after organizing" }
+    },
+    "scanTitle": "Local skill inventory",
+    "scanBefore": "A scan lists skills in agent folders and known sources.",
+    "scanSummary": "Scanned {{agents}} agents · found {{locations}} locations · representing {{skills}} skill sources",
+    "scanning": "Scanning…",
+    "rescan": "Scan again",
+    "queueLabel": "Organization results",
+    "queues": { "pending": "To collect", "issues": "Duplicates / conflicts", "managed": "Managed" },
+    "search": "Search name, agent, or path…",
+    "issue": { "conflict": "Same name, different content", "duplicate": "Possible duplicate content", "unverified": "Content not verified" },
+    "issueHelp": {
+      "conflict": "Several sources use the same name with different content. Review them, then choose a version or change its library name.",
+      "duplicate": "Several sources have the same content fingerprint. Equal content does not prove equal ownership; choose the long-term source deliberately.",
+      "unverified": "The scanner could not prove whether the content matches. It will not merge this skill automatically."
+    },
+    "managed": "In library",
+    "libraryOnly": "Library only, not deployed",
+    "deployedCount": "Deployed to {{count}} locations",
+    "pathCount": "{{count}} physical paths",
+    "morePaths": "{{count}} more paths",
+    "libraryName": "Name in the managed library",
+    "collect": "Collect into library",
+    "collectSafety": "Copies it into the managed library; the original is kept and no agent deployment happens automatically.",
+    "imported": "{{name}} was collected into the library",
+    "viewInLibrary": "View in library",
+    "empty": {
+      "pending": { "title": "No regular items waiting", "detail": "If same-name or duplicate content exists, review it under “Duplicates / conflicts.”" },
+      "issues": { "title": "No duplicates or conflicts found", "detail": "Nothing in this scan currently needs a content-identity decision." },
+      "managed": { "title": "No managed items yet", "detail": "Collect a skill from “To collect” and it will appear here." }
+    },
+    "scopeNote": "This step only creates a clear skill inventory and management boundary. Tags, presets, projects, and capability insights stay out of this pass."
+  },
   "help": {
     "eyebrow": "Guide",
     "title": "Quick Start for Skills Manager",
-    "description": "Fastest path: install skills → open Global Workspace → click a Preset pill to activate. Press ⌘K anytime for the command palette. Use Project Workspaces, Git backup, and Settings as needed.",
+    "description": "Fastest path: organize scattered skills → confirm the managed library → choose agent deployments in a workspace. Press ⌘K anytime for the command palette.",
     "items": {
       "workflows": {
         "title": "Recommended Workflows",
@@ -61,7 +103,7 @@
     "presets": "Presets",
     "projects": "Projects",
     "actions": "Actions",
-    "scanImport": "Scan & import local skills",
+    "scanImport": "Organize local skills",
     "hints": {
       "navigate": "navigate",
       "open": "open",
@@ -76,7 +118,7 @@
     "connectedAgents": "Connected Agents",
     "synced": "Synced",
     "notSynced": "Not synced",
-    "scanImport": "Scan & Import Local Skills",
+    "scanImport": "Organize Local Skills",
     "installNew": "Install New Skills",
     "recentActivity": "Recent Activity"
   },
@@ -223,6 +265,23 @@
   },
   "mySkills": {
     "title": "Library",
+    "foundation": {
+      "subtitle": "This is the complete managed skill pool. First see what you own, then decide what each agent can access.",
+      "managed": "Managed",
+      "managedHint": "Skills in the managed library",
+      "visible": "Agent-visible",
+      "visibleHint": "{{count}} deployment locations",
+      "libraryOnly": "Library only",
+      "libraryOnlyHint": "Not deployed to any agent",
+      "noAgentVisibility": "No agent can currently see it",
+      "attention": "Needs attention",
+      "attentionHint": "Missing source, error, or sync conflict",
+      "agentCount": "{{count}} agents",
+      "mixedProjection": "Multiple deployments",
+      "symlink": "Symlink deployment",
+      "copy": "Copy deployment",
+      "placed": "Deployed"
+    },
     "applyToDefault": "Apply Preset",
     "applied": "Applied",
     "notAppliedYet": "Not applied yet",

@@ -121,6 +121,7 @@ export interface ScanResult {
   tools_scanned: number;
   skills_found: number;
   groups: DiscoveredGroup[];
+  diagnostics?: unknown[];
 }
 
 export interface SkillsShSkill {

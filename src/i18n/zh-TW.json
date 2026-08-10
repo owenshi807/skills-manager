@@ -4,6 +4,7 @@
   },
   "sidebar": {
     "dashboard": "Dashboard",
+    "organizeSkills": "整理",
     "mySkills": "技能庫",
     "globalWorkspace": "全域工作區",
     "lobsterAgents": "龍蝦 Agent",
@@ -15,10 +16,51 @@
     "addProject": "關聯專案",
     "settings": "設定"
   },
+  "organize": {
+    "eyebrow": "基礎整理 · 第 1 步",
+    "title": "先把散落的 Skills 理清楚",
+    "subtitle": "掃描各個 Agent 和已知來源中的 Skills，識別待收入、重複與衝突，再決定哪些進入統一技能庫。這裡不討論卡組，也不會替你刪除或投放任何 Skill。",
+    "openLibrary": "打開技能庫",
+    "steps": {
+      "scan": { "title": "掃描本機", "detail": "看見 Skills 分布在哪裡" },
+      "collect": { "title": "整理並收入", "detail": "核對重複、衝突和來源" },
+      "deliver": { "title": "投放給 Agent", "detail": "整理完成後再決定誰能看見" }
+    },
+    "scanTitle": "本機 Skill 盤點",
+    "scanBefore": "掃描後會列出各 Agent 目錄與已知來源中的 Skills。",
+    "scanSummary": "掃描 {{agents}} 個 Agent · 發現 {{locations}} 個位置 · 對應 {{skills}} 個 Skill 來源",
+    "scanning": "正在掃描…",
+    "rescan": "重新掃描",
+    "queueLabel": "整理結果",
+    "queues": { "pending": "待收入", "issues": "重複 / 衝突", "managed": "已納管" },
+    "search": "搜尋名稱、Agent 或路徑…",
+    "issue": { "conflict": "同名但內容不同", "duplicate": "內容疑似重複", "unverified": "內容未驗證" },
+    "issueHelp": {
+      "conflict": "多個來源使用同一個名稱，但內容不同。請先核對，再選擇要收入的版本或修改入庫名稱。",
+      "duplicate": "多個來源的內容指紋相同。內容相同不等於來源相同，請確認哪個應作為長期維護來源。",
+      "unverified": "掃描器無法證明內容是否相同。目前不會把它自動併入其他 Skill。"
+    },
+    "managed": "已在技能庫",
+    "libraryOnly": "僅在技能庫，尚未投放",
+    "deployedCount": "已投放到 {{count}} 個位置",
+    "pathCount": "{{count}} 個實際路徑",
+    "morePaths": "另有 {{count}} 個路徑",
+    "libraryName": "收入技能庫後的名稱",
+    "collect": "收入技能庫",
+    "collectSafety": "會複製一份到管理庫；不刪除原檔，也不自動投放給 Agent。",
+    "imported": "{{name}} 已收入技能庫",
+    "viewInLibrary": "在技能庫查看",
+    "empty": {
+      "pending": { "title": "沒有普通待收入項", "detail": "如果存在同名或重複內容，請到「重複 / 衝突」繼續核對。" },
+      "issues": { "title": "沒有發現重複或衝突", "detail": "目前掃描結果中，沒有需要人工判斷的內容關係。" },
+      "managed": { "title": "還沒有已納管項", "detail": "從「待收入」選擇 Skill 收入技能庫後，會在這裡出現。" }
+    },
+    "scopeNote": "這一步只建立清晰的 Skill 清單和管理邊界。標籤、Preset、Project 與能力洞察不參與這輪整理。"
+  },
   "help": {
     "eyebrow": "操作指南",
     "title": "快速上手 Skills Manager",
-    "description": "最快路徑：安裝 Skills → 開啟全域工作區 → 點擊 Preset 標籤啟用。按 ⌘K 可隨時呼出命令面板。按需使用專案工作區、Git 備份和設定。",
+    "description": "最快路徑：先用「整理」盤點散落的 Skills → 在技能庫確認已納管內容 → 再到 Agent 工作區決定投放。按 ⌘K 可隨時呼出命令面板。",
     "items": {
       "workflows": {
         "title": "推薦工作流程",
@@ -61,7 +103,7 @@
     "presets": "Preset",
     "projects": "專案",
     "actions": "操作",
-    "scanImport": "掃描並匯入本機技能",
+    "scanImport": "整理本機 Skills",
     "hints": {
       "navigate": "選擇",
       "open": "開啟",
@@ -76,7 +118,7 @@
     "connectedAgents": "已接入 Agent",
     "synced": "已同步",
     "notSynced": "未同步",
-    "scanImport": "掃描本機 Skills 匯入",
+    "scanImport": "整理本機 Skills",
     "installNew": "安裝新 Skills",
     "recentActivity": "近期動態"
   },
@@ -223,6 +265,23 @@
   },
   "mySkills": {
     "title": "技能庫",
+    "foundation": {
+      "subtitle": "這裡是已納管的完整技能池。先確認有哪些 Skill，再決定哪些投放給 Agent。",
+      "managed": "已納管",
+      "managedHint": "統一技能庫中的 Skills",
+      "visible": "Agent 可見",
+      "visibleHint": "共 {{count}} 個投放位置",
+      "libraryOnly": "僅在技能庫",
+      "libraryOnlyHint": "尚未投放給任何 Agent",
+      "noAgentVisibility": "Agent 目前不可見",
+      "attention": "需要處理",
+      "attentionHint": "來源缺失、錯誤或同步衝突",
+      "agentCount": "{{count}} 個 Agent",
+      "mixedProjection": "多個投放位置",
+      "symlink": "軟連結投放",
+      "copy": "副本投放",
+      "placed": "已投放"
+    },
     "applyToDefault": "套用 Preset",
     "applied": "已套用",
     "notAppliedYet": "尚未套用",

@@ -22,6 +22,10 @@ import {
   CircleSlash,
   Pencil,
   Trash2,
+  Link2,
+  Copy,
+  Library,
+  CircleAlert,
 } from "lucide-react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { useNavigate } from "react-router-dom";
@@ -35,7 +39,6 @@ import { TagRenameDialog } from "../components/TagRenameDialog";
 import { SkillDetailPanel } from "../components/SkillDetailPanel";
 import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import { BatchTagDialog } from "../components/BatchTagDialog";
-import { SyncDots } from "../components/SyncDots";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { CardActionMenu } from "../components/CardActionMenu";
 import * as api from "../lib/tauri";
@@ -165,7 +168,6 @@ export function MySkills() {
   const [batchUpdating, setBatchUpdating] = useState(false);
   const [toolToggles, setToolToggles] = useState<SkillToolToggle[] | null>(null);
   const [togglingToolKey, setTogglingToolKey] = useState<string | null>(null);
-  const [togglingTarget, setTogglingTarget] = useState<{ skillId: string; tool: string } | null>(null);
   const [gitStatus, setGitStatus] = useState<GitBackupStatus | null>(null);
   const [gitRemoteConfig, setGitRemoteConfig] = useState("");
   const [tagEditSkillId, setTagEditSkillId] = useState<string | null>(null);
@@ -480,30 +482,6 @@ export function MySkills() {
       setTogglingToolKey(null);
     }
   };
-
-  const handleToggleSkillTarget = useCallback(
-    async (skill: ManagedSkill, toolKey: string, enabled: boolean) => {
-      if (togglingTarget) return;
-      setTogglingTarget({ skillId: skill.id, tool: toolKey });
-      const displayName = getToolDisplayName(toolKey, tools);
-      try {
-        if (enabled) {
-          await api.syncSkillToTool(skill.id, toolKey);
-          toast.success(t("mySkills.targetInstalled", { name: skill.name, agent: displayName }));
-        } else {
-          await api.unsyncSkillFromTool(skill.id, toolKey);
-          toast.success(t("mySkills.targetUninstalled", { name: skill.name, agent: displayName }));
-        }
-        await refreshManagedSkills();
-      } catch (error: unknown) {
-        toast.error(getErrorMessage(error, t("common.error")));
-        await refreshManagedSkills();
-      } finally {
-        setTogglingTarget(null);
-      }
-    },
-    [togglingTarget, tools, t, refreshManagedSkills]
-  );
 
   const scheduleRefreshAfterDelete = useCallback(() => {
     if (refreshAfterDeleteRef.current !== null) {
@@ -955,6 +933,22 @@ export function MySkills() {
     () => skills.filter((skill) => skill.update_status === "update_available" && canRefresh(skill)).length,
     [skills]
   );
+  const projectedSkillCount = useMemo(
+    () => skills.filter((skill) => skill.targets.length > 0).length,
+    [skills]
+  );
+  const projectionCount = useMemo(
+    () => skills.reduce((total, skill) => total + skill.targets.length, 0),
+    [skills]
+  );
+  const attentionCount = useMemo(
+    () => skills.filter((skill) =>
+      conflictIds.has(skill.id)
+      || skill.update_status === "source_missing"
+      || skill.update_status === "error"
+    ).length,
+    [skills, conflictIds]
+  );
   const refreshableSelectedCount = useMemo(
     () => skills.filter((skill) => selectedIds.has(skill.id) && canRefresh(skill)).length,
     [skills, selectedIds]
@@ -962,6 +956,36 @@ export function MySkills() {
 
   const sourceTypeLabel = (skill: ManagedSkill) =>
     skill.source_type === "skillssh" ? "skills.sh" : skill.source_type;
+
+  const targetModeLabel = (mode: string) => {
+    if (mode === "symlink") return t("mySkills.foundation.symlink");
+    if (mode === "copy") return t("mySkills.foundation.copy");
+    return mode || t("mySkills.foundation.placed");
+  };
+
+  const targetSummary = (skill: ManagedSkill) => {
+    if (skill.targets.length === 0) {
+      return {
+        icon: Library,
+        label: t("mySkills.foundation.libraryOnly"),
+        detail: t("mySkills.foundation.noAgentVisibility"),
+      };
+    }
+    const first = skill.targets[0];
+    const toolName = getToolDisplayName(first.tool, tools);
+    if (skill.targets.length === 1) {
+      return {
+        icon: first.mode === "symlink" ? Link2 : Copy,
+        label: toolName,
+        detail: targetModeLabel(first.mode),
+      };
+    }
+    return {
+      icon: Link2,
+      label: t("mySkills.foundation.agentCount", { count: skill.targets.length }),
+      detail: t("mySkills.foundation.mixedProjection"),
+    };
+  };
 
   const refreshLabel = (skill: ManagedSkill) =>
     skill.source_type === "local" || skill.source_type === "import"
@@ -993,13 +1017,37 @@ export function MySkills() {
   return (
     <div className="app-page">
       <div className="app-page-header pr-2 pb-1 flex items-center justify-between gap-3">
-        <h1 className="app-page-title flex items-center gap-2">
-          {t("mySkills.title")}
-          <span className="app-badge">
-            {skills.length}
-          </span>
-        </h1>
+        <div>
+          <h1 className="app-page-title flex items-center gap-2">
+            {t("mySkills.title")}
+            <span className="app-badge">{skills.length}</span>
+          </h1>
+          <p className="app-page-subtitle max-w-[680px]">
+            {t("mySkills.foundation.subtitle")}
+          </p>
+        </div>
 
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {[
+          { label: t("mySkills.foundation.managed"), value: skills.length, detail: t("mySkills.foundation.managedHint"), icon: Library },
+          { label: t("mySkills.foundation.visible"), value: projectedSkillCount, detail: t("mySkills.foundation.visibleHint", { count: projectionCount }), icon: Link2 },
+          { label: t("mySkills.foundation.libraryOnly"), value: skills.length - projectedSkillCount, detail: t("mySkills.foundation.libraryOnlyHint"), icon: Copy },
+          { label: t("mySkills.foundation.attention"), value: attentionCount, detail: t("mySkills.foundation.attentionHint"), icon: CircleAlert },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.label} className="rounded-xl border border-border-subtle bg-surface px-3.5 py-3 shadow-card">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-semibold text-muted">{item.label}</span>
+                <Icon className="h-3.5 w-3.5 text-faint" />
+              </div>
+              <div className="mt-1.5 text-[20px] font-semibold tracking-tight text-primary">{item.value}</div>
+              <div className="mt-0.5 text-[10px] leading-4 text-faint">{item.detail}</div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="app-toolbar">
@@ -1236,6 +1284,8 @@ export function MySkills() {
               skill.update_status === "source_missing"
               && (skill.source_type === "local" || skill.source_type === "import");
             const displayName = skillDisplayNames.get(skill.id) || skill.name;
+            const placement = targetSummary(skill);
+            const PlacementIcon = placement.icon;
 
             if (viewMode === "grid") {
               return (
@@ -1484,18 +1534,14 @@ export function MySkills() {
                         </>
                       )}
                     </div>
-                    <SyncDots
-                      className="shrink-0"
-                      skill={skill}
-                      tools={tools}
-                      limit={6}
-                      onToggle={
-                        isMultiSelect
-                          ? undefined
-                          : (tool, enabled) => handleToggleSkillTarget(skill, tool, enabled)
-                      }
-                      pendingKey={togglingTarget?.skillId === skill.id ? togglingTarget.tool : null}
-                    />
+                    <span
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border-subtle bg-bg-secondary px-2 py-1 text-[10px] text-secondary"
+                      title={skill.targets.map((target) => `${target.target_path} · ${targetModeLabel(target.mode)}`).join("\n")}
+                    >
+                      <PlacementIcon className="h-3 w-3 text-muted" />
+                      <span className="font-medium">{placement.label}</span>
+                      <span className="text-faint">· {placement.detail}</span>
+                    </span>
                   </div>
                 </div>
                 )}
@@ -1605,18 +1651,14 @@ export function MySkills() {
                       {badge.label}
                     </span>
                   )}
-                  <SyncDots
-                    skill={skill}
-                    tools={tools}
-                    limit={6}
-                    size="sm"
-                    onToggle={
-                      isMultiSelect
-                        ? undefined
-                        : (tool, enabled) => handleToggleSkillTarget(skill, tool, enabled)
-                    }
-                    pendingKey={togglingTarget?.skillId === skill.id ? togglingTarget.tool : null}
-                  />
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-bg-secondary px-2 py-1 text-[10px] text-secondary"
+                    title={skill.targets.map((target) => `${target.target_path} · ${targetModeLabel(target.mode)}`).join("\n")}
+                  >
+                    <PlacementIcon className="h-3 w-3 text-muted" />
+                    <span className="font-medium">{placement.label}</span>
+                    <span className="text-faint">· {placement.detail}</span>
+                  </span>
                   <span className="inline-flex items-center gap-1 text-[13px] text-muted">
                     {sourceIcon(skill.source_type)}
                     {sourceTypeLabel(skill)}

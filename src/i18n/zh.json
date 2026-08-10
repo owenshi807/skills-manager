@@ -4,6 +4,7 @@
   },
   "sidebar": {
     "dashboard": "Dashboard",
+    "organizeSkills": "整理",
     "mySkills": "技能库",
     "globalWorkspace": "全局工作区",
     "lobsterAgents": "龙虾 Agent",
@@ -15,10 +16,51 @@
     "addProject": "关联项目",
     "settings": "设置"
   },
+  "organize": {
+    "eyebrow": "基础整理 · 第 1 步",
+    "title": "先把散落的 Skills 理清楚",
+    "subtitle": "扫描各个 Agent 和已知来源中的 Skills，识别待收入、重复与冲突，再决定哪些进入统一技能库。这里不讨论卡组，也不会替你删除或投放任何 Skill。",
+    "openLibrary": "打开技能库",
+    "steps": {
+      "scan": { "title": "扫描本机", "detail": "看见 Skills 分布在哪里" },
+      "collect": { "title": "整理并收入", "detail": "核对重复、冲突和来源" },
+      "deliver": { "title": "投放给 Agent", "detail": "整理完成后再决定谁能看见" }
+    },
+    "scanTitle": "本机 Skill 盘点",
+    "scanBefore": "扫描后会列出各 Agent 目录与已知来源中的 Skills。",
+    "scanSummary": "扫描 {{agents}} 个 Agent · 发现 {{locations}} 个位置 · 对应 {{skills}} 个 Skill 来源",
+    "scanning": "正在扫描…",
+    "rescan": "重新扫描",
+    "queueLabel": "整理结果",
+    "queues": { "pending": "待收入", "issues": "重复 / 冲突", "managed": "已纳管" },
+    "search": "搜索名称、Agent 或路径…",
+    "issue": { "conflict": "同名但内容不同", "duplicate": "内容疑似重复", "unverified": "内容未验证" },
+    "issueHelp": {
+      "conflict": "多个来源使用同一个名称，但内容不同。请先核对，再选择要收入的版本或修改入库名称。",
+      "duplicate": "多个来源的内容指纹相同。内容相同不等于来源相同，请确认哪个应作为长期维护来源。",
+      "unverified": "扫描器无法证明内容是否相同。当前不会把它自动并入其他 Skill。"
+    },
+    "managed": "已在技能库",
+    "libraryOnly": "仅在技能库，尚未投放",
+    "deployedCount": "已投放到 {{count}} 个位置",
+    "pathCount": "{{count}} 个实际路径",
+    "morePaths": "另有 {{count}} 个路径",
+    "libraryName": "收入技能库后的名称",
+    "collect": "收入技能库",
+    "collectSafety": "会复制一份到管理库；不删除原文件，也不自动投放给 Agent。",
+    "imported": "{{name}} 已收入技能库",
+    "viewInLibrary": "在技能库查看",
+    "empty": {
+      "pending": { "title": "没有普通待收入项", "detail": "如果存在同名或重复内容，请到“重复 / 冲突”继续核对。" },
+      "issues": { "title": "没有发现重复或冲突", "detail": "当前扫描结果中，没有需要人工判断的内容关系。" },
+      "managed": { "title": "还没有已纳管项", "detail": "从“待收入”选择 Skill 收入技能库后，会在这里出现。" }
+    },
+    "scopeNote": "这一步只建立清晰的 Skill 清单和管理边界。标签、Preset、Project 与能力洞察不参与这轮整理。"
+  },
   "help": {
     "eyebrow": "操作指南",
     "title": "快速上手 Skills Manager",
-    "description": "最快路径：安装 Skills → 打开全局工作区 → 点击 Preset 标签激活。按 ⌘K 可随时呼出命令面板。按需使用项目工作区、Git 备份和设置。",
+    "description": "最快路径：先用“整理”盘点散落的 Skills → 在技能库确认已纳管内容 → 再到 Agent 工作区决定投放。按 ⌘K 可随时呼出命令面板。",
     "items": {
       "workflows": {
         "title": "推荐工作流",
@@ -61,7 +103,7 @@
     "presets": "Preset",
     "projects": "项目",
     "actions": "操作",
-    "scanImport": "扫描并导入本地技能",
+    "scanImport": "整理本地 Skills",
     "hints": {
       "navigate": "选择",
       "open": "打开",
@@ -76,7 +118,7 @@
     "connectedAgents": "已接入 Agent",
     "synced": "已同步",
     "notSynced": "未同步",
-    "scanImport": "扫描本地 Skills 导入",
+    "scanImport": "整理本地 Skills",
     "installNew": "安装新 Skills",
     "recentActivity": "近期动态"
   },
@@ -223,6 +265,23 @@
   },
   "mySkills": {
     "title": "技能库",
+    "foundation": {
+      "subtitle": "这里是已纳管的完整技能池。先确认有哪些 Skill，再决定哪些投放给 Agent。",
+      "managed": "已纳管",
+      "managedHint": "统一技能库中的 Skills",
+      "visible": "Agent 可见",
+      "visibleHint": "共 {{count}} 个投放位置",
+      "libraryOnly": "仅在技能库",
+      "libraryOnlyHint": "尚未投放给任何 Agent",
+      "noAgentVisibility": "Agent 当前不可见",
+      "attention": "需要处理",
+      "attentionHint": "来源缺失、错误或同步冲突",
+      "agentCount": "{{count}} 个 Agent",
+      "mixedProjection": "多个投放位置",
+      "symlink": "软链接投放",
+      "copy": "副本投放",
+      "placed": "已投放"
+    },
     "applyToDefault": "应用 Preset",
     "applied": "已应用",
     "notAppliedYet": "尚未应用",

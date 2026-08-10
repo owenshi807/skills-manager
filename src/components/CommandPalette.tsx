@@ -10,6 +10,7 @@ import {
   Folder,
   Home,
   ArrowRight,
+  ListFilter,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { getPresetIconOption } from "../lib/presetIcons";
@@ -152,6 +153,13 @@ export function CommandPalette() {
         run: () => navigate("/"),
       },
       {
+        id: "action:organize",
+        kind: "action",
+        label: t("sidebar.organizeSkills"),
+        icon: <ListFilter className="h-3.5 w-3.5" />,
+        run: () => navigate("/organize"),
+      },
+      {
         id: "action:my-skills",
         kind: "action",
         label: t("sidebar.mySkills"),
@@ -170,7 +178,7 @@ export function CommandPalette() {
         kind: "action",
         label: t("commandPalette.scanImport"),
         icon: <FolderOpen className="h-3.5 w-3.5" />,
-        run: () => navigate("/install?tab=local"),
+        run: () => navigate("/organize"),
       },
       {
         id: "action:settings",
