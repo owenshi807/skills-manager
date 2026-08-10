@@ -4,7 +4,6 @@
   },
   "sidebar": {
     "dashboard": "Dashboard",
-    "organizeSkills": "整理",
     "mySkills": "技能庫",
     "globalWorkspace": "全域工作區",
     "lobsterAgents": "龍蝦 Agent",
@@ -104,7 +103,7 @@
     "presets": "Preset",
     "projects": "專案",
     "actions": "操作",
-    "scanImport": "整理本機 Skills",
+    "scanImport": "整理技能庫",
     "hints": {
       "navigate": "選擇",
       "open": "開啟",
@@ -119,7 +118,7 @@
     "connectedAgents": "已接入 Agent",
     "synced": "已同步",
     "notSynced": "未同步",
-    "scanImport": "整理本機 Skills",
+    "scanImport": "整理技能庫",
     "installNew": "安裝新 Skills",
     "recentActivity": "近期動態"
   },
@@ -276,7 +275,13 @@
       "libraryOnlyHint": "尚未投放給任何 Agent",
       "noAgentVisibility": "Agent 目前不可見",
       "attention": "需要處理",
-      "attentionHint": "來源缺失、錯誤或同步衝突",
+      "attentionHint": "{{names}} 組同名 · {{contents}} 組同內容",
+      "sameName": "同名 {{count}} 項",
+      "sameContent": "內容相同 {{count}} 項",
+      "filters": {
+        "all": "全部 {{count}}",
+        "needsReview": "待整理 {{count}}"
+      },
       "agentCount": "{{count}} 個 Agent",
       "mixedProjection": "多個投放位置",
       "symlink": "軟連結投放",

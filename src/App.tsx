@@ -14,7 +14,6 @@ import { InstallSkills } from "./views/InstallSkills";
 import { Settings } from "./views/Settings";
 import { ProjectDetail } from "./views/ProjectDetail";
 import { Backup } from "./views/Backup";
-import { OrganizeSkills } from "./views/OrganizeSkills";
 
 function ThemedToaster() {
   const { resolvedTheme } = useThemeContext();
@@ -41,7 +40,6 @@ function App() {
           <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/organize" element={<OrganizeSkills />} />
               <Route path="/my-skills" element={<MySkills />} />
               <Route path="/global-workspace" element={<WorkspaceView config={CODING_WORKSPACE_CONFIG} />} />
               <Route path="/global-workspace/:agentKey" element={<WorkspaceView config={CODING_WORKSPACE_CONFIG} />} />

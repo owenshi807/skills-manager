@@ -32,6 +32,7 @@ export interface ManagedSkill {
   last_checked_at: number | null;
   last_check_error: string | null;
   central_path: string;
+  content_hash: string | null;
   enabled: boolean;
   created_at: number;
   updated_at: number;

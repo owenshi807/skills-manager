@@ -148,7 +148,7 @@ export function MySkills() {
     refreshProjects,
   } = useApp();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [filterMode, setFilterMode] = useState<"all" | "enabled" | "available">("all");
+  const [libraryFilter, setLibraryFilter] = useState<"all" | "needsReview">("all");
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -243,19 +243,19 @@ export function MySkills() {
   };
 
   // A filter can outlive the control that set it (the tag row hides itself once
-  // no tag is left), so the empty state carries the way out. `filterMode` is
+  // no tag is left), so the empty state carries the way out. `libraryFilter` is
   // reset too — its control never hides, but a button labelled "clear filters"
   // that leaves one of them on is a lie.
   const hasActiveFilters =
     search.trim() !== "" ||
     sourceFilters.size > 0 ||
     tagFilters.size > 0 ||
-    filterMode !== "all";
+    libraryFilter !== "all";
   const clearFilters = () => {
     setSearch("");
     setSourceFilters(new Set());
     setTagFilters(new Set());
-    setFilterMode("all");
+    setLibraryFilter("all");
   };
 
   const skillDisplayNames = useMemo(() => {
@@ -277,6 +277,51 @@ export function MySkills() {
     return displayNames;
   }, [skills]);
 
+  const nameGroupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const skill of skills) {
+      const key = skill.name.normalize("NFKC").toLocaleLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [skills]);
+
+  const hashGroupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const skill of skills) {
+      if (!skill.content_hash) continue;
+      counts.set(skill.content_hash, (counts.get(skill.content_hash) ?? 0) + 1);
+    }
+    return counts;
+  }, [skills]);
+
+  const duplicateNameGroupCount = useMemo(
+    () => Array.from(nameGroupCounts.values()).filter((count) => count > 1).length,
+    [nameGroupCounts]
+  );
+
+  const exactDuplicateGroupCount = useMemo(
+    () => Array.from(hashGroupCounts.values()).filter((count) => count > 1).length,
+    [hashGroupCounts]
+  );
+
+  const needsReviewIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const skill of skills) {
+      const nameKey = skill.name.normalize("NFKC").toLocaleLowerCase();
+      if (
+        (nameGroupCounts.get(nameKey) ?? 0) > 1
+        || (skill.content_hash ? (hashGroupCounts.get(skill.content_hash) ?? 0) > 1 : false)
+        || conflictIds.has(skill.id)
+        || skill.update_status === "source_missing"
+        || skill.update_status === "error"
+      ) {
+        ids.add(skill.id);
+      }
+    }
+    return ids;
+  }, [skills, nameGroupCounts, hashGroupCounts, conflictIds]);
+
   const filtered = useMemo(() => {
     const result = skills.filter((skill) => {
       const displayName = skillDisplayNames.get(skill.id) || skill.name;
@@ -285,6 +330,8 @@ export function MySkills() {
         displayName.toLowerCase().includes(search.toLowerCase()) ||
         (skill.description || "").toLowerCase().includes(search.toLowerCase());
       if (!matchesSearch) return false;
+
+      if (libraryFilter === "needsReview" && !needsReviewIds.has(skill.id)) return false;
 
       if (sourceFilters.size > 0 && !sourceFilters.has(skill.source_type)) return false;
 
@@ -295,11 +342,6 @@ export function MySkills() {
         if (!matchUntagged && !matchTag) return false;
       }
 
-      if (!viewedPreset) return true;
-
-      const enabledInPreset = skill.preset_ids.includes(viewedPreset.id);
-      if (filterMode === "enabled") return enabledInPreset;
-      if (filterMode === "available") return !enabledInPreset;
       return true;
     });
 
@@ -320,7 +362,7 @@ export function MySkills() {
     }
 
     return result;
-  }, [skills, skillDisplayNames, search, sourceFilters, tagFilters, filterMode, viewedPreset, presetSkillOrder]);
+  }, [skills, skillDisplayNames, search, sourceFilters, tagFilters, libraryFilter, needsReviewIds, viewedPreset, presetSkillOrder]);
 
   const {
     isMultiSelect, setIsMultiSelect,
@@ -941,14 +983,7 @@ export function MySkills() {
     () => skills.reduce((total, skill) => total + skill.targets.length, 0),
     [skills]
   );
-  const attentionCount = useMemo(
-    () => skills.filter((skill) =>
-      conflictIds.has(skill.id)
-      || skill.update_status === "source_missing"
-      || skill.update_status === "error"
-    ).length,
-    [skills, conflictIds]
-  );
+  const attentionCount = needsReviewIds.size;
   const refreshableSelectedCount = useMemo(
     () => skills.filter((skill) => selectedIds.has(skill.id) && canRefresh(skill)).length,
     [skills, selectedIds]
@@ -1034,7 +1069,15 @@ export function MySkills() {
           { label: t("mySkills.foundation.managed"), value: skills.length, detail: t("mySkills.foundation.managedHint"), icon: Library },
           { label: t("mySkills.foundation.visible"), value: projectedSkillCount, detail: t("mySkills.foundation.visibleHint", { count: projectionCount }), icon: Link2 },
           { label: t("mySkills.foundation.libraryOnly"), value: skills.length - projectedSkillCount, detail: t("mySkills.foundation.libraryOnlyHint"), icon: Copy },
-          { label: t("mySkills.foundation.attention"), value: attentionCount, detail: t("mySkills.foundation.attentionHint"), icon: CircleAlert },
+          {
+            label: t("mySkills.foundation.attention"),
+            value: attentionCount,
+            detail: t("mySkills.foundation.attentionHint", {
+              names: duplicateNameGroupCount,
+              contents: exactDuplicateGroupCount,
+            }),
+            icon: CircleAlert,
+          },
         ].map((item) => {
           const Icon = item.icon;
           return (
@@ -1067,16 +1110,18 @@ export function MySkills() {
           </div>
 
           <div className="app-segmented">
-            {(["all", "enabled", "available"] as const).map((mode) => (
+            {(["all", "needsReview"] as const).map((mode) => (
               <button
                 key={mode}
-                onClick={() => setFilterMode(mode)}
+                onClick={() => setLibraryFilter(mode)}
                 className={cn(
                   "app-segmented-button",
-                  filterMode === mode && "app-segmented-button-active"
+                  libraryFilter === mode && "app-segmented-button-active"
                 )}
               >
-                {t(`mySkills.filters.${mode}`)}
+                {t(`mySkills.foundation.filters.${mode}`, {
+                  count: mode === "needsReview" ? attentionCount : skills.length,
+                })}
               </button>
             ))}
           </div>
@@ -1286,6 +1331,12 @@ export function MySkills() {
             const displayName = skillDisplayNames.get(skill.id) || skill.name;
             const placement = targetSummary(skill);
             const PlacementIcon = placement.icon;
+            const duplicateNameCount = nameGroupCounts.get(
+              skill.name.normalize("NFKC").toLocaleLowerCase()
+            ) ?? 0;
+            const exactDuplicateCount = skill.content_hash
+              ? (hashGroupCounts.get(skill.content_hash) ?? 0)
+              : 0;
 
             if (viewMode === "grid") {
               return (
@@ -1408,8 +1459,23 @@ export function MySkills() {
                     <p className="text-[13px] leading-[18px] text-muted truncate">
                       {skill.description || "—"}
                     </p>
-                    {((badge && !showUpdatePill) || conflictIds.has(skill.id)) && (
+                    {(
+                      (badge && !showUpdatePill)
+                      || conflictIds.has(skill.id)
+                      || duplicateNameCount > 1
+                      || exactDuplicateCount > 1
+                    ) && (
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {duplicateNameCount > 1 && (
+                          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-300">
+                            {t("mySkills.foundation.sameName", { count: duplicateNameCount })}
+                          </span>
+                        )}
+                        {exactDuplicateCount > 1 && (
+                          <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-300">
+                            {t("mySkills.foundation.sameContent", { count: exactDuplicateCount })}
+                          </span>
+                        )}
                         {conflictIds.has(skill.id) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate("/backup"); }}
@@ -1622,6 +1688,16 @@ export function MySkills() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2.5">
+                  {duplicateNameCount > 1 && (
+                    <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-300">
+                      {t("mySkills.foundation.sameName", { count: duplicateNameCount })}
+                    </span>
+                  )}
+                  {exactDuplicateCount > 1 && (
+                    <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-300">
+                      {t("mySkills.foundation.sameContent", { count: exactDuplicateCount })}
+                    </span>
+                  )}
                   {conflictIds.has(skill.id) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate("/backup"); }}

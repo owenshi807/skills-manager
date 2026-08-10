@@ -4,7 +4,6 @@
   },
   "sidebar": {
     "dashboard": "Dashboard",
-    "organizeSkills": "Organize",
     "mySkills": "Library",
     "globalWorkspace": "Global Workspace",
     "lobsterAgents": "Lobster Agents",
@@ -104,7 +103,7 @@
     "presets": "Presets",
     "projects": "Projects",
     "actions": "Actions",
-    "scanImport": "Organize local skills",
+    "scanImport": "Organize library",
     "hints": {
       "navigate": "navigate",
       "open": "open",
@@ -119,7 +118,7 @@
     "connectedAgents": "Connected Agents",
     "synced": "Synced",
     "notSynced": "Not synced",
-    "scanImport": "Organize Local Skills",
+    "scanImport": "Organize Library",
     "installNew": "Install New Skills",
     "recentActivity": "Recent Activity"
   },
@@ -276,7 +275,13 @@
       "libraryOnlyHint": "Not deployed to any agent",
       "noAgentVisibility": "No agent can currently see it",
       "attention": "Needs attention",
-      "attentionHint": "Missing source, error, or sync conflict",
+      "attentionHint": "{{names}} same-name groups · {{contents}} same-content groups",
+      "sameName": "{{count}} share this name",
+      "sameContent": "{{count}} share this content",
+      "filters": {
+        "all": "All {{count}}",
+        "needsReview": "Review {{count}}"
+      },
       "agentCount": "{{count}} agents",
       "mixedProjection": "Multiple deployments",
       "symlink": "Symlink deployment",

@@ -96,7 +96,7 @@ export function Dashboard() {
       {/* Actions */}
       <div className="flex gap-3">
         <button
-          onClick={() => navigate("/organize")}
+          onClick={() => navigate("/my-skills")}
           className="app-button-primary flex-1"
         >
           <Download className="w-4 h-4" />
