@@ -1,8 +1,10 @@
 import {
   ArrowRight,
+  Bot,
   Boxes,
   CheckCircle2,
   CircleAlert,
+  Copy,
   GitCompareArrows,
   Layers3,
   Link2,
@@ -11,7 +13,8 @@ import {
 import { useTranslation } from "react-i18next";
 import type { ManagedSkill, ToolInfo } from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
-import { countSkillsInRelations } from "../lib/skillOrganization";
+import type { SkillCapabilityGroup } from "../lib/skillOrganization";
+import { countSkillsInCapabilityGroups } from "../lib/skillOrganization";
 import { cn } from "../utils";
 
 interface SharedProps {
@@ -23,12 +26,20 @@ interface SharedProps {
 }
 
 interface OrganizeProps extends SharedProps {
-  groups: SkillRelationGroup[];
-  onShowAll: () => void;
+  capabilityGroups: SkillCapabilityGroup[];
+  relationshipGroups: SkillRelationGroup[];
+  resolvedIds: Set<string>;
+  onShowIssues: () => void;
 }
 
 interface IssuesProps extends SharedProps {
   issues: SkillIssue[];
+  resolvedIds: Set<string>;
+  selectedAgent: "codex" | "claude_code";
+  onAgentChange: (agent: "codex" | "claude_code") => void;
+  onResolveIssue: (issue: SkillIssue) => void;
+  onResolveMany: (issues: SkillIssue[]) => void;
+  onHandOff: (issue: SkillIssue) => void;
 }
 
 function toolNames(skill: ManagedSkill, tools: ToolInfo[]) {
@@ -116,16 +127,24 @@ function relationCopy(kind: SkillRelationGroup["kind"], t: ReturnType<typeof use
 
 export function SkillOrganizeView({
   skills,
-  groups,
+  capabilityGroups,
+  relationshipGroups,
+  resolvedIds,
   search,
   displayNames,
   tools,
   onOpenSkill,
-  onShowAll,
+  onShowIssues,
 }: OrganizeProps) {
   const { t } = useTranslation();
-  const groupedSkillCount = countSkillsInRelations(groups);
-  const visibleGroups = groups.filter((group) => matchesSearch(group.skills, group.label, search));
+  const groupedSkillCount = countSkillsInCapabilityGroups(capabilityGroups);
+  const confirmedRelationshipGroups = relationshipGroups.filter((group) => resolvedIds.has(group.id));
+  const pendingRelationshipCount = relationshipGroups.length - confirmedRelationshipGroups.length;
+  const visibleGroups = capabilityGroups.filter((group) => matchesSearch(
+    group.skills,
+    t(`mySkills.organization.families.${group.labelKey}.label`),
+    search,
+  ));
 
   return (
     <div className="space-y-4 pb-8">
@@ -135,7 +154,7 @@ export function SkillOrganizeView({
             <Layers3 className="h-3.5 w-3.5" />
             {t("mySkills.organization.summary.groups")}
           </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{groups.length}</div>
+          <div className="mt-1 text-[22px] font-semibold text-primary">{capabilityGroups.length}</div>
           <div className="text-[10px] text-faint">{t("mySkills.organization.summary.groupsHint")}</div>
         </div>
         <div className="app-panel px-4 py-3">
@@ -143,16 +162,16 @@ export function SkillOrganizeView({
             <Boxes className="h-3.5 w-3.5" />
             {t("mySkills.organization.summary.grouped")}
           </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{groupedSkillCount}</div>
+          <div className="mt-1 text-[22px] font-semibold text-primary">{groupedSkillCount} / {skills.length}</div>
           <div className="text-[10px] text-faint">{t("mySkills.organization.summary.groupedHint")}</div>
         </div>
-        <button type="button" onClick={onShowAll} className="app-panel px-4 py-3 text-left transition-colors hover:bg-surface-hover">
+        <button type="button" onClick={onShowIssues} className="app-panel px-4 py-3 text-left transition-colors hover:bg-surface-hover">
           <div className="flex items-center gap-2 text-[11px] font-semibold text-muted">
             <CircleAlert className="h-3.5 w-3.5" />
-            {t("mySkills.organization.summary.ungrouped")}
+            {t("mySkills.organization.summary.relationships")}
           </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{skills.length - groupedSkillCount}</div>
-          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.ungroupedHint")}</div>
+          <div className="mt-1 text-[22px] font-semibold text-primary">{pendingRelationshipCount}</div>
+          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.relationshipsHint")}</div>
         </button>
       </div>
 
@@ -173,33 +192,27 @@ export function SkillOrganizeView({
       ) : (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {visibleGroups.map((group) => {
-            const copy = relationCopy(group.kind, t);
+            const label = t(`mySkills.organization.families.${group.labelKey}.label`);
+            const description = t(`mySkills.organization.families.${group.labelKey}.description`);
             return (
               <article key={group.id} className="app-panel flex flex-col p-4 shadow-card">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="truncate text-[15px] font-semibold text-primary">{group.label}</h3>
+                      <h3 className="truncate text-[15px] font-semibold text-primary">{label}</h3>
                       <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-muted">
                         {t("mySkills.organization.skillCount", { count: group.skills.length })}
                       </span>
                     </div>
-                    <p className="mt-1 text-[12px] leading-5 text-muted">{copy.fact}</p>
+                    <p className="mt-1 text-[12px] leading-5 text-muted">{description}</p>
                   </div>
-                  <span className={cn(
-                    "shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold",
-                    copy.tone === "safe"
-                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
-                      : "bg-amber-500/10 text-amber-600 dark:text-amber-300",
-                  )}>
-                    {copy.tone === "safe"
-                      ? t("mySkills.organization.direct")
-                      : t("mySkills.organization.needsDecision")}
+                  <span className="shrink-0 rounded-full bg-accent-bg px-2 py-1 text-[10px] font-semibold text-accent-light">
+                    {t(`mySkills.organization.groupBasis.${group.basisKey}`)}
                   </span>
                 </div>
 
                 <div className="mt-3 space-y-1.5">
-                  {group.skills.map((skill) => (
+                  {group.skills.slice(0, 6).map((skill) => (
                     <MemberRow
                       key={skill.id}
                       skill={skill}
@@ -208,19 +221,61 @@ export function SkillOrganizeView({
                       onOpen={() => onOpenSkill(skill.id)}
                     />
                   ))}
+                  {group.skills.length > 6 && (
+                    <div className="px-3 py-1 text-[11px] text-faint">
+                      {t("mySkills.organization.moreMembers", { count: group.skills.length - 6 })}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-3 rounded-lg border border-border-faint bg-bg-secondary/50 px-3 py-2.5">
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
                     {t("mySkills.organization.recommendation")}
                   </div>
                   <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">
-                    {copy.recommendation}
+                    {t("mySkills.organization.familyRecommendation")}
                   </div>
                 </div>
               </article>
             );
           })}
         </div>
+      )}
+
+      {confirmedRelationshipGroups.length > 0 && (
+        <section className="space-y-3 pt-2">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-[14px] font-semibold text-primary">
+                {t("mySkills.organization.confirmedRelations", { count: confirmedRelationshipGroups.length })}
+              </h2>
+              <p className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.confirmedRelationsHint")}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+            {confirmedRelationshipGroups
+              .filter((group) => matchesSearch(group.skills, group.label, search))
+              .map((group) => (
+                <article key={group.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate text-[13px] font-semibold text-primary">{group.label}</h3>
+                        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
+                          {t("mySkills.organization.skillCount", { count: group.skills.length })}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted">
+                        {group.kind === "name_collision"
+                          ? t("mySkills.organization.confirmedKeepGrouped")
+                          : t("mySkills.organization.confirmedRelation")}
+                      </p>
+                    </div>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  </div>
+                </article>
+              ))}
+          </div>
+        </section>
       )}
     </div>
   );
@@ -262,17 +317,25 @@ function issueCopy(kind: SkillIssue["kind"], t: ReturnType<typeof useTranslation
 
 export function SkillIssuesView({
   issues,
+  resolvedIds,
+  selectedAgent,
+  onAgentChange,
+  onResolveIssue,
+  onResolveMany,
+  onHandOff,
   search,
   displayNames,
   tools,
   onOpenSkill,
 }: IssuesProps) {
   const { t } = useTranslation();
-  const visibleIssues = issues.filter((issue) => {
+  const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
+  const visibleIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
     return matchesSearch(issue.skills, copy.title, search);
   });
-  const directCount = issues.filter((issue) => issue.kind === "exact_duplicate" || issue.kind === "content_alias").length;
+  const duplicateCount = unresolvedIssues.filter((issue) => issue.kind === "exact_duplicate" || issue.kind === "content_alias").length;
+  const nameCollisionIssues = unresolvedIssues.filter((issue) => issue.kind === "name_collision");
 
   return (
     <div className="space-y-4 pb-8">
@@ -282,17 +345,40 @@ export function SkillIssuesView({
             <h2 className="text-[15px] font-semibold text-primary">{t("mySkills.organization.issuesTitle")}</h2>
             <p className="mt-1 text-[12px] leading-5 text-muted">{t("mySkills.organization.issuesIntro")}</p>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-emerald-600 dark:text-emerald-300">{directCount}</div>
-              <div className="text-[10px] text-emerald-600/80 dark:text-emerald-300/80">{t("mySkills.organization.directCount")}</div>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="rounded-lg bg-red-500/10 px-3 py-2 text-center">
+              <div className="text-[17px] font-semibold text-red-600 dark:text-red-300">{duplicateCount}</div>
+              <div className="text-[10px] text-red-600/80 dark:text-red-300/80">{t("mySkills.organization.duplicateCount")}</div>
             </div>
             <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{issues.length - directCount}</div>
-              <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.decisionCount")}</div>
+              <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{nameCollisionIssues.length}</div>
+              <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.nameCollisionCount")}</div>
             </div>
+            <select
+              value={selectedAgent}
+              onChange={(event) => onAgentChange(event.target.value as "codex" | "claude_code")}
+              className="app-input h-10 min-w-[132px] text-[12px]"
+              aria-label={t("mySkills.organization.chooseAgent")}
+            >
+              <option value="codex">Codex</option>
+              <option value="claude_code">Claude Code</option>
+            </select>
           </div>
         </div>
+        {nameCollisionIssues.length > 1 && (
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/20 bg-accent-bg px-3 py-2.5">
+            <div>
+              <div className="text-[12px] font-semibold text-secondary">
+                {t("mySkills.organization.batchTitle", { count: nameCollisionIssues.length })}
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.batchHint")}</div>
+            </div>
+            <button type="button" onClick={() => onResolveMany(nameCollisionIssues)} className="app-button-primary">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {t("mySkills.organization.batchAction", { count: nameCollisionIssues.length })}
+            </button>
+          </div>
+        )}
       </div>
 
       {visibleIssues.length === 0 ? (
@@ -345,6 +431,19 @@ export function SkillIssuesView({
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">{t("mySkills.organization.impact")}</div>
                     <div className="mt-1 text-[12px] text-muted">{copy.impact}</div>
                   </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
+                  <button type="button" onClick={() => onHandOff(issue)} className="app-button-secondary">
+                    <Bot className="h-3.5 w-3.5" />
+                    {t("mySkills.organization.handOff", { agent: selectedAgent === "codex" ? "Codex" : "Claude Code" })}
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  {issue.kind === "name_collision" && (
+                    <button type="button" onClick={() => onResolveIssue(issue)} className="app-button-primary">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {t("mySkills.organization.acceptRecommendation")}
+                    </button>
+                  )}
                 </div>
               </article>
             );

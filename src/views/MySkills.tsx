@@ -28,6 +28,7 @@ import {
   CircleAlert,
 } from "lucide-react";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import { writeText as clipboardWriteText } from "@tauri-apps/plugin-clipboard-manager";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -44,7 +45,12 @@ import { CardActionMenu } from "../components/CardActionMenu";
 import { SkillIssuesView, SkillOrganizeView } from "../components/SkillOrganizationViews";
 import * as api from "../lib/tauri";
 import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER } from "../lib/skillTags";
-import { buildSkillIssues, buildSkillRelationGroups } from "../lib/skillOrganization";
+import {
+  buildSkillCapabilityGroups,
+  buildSkillIssues,
+  buildSkillRelationGroups,
+} from "../lib/skillOrganization";
+import type { SkillIssue } from "../lib/skillOrganization";
 import type {
   ManagedSkill,
   ToolInfo,
@@ -151,6 +157,15 @@ export function MySkills() {
   } = useApp();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [libraryView, setLibraryView] = useState<"all" | "organize" | "issues">("all");
+  const [organizationAgent, setOrganizationAgent] = useState<"codex" | "claude_code">("codex");
+  const [resolvedOrganizationIds, setResolvedOrganizationIds] = useState<Set<string>>(() => {
+    try {
+      const stored = window.localStorage.getItem("skill-card-master:organization-resolutions:v1");
+      return new Set(stored ? JSON.parse(stored) as string[] : []);
+    } catch {
+      return new Set();
+    }
+  });
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -306,10 +321,22 @@ export function MySkills() {
   );
 
   const relationGroups = useMemo(() => buildSkillRelationGroups(skills), [skills]);
+  const capabilityGroups = useMemo(() => buildSkillCapabilityGroups(skills), [skills]);
   const organizationIssues = useMemo(
     () => buildSkillIssues(skills, relationGroups, conflictIds),
     [skills, relationGroups, conflictIds],
   );
+  const unresolvedOrganizationCount = useMemo(
+    () => organizationIssues.filter((issue) => !resolvedOrganizationIds.has(issue.id)).length,
+    [organizationIssues, resolvedOrganizationIds],
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "skill-card-master:organization-resolutions:v1",
+      JSON.stringify([...resolvedOrganizationIds]),
+    );
+  }, [resolvedOrganizationIds]);
 
   const filtered = useMemo(() => {
     const result = skills.filter((skill) => {
@@ -970,7 +997,7 @@ export function MySkills() {
     () => skills.reduce((total, skill) => total + skill.targets.length, 0),
     [skills]
   );
-  const attentionCount = organizationIssues.length;
+  const attentionCount = unresolvedOrganizationCount;
   const refreshableSelectedCount = useMemo(
     () => skills.filter((skill) => selectedIds.has(skill.id) && canRefresh(skill)).length,
     [skills, selectedIds]
@@ -1036,6 +1063,75 @@ export function MySkills() {
     return null;
   };
 
+  const resolveOrganizationIssues = useCallback((issues: SkillIssue[]) => {
+    const ids = issues.map((issue) => issue.id);
+    setResolvedOrganizationIds((previous) => {
+      const next = new Set(previous);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+    toast.success(t("mySkills.organization.resolvedToast", { count: ids.length }), {
+      action: {
+        label: t("mySkills.organization.undo"),
+        onClick: () => setResolvedOrganizationIds((previous) => {
+          const next = new Set(previous);
+          ids.forEach((id) => next.delete(id));
+          return next;
+        }),
+      },
+    });
+  }, [t]);
+
+  const handOffOrganizationIssue = useCallback(async (issue: SkillIssue) => {
+    const agentName = organizationAgent === "codex" ? "Codex" : "Claude Code";
+    const memberContext = issue.skills.map((skill, index) => {
+      const agents = [...new Set(skill.targets.map((target) => getToolDisplayName(target.tool, tools)))];
+      return [
+        `### Skill ${index + 1}: ${skillDisplayNames.get(skill.id) || skill.name}`,
+        `- ID: ${skill.id}`,
+        `- 用途: ${skill.description || "未提供"}`,
+        `- 中央库路径: ${skill.central_path}`,
+        `- 原始来源: ${skill.source_ref_resolved || skill.source_ref || "未知"}`,
+        `- 当前使用 Agent: ${agents.length > 0 ? agents.join("、") : "无"}`,
+        `- 内容指纹: ${skill.content_hash || "无法验证"}`,
+      ].join("\n");
+    }).join("\n\n");
+    const actionChoices = issue.kind === "name_collision"
+      ? "keep_grouped（都保留并归为一组，同时建议清楚的显示名称）、keep_separate（确认不是同类）、needs_manual_compare"
+      : "consolidate_candidate（建议统一管理并指定 canonical）、keep_separate、needs_manual_compare";
+    const prompt = [
+      `# Skill Manager 整理任务 · ${agentName}`,
+      "",
+      "你正在替 Skill Manager 执行一次有边界的语义判断。请读取下列中央库路径中的 SKILL.md 和必要的同目录说明，判断这些 Skill 的关系。",
+      "",
+      "## 产品约束",
+      "- Skill Manager 是事实与安全边界的持有者；你负责语义比较和给出可审计的整理计划。",
+      "- 不得删除、移动、覆盖或改写任何 Skill、来源目录、Agent 投放目录、Preset 或 Harness。",
+      "- 同名不等于重复；当前内容相同也不自动等于同一 owner。",
+      "- 若证据不足，必须选择 needs_manual_compare，不得猜测。",
+      "- 输出应让普通用户看懂：共同用途、关键差异、推荐动作、执行影响。",
+      "",
+      "## 可选动作",
+      actionChoices,
+      "",
+      "## 需要检查的 Skills",
+      memberContext,
+      "",
+      "## 输出格式",
+      "先用不超过 120 字给出用户可见结论，再输出一个 JSON code block：",
+      "{\"action\":\"...\",\"group_name\":\"...\",\"display_names\":{\"skill_id\":\"建议名称\"},\"reason\":\"...\",\"impact\":\"...\",\"confidence\":\"high|medium|low\"}",
+      "",
+      "只做分析并返回计划。实际写入必须回到 Skill Manager 由用户确认。",
+    ].join("\n");
+
+    try {
+      await clipboardWriteText(prompt);
+    } catch {
+      await navigator.clipboard.writeText(prompt);
+    }
+    toast.success(t("mySkills.organization.handoffCopied", { agent: agentName }));
+  }, [organizationAgent, skillDisplayNames, t, tools]);
+
   return (
     <div className="app-page">
       <div className="app-page-header pr-2 pb-1 flex items-center justify-between gap-3">
@@ -1049,40 +1145,6 @@ export function MySkills() {
           </p>
         </div>
 
-      </div>
-
-      <div className="flex items-center gap-1 border-b border-border-subtle">
-        {([
-          { id: "all", icon: LayoutGrid, count: skills.length },
-          { id: "organize", icon: Layers, count: relationGroups.length },
-          { id: "issues", icon: CircleAlert, count: organizationIssues.length },
-        ] as const).map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setLibraryView(item.id);
-                exitMultiSelect();
-              }}
-              className={cn(
-                "relative inline-flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-muted transition-colors hover:text-secondary",
-                libraryView === item.id && "text-primary",
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {t(`mySkills.organization.tabs.${item.id}`)}
-              <span className={cn(
-                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                libraryView === item.id ? "bg-accent-bg text-accent-light" : "bg-surface-hover text-faint",
-              )}>
-                {item.count}
-              </span>
-              {libraryView === item.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />}
-            </button>
-          );
-        })}
       </div>
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -1132,7 +1194,44 @@ export function MySkills() {
 
         </div>
 
-        {libraryView === "all" && <div className="app-segmented">
+      </div>
+
+      <div className="flex items-center gap-1 border-b border-border-subtle">
+        {([
+          { id: "all", icon: LayoutGrid, count: skills.length },
+          { id: "organize", icon: Layers, count: capabilityGroups.length },
+          { id: "issues", icon: CircleAlert, count: unresolvedOrganizationCount },
+        ] as const).map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setLibraryView(item.id);
+                exitMultiSelect();
+              }}
+              className={cn(
+                "relative inline-flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-muted transition-colors hover:text-secondary",
+                libraryView === item.id && "text-primary",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {t(`mySkills.organization.tabs.${item.id}`)}
+              <span className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                libraryView === item.id ? "bg-accent-bg text-accent-light" : "bg-surface-hover text-faint",
+              )}>
+                {item.count}
+              </span>
+              {libraryView === item.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />}
+            </button>
+          );
+        })}
+      </div>
+
+      {libraryView === "all" && <div className="flex items-center justify-end">
+        <div className="app-segmented">
           {(() => {
             const mode = getGitToolbarMode();
             const meta = getGitStatusMeta(mode);
@@ -1196,8 +1295,8 @@ export function MySkills() {
           >
             <SquareCheck className="h-4 w-4" />
           </button>
-        </div>}
-      </div>
+        </div>
+      </div>}
 
       {libraryView === "all" && <div className="flex flex-wrap items-center gap-1 px-1 -mt-2 -mb-3">
         {(["local", "import", "git", "skillssh"] as const).map((src) => (
@@ -1295,17 +1394,25 @@ export function MySkills() {
       {libraryView === "organize" ? (
         <SkillOrganizeView
           skills={skills}
-          groups={relationGroups}
+          capabilityGroups={capabilityGroups}
+          relationshipGroups={relationGroups}
+          resolvedIds={resolvedOrganizationIds}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}
           onOpenSkill={openSkillDetailById}
-          onShowAll={() => setLibraryView("all")}
+          onShowIssues={() => setLibraryView("issues")}
         />
       ) : libraryView === "issues" ? (
         <SkillIssuesView
           skills={skills}
           issues={organizationIssues}
+          resolvedIds={resolvedOrganizationIds}
+          selectedAgent={organizationAgent}
+          onAgentChange={setOrganizationAgent}
+          onResolveIssue={(issue) => resolveOrganizationIssues([issue])}
+          onResolveMany={resolveOrganizationIssues}
+          onHandOff={handOffOrganizationIssue}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}
