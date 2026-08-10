@@ -31,6 +31,7 @@
     "scanSummary": "Scanned {{agents}} agents · found {{locations}} locations · representing {{skills}} skill sources",
     "scanning": "Scanning…",
     "rescan": "Scan again",
+    "desktopOnly": "This is a web preview and cannot read local files. Open Organize in the Skills Manager desktop app.",
     "queueLabel": "Organization results",
     "queues": { "pending": "To collect", "issues": "Duplicates / conflicts", "managed": "Managed" },
     "search": "Search name, agent, or path…",

@@ -34,6 +34,7 @@ function normalizedName(name: string) {
 export function OrganizeSkills() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const isDesktopRuntime = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
   const { managedSkills, refreshManagedSkills, refreshPresets, openSkillDetailById } = useApp();
   const [result, setResult] = useState<ScanResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,8 +59,8 @@ export function OrganizeSkills() {
   }, [t]);
 
   useEffect(() => {
-    void scan();
-  }, [scan]);
+    if (isDesktopRuntime) void scan();
+  }, [isDesktopRuntime, scan]);
 
   const analysis = useMemo(() => {
     const groups = result?.groups ?? [];
@@ -201,13 +202,18 @@ export function OrganizeSkills() {
                 : t("organize.scanBefore")}
             </p>
           </div>
-          <button className="app-button-primary" onClick={() => void scan()} disabled={loading}>
+          <button className="app-button-primary" onClick={() => void scan()} disabled={loading || !isDesktopRuntime}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {loading ? t("organize.scanning") : t("organize.rescan")}
           </button>
         </div>
 
-        {error ? (
+        {!isDesktopRuntime ? (
+          <div className="m-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2.5 text-[12px] leading-5 text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{t("organize.desktopOnly")}</span>
+          </div>
+        ) : error ? (
           <div className="m-4 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-[12px] text-red-300">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>

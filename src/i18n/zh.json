@@ -31,6 +31,7 @@
     "scanSummary": "扫描 {{agents}} 个 Agent · 发现 {{locations}} 个位置 · 对应 {{skills}} 个 Skill 来源",
     "scanning": "正在扫描…",
     "rescan": "重新扫描",
+    "desktopOnly": "当前是网页预览，无法读取本机文件。请使用 Skills Manager 桌面应用中的“整理”页面。",
     "queueLabel": "整理结果",
     "queues": { "pending": "待收入", "issues": "重复 / 冲突", "managed": "已纳管" },
     "search": "搜索名称、Agent 或路径…",
