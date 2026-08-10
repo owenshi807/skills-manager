@@ -456,7 +456,7 @@ export function MySkills() {
       case_id: group.id,
       issue_kind: group.kind,
       member_ids: group.skills.map((skill) => skill.id),
-      verify_strict_artifact: group.kind === "exact_duplicate" || group.kind === "content_alias",
+      verify_strict_artifact: true,
     }));
     Promise.all([
       api.inspectOrganizationCases(cases),
@@ -1312,7 +1312,12 @@ export function MySkills() {
       return;
     }
     try {
-      const decision = await api.setOrganizationDecision(issue.id, issue.caseRevision, disposition);
+      const decision = await api.setOrganizationDecision({
+        case_id: issue.id,
+        issue_kind: issue.kind,
+        member_ids: issue.skills.map((skill) => skill.id),
+        verify_strict_artifact: true,
+      }, issue.caseRevision, disposition);
       setOrganizationDecisions((current) => [
         decision,
         ...current.filter((item) => item.case_key !== decision.case_key),
@@ -2193,6 +2198,7 @@ export function MySkills() {
         onToggleTool={handleToggleSkillTool}
         projects={projects}
         onProjectsChanged={refreshProjects}
+        readOnly={libraryView !== "all"}
       />
 
       <ConfirmDialog

@@ -37,6 +37,7 @@ interface Props {
   onToggleTool?: (tool: string, enabled: boolean) => void;
   projects?: Project[];
   onProjectsChanged?: () => void;
+  readOnly?: boolean;
 }
 
 export function SkillDetailPanel({
@@ -48,6 +49,7 @@ export function SkillDetailPanel({
   onToggleTool,
   projects,
   onProjectsChanged,
+  readOnly = false,
 }: Props) {
   if (!skill) return null;
 
@@ -71,6 +73,7 @@ export function SkillDetailPanel({
       onToggleTool={onToggleTool}
       projects={projects}
       onProjectsChanged={onProjectsChanged}
+      readOnly={readOnly}
     />
   );
 }
@@ -84,6 +87,7 @@ function SkillDetailPanelContent({
   onToggleTool,
   projects,
   onProjectsChanged,
+  readOnly,
 }: {
   skill: ManagedSkill;
   onClose: () => void;
@@ -93,6 +97,7 @@ function SkillDetailPanelContent({
   onToggleTool?: (tool: string, enabled: boolean) => void;
   projects?: Project[];
   onProjectsChanged?: () => void;
+  readOnly: boolean;
 }) {
   const { t } = useTranslation();
   const [doc, setDoc] = useState<SkillDocument | null>(null);
@@ -311,7 +316,7 @@ function SkillDetailPanelContent({
       meta={meta}
       onClose={onClose}
     >
-      {toolToggles && onToggleTool && (
+      {!readOnly && toolToggles && onToggleTool && (
         <AgentToggleSection
           items={toggleItems}
           togglingKey={togglingTool}
@@ -320,7 +325,7 @@ function SkillDetailPanelContent({
         />
       )}
 
-      {projects && projects.length > 0 && (
+      {!readOnly && projects && projects.length > 0 && (
         <SkillProjectsSection
           skill={skill}
           projects={projects}

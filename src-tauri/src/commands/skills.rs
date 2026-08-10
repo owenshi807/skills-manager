@@ -804,7 +804,7 @@ pub async fn get_organization_decisions(
 
 #[tauri::command]
 pub async fn set_organization_decision(
-    case_key: String,
+    case: OrganizationCaseRequest,
     evidence_fingerprint: String,
     disposition: String,
     store: State<'_, Arc<SkillStore>>,
@@ -816,15 +816,27 @@ pub async fn set_organization_decision(
         "defer",
         "dismissed",
     ];
-    if case_key.is_empty()
-        || case_key.len() > 512
-        || evidence_fingerprint.len() != 64
-        || !ALLOWED.contains(&disposition.as_str())
-    {
+    if evidence_fingerprint.len() != 64 || !ALLOWED.contains(&disposition.as_str()) {
         return Err(AppError::invalid_input("Invalid organization decision"));
     }
     let store = store.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let case_key = case.case_id.clone();
+        let current = inspect_organization_cases_sync(
+            vec![OrganizationCaseRequest {
+                verify_strict_artifact: true,
+                ..case
+            }],
+            &store,
+        )?
+        .into_iter()
+        .next()
+        .ok_or_else(|| AppError::invalid_input("Organization case not found"))?;
+        if current.case_revision != evidence_fingerprint || current.decision.tier == "blocked" {
+            return Err(AppError::invalid_input(
+                "Organization evidence changed or is incomplete; refresh before deciding",
+            ));
+        }
         store
             .set_organization_decision(&case_key, &evidence_fingerprint, &disposition)
             .map_err(AppError::db)
@@ -865,10 +877,7 @@ fn prepare_organization_agent_prompt(
                 case_id: task.case_id.clone(),
                 issue_kind: task.issue_kind.clone(),
                 member_ids: task.member_ids.clone(),
-                verify_strict_artifact: matches!(
-                    task.issue_kind.as_str(),
-                    "exact_duplicate" | "content_alias"
-                ),
+                verify_strict_artifact: true,
             })
             .collect(),
         store,
@@ -1131,7 +1140,7 @@ mod organization_health_tests {
                 case_id: "name:compare".to_string(),
                 issue_kind: "name_collision".to_string(),
                 member_ids: vec!["first".to_string(), "second".to_string()],
-                verify_strict_artifact: false,
+                verify_strict_artifact: true,
             }],
             &store,
         )
@@ -1152,6 +1161,22 @@ mod organization_health_tests {
         assert!(!prompt.contains(first_dir.to_string_lossy().as_ref()));
         assert!(!prompt.contains(second_dir.to_string_lossy().as_ref()));
         assert_eq!(expected[0].0, "name:compare");
+
+        std::fs::write(
+            second_dir.join("SKILL.md"),
+            "---\nname: compare\ndescription: changed\n---\n# Changed",
+        )
+        .unwrap();
+        assert!(prepare_organization_agent_prompt(
+            &[OrganizationAgentCaseTask {
+                case_id: "name:compare".to_string(),
+                case_revision: evidence[0].case_revision.clone(),
+                issue_kind: "name_collision".to_string(),
+                member_ids: vec!["first".to_string(), "second".to_string()],
+            }],
+            &store,
+        )
+        .is_err());
     }
 }
 

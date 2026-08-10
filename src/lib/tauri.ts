@@ -368,11 +368,11 @@ export const getOrganizationDecisions = () =>
   invoke<OrganizationDecision[]>("get_organization_decisions");
 
 export const setOrganizationDecision = (
-  caseKey: string,
+  caseRequest: OrganizationCaseRequest,
   evidenceFingerprint: string,
   disposition: OrganizationDisposition,
 ) => invoke<OrganizationDecision>("set_organization_decision", {
-  caseKey,
+  case: caseRequest,
   evidenceFingerprint,
   disposition,
 });
