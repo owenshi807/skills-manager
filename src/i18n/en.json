@@ -288,6 +288,73 @@
       "copy": "Copy deployment",
       "placed": "Deployed"
     },
+    "organization": {
+      "tabs": {
+        "all": "All",
+        "organize": "Organize",
+        "issues": "To review"
+      },
+      "summary": {
+        "groups": "Relation groups",
+        "groupsHint": "Grouped using verifiable evidence",
+        "grouped": "Related skills",
+        "groupedHint": "Skills with a known relation to others",
+        "ungrouped": "Not grouped yet",
+        "ungroupedHint": "Return to all skills to keep exploring"
+      },
+      "organizeTitle": "See the relationships behind a flat list of skills",
+      "organizeIntro": "This is not an error list. Each group explains why the skills belong together: they may be identical, different versions with the same name, or related capabilities that still need your judgment.",
+      "noGroups": "No relation groups match your search",
+      "skillCount": "{{count}} skills",
+      "direct": "Clear relation",
+      "needsDecision": "Needs judgment",
+      "relations": {
+        "exactDuplicate": {
+          "fact": "The name and content are identical, so these are duplicate imports of the same capability.",
+          "recommendation": "Manage them as one skill while preserving every source and agent usage relation.",
+          "impact": "Two library items become one; agents keep the same capability; the old item is archived with undo before execution."
+        },
+        "contentAlias": {
+          "fact": "The names differ, but the content is identical. These are likely aliases or copies of the same capability.",
+          "recommendation": "Unify them as one skill and preserve the old names as search aliases.",
+          "impact": "Duplicate content is removed without changing agent-visible capability; all source records are preserved."
+        },
+        "nameCollision": {
+          "fact": "The names match, but the content differs. They are related, but cannot safely be merged as duplicates.",
+          "recommendation": "Keep both in one relation group and distinguish their display names by source or purpose.",
+          "impact": "This first helps people tell them apart; it does not change content, triggers, or agent visibility."
+        }
+      },
+      "issuesTitle": "Understand each case before applying a recommendation",
+      "issuesIntro": "Cases are counted as events, not flagged skills. Every event explains what was found, what we recommend, and what execution would change.",
+      "directCount": "Clear recommendation",
+      "decisionCount": "Needs judgment",
+      "noIssues": "There are no organization events to review",
+      "recommendation": "Recommendation",
+      "impact": "Execution impact",
+      "issues": {
+        "duplicateTitle": "Duplicate skills found",
+        "nameCollisionTitle": "Same name, different content",
+        "sourceMissing": {
+          "title": "Original skill source is missing",
+          "fact": "The library content is intact, but it can no longer update from the original location.",
+          "recommendation": "Relink the source or detach the current content as an independent local version.",
+          "impact": "Library content stays intact; only its update relationship is repaired or removed."
+        },
+        "syncConflict": {
+          "title": "Skill has a sync conflict",
+          "fact": "Both local and remote versions changed, so the system cannot choose safely.",
+          "recommendation": "Compare the versions, then keep local, keep remote, or preserve both.",
+          "impact": "Overwrites stay paused until you decide, protecting changes on both sides."
+        },
+        "readError": {
+          "title": "Skill cannot be read reliably",
+          "fact": "There is not enough evidence to judge its content or relationships.",
+          "recommendation": "Fix permissions or structure before organizing it.",
+          "impact": "Nothing is moved, merged, or deleted until the issue is resolved."
+        }
+      }
+    },
     "applyToDefault": "Apply Preset",
     "applied": "Applied",
     "notAppliedYet": "Not applied yet",

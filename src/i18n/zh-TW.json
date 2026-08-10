@@ -288,6 +288,73 @@
       "copy": "副本投放",
       "placed": "已投放"
     },
+    "organization": {
+      "tabs": {
+        "all": "全部",
+        "organize": "整理",
+        "issues": "待處理"
+      },
+      "summary": {
+        "groups": "關係組",
+        "groupsHint": "系統有依據地聚攏在一起",
+        "grouped": "已發現關係",
+        "groupedHint": "這些 Skill 與其他內容有關聯",
+        "ungrouped": "尚未成組",
+        "ungroupedHint": "返回全部 Skills 繼續查看"
+      },
+      "organizeTitle": "從平鋪的 Skills，看見它們之間的關係",
+      "organizeIntro": "這裡不是異常清單。每一組都解釋這些 Skill 為什麼有關：它們可能是同一份內容、同名的不同版本，或需要進一步確認的同類能力。",
+      "noGroups": "沒有符合搜尋條件的關係組",
+      "skillCount": "{{count}} 個 Skill",
+      "direct": "關係明確",
+      "needsDecision": "需要判斷",
+      "relations": {
+        "exactDuplicate": {
+          "fact": "名稱和內容都完全相同，可以確認它們是重複收入的同一份能力。",
+          "recommendation": "統一管理為一個 Skill，並保留所有來源和 Agent 使用關係。",
+          "impact": "技能庫兩項變一項；Agent 繼續使用原能力；舊項進入可撤銷歸檔後才執行。"
+        },
+        "contentAlias": {
+          "fact": "名稱不同，但內容完全相同；它們很可能是同一份能力的別名或副本。",
+          "recommendation": "統一為一個 Skill，保留舊名稱作為查找線索。",
+          "impact": "減少重複內容，不改變 Agent 當前可見的能力；來源記錄全部保留。"
+        },
+        "nameCollision": {
+          "fact": "名稱相同，但內容不同。它們有關聯，卻不能被當成重複項直接合併。",
+          "recommendation": "兩項都保留，歸在同一關係組，並按來源或用途區分顯示名稱。",
+          "impact": "先只幫助人分清兩項，不修改 Skill 內容、觸發方式或 Agent 使用狀態。"
+        }
+      },
+      "issuesTitle": "逐件理解，再執行整理建議",
+      "issuesIntro": "這裡以「事情」計數，不再把兩個相關 Skill 算成兩項問題。每件事都說明發現、建議和執行影響。",
+      "directCount": "建議明確",
+      "decisionCount": "需要判斷",
+      "noIssues": "目前沒有需要處理的整理事件",
+      "recommendation": "建議",
+      "impact": "執行影響",
+      "issues": {
+        "duplicateTitle": "發現重複的 Skill",
+        "nameCollisionTitle": "發現同名但不同內容的 Skill",
+        "sourceMissing": {
+          "title": "Skill 的原始來源已失效",
+          "fact": "技能庫中的內容仍然完整，但以後無法從原位置更新。",
+          "recommendation": "重新關聯來源，或把目前內容轉為獨立本機版本。",
+          "impact": "不刪除庫內內容；只修復或解除它與原來源的更新關係。"
+        },
+        "syncConflict": {
+          "title": "Skill 存在同步衝突",
+          "fact": "本機和遠端都有變化，系統不能安全替你選擇。",
+          "recommendation": "先比較兩個版本，再決定保留本機、遠端或兩項都保留。",
+          "impact": "確認之前暫停覆蓋，避免遺失任一側修改。"
+        },
+        "readError": {
+          "title": "Skill 目前無法正常讀取",
+          "fact": "系統沒有足夠證據判斷內容和關係。",
+          "recommendation": "先修復權限或內容結構，再繼續整理。",
+          "impact": "問題修復前不移動、不合併、也不刪除任何內容。"
+        }
+      }
+    },
     "applyToDefault": "套用 Preset",
     "applied": "已套用",
     "notAppliedYet": "尚未套用",

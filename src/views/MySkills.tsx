@@ -41,8 +41,10 @@ import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import { BatchTagDialog } from "../components/BatchTagDialog";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { CardActionMenu } from "../components/CardActionMenu";
+import { SkillIssuesView, SkillOrganizeView } from "../components/SkillOrganizationViews";
 import * as api from "../lib/tauri";
 import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER } from "../lib/skillTags";
+import { buildSkillIssues, buildSkillRelationGroups } from "../lib/skillOrganization";
 import type {
   ManagedSkill,
   ToolInfo,
@@ -148,7 +150,7 @@ export function MySkills() {
     refreshProjects,
   } = useApp();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [libraryFilter, setLibraryFilter] = useState<"all" | "needsReview">("all");
+  const [libraryView, setLibraryView] = useState<"all" | "organize" | "issues">("all");
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -249,13 +251,11 @@ export function MySkills() {
   const hasActiveFilters =
     search.trim() !== "" ||
     sourceFilters.size > 0 ||
-    tagFilters.size > 0 ||
-    libraryFilter !== "all";
+    tagFilters.size > 0;
   const clearFilters = () => {
     setSearch("");
     setSourceFilters(new Set());
     setTagFilters(new Set());
-    setLibraryFilter("all");
   };
 
   const skillDisplayNames = useMemo(() => {
@@ -305,22 +305,11 @@ export function MySkills() {
     [hashGroupCounts]
   );
 
-  const needsReviewIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const skill of skills) {
-      const nameKey = skill.name.normalize("NFKC").toLocaleLowerCase();
-      if (
-        (nameGroupCounts.get(nameKey) ?? 0) > 1
-        || (skill.content_hash ? (hashGroupCounts.get(skill.content_hash) ?? 0) > 1 : false)
-        || conflictIds.has(skill.id)
-        || skill.update_status === "source_missing"
-        || skill.update_status === "error"
-      ) {
-        ids.add(skill.id);
-      }
-    }
-    return ids;
-  }, [skills, nameGroupCounts, hashGroupCounts, conflictIds]);
+  const relationGroups = useMemo(() => buildSkillRelationGroups(skills), [skills]);
+  const organizationIssues = useMemo(
+    () => buildSkillIssues(skills, relationGroups, conflictIds),
+    [skills, relationGroups, conflictIds],
+  );
 
   const filtered = useMemo(() => {
     const result = skills.filter((skill) => {
@@ -330,8 +319,6 @@ export function MySkills() {
         displayName.toLowerCase().includes(search.toLowerCase()) ||
         (skill.description || "").toLowerCase().includes(search.toLowerCase());
       if (!matchesSearch) return false;
-
-      if (libraryFilter === "needsReview" && !needsReviewIds.has(skill.id)) return false;
 
       if (sourceFilters.size > 0 && !sourceFilters.has(skill.source_type)) return false;
 
@@ -362,7 +349,7 @@ export function MySkills() {
     }
 
     return result;
-  }, [skills, skillDisplayNames, search, sourceFilters, tagFilters, libraryFilter, needsReviewIds, viewedPreset, presetSkillOrder]);
+  }, [skills, skillDisplayNames, search, sourceFilters, tagFilters, viewedPreset, presetSkillOrder]);
 
   const {
     isMultiSelect, setIsMultiSelect,
@@ -983,7 +970,7 @@ export function MySkills() {
     () => skills.reduce((total, skill) => total + skill.targets.length, 0),
     [skills]
   );
-  const attentionCount = needsReviewIds.size;
+  const attentionCount = organizationIssues.length;
   const refreshableSelectedCount = useMemo(
     () => skills.filter((skill) => selectedIds.has(skill.id) && canRefresh(skill)).length,
     [skills, selectedIds]
@@ -1064,6 +1051,40 @@ export function MySkills() {
 
       </div>
 
+      <div className="flex items-center gap-1 border-b border-border-subtle">
+        {([
+          { id: "all", icon: LayoutGrid, count: skills.length },
+          { id: "organize", icon: Layers, count: relationGroups.length },
+          { id: "issues", icon: CircleAlert, count: organizationIssues.length },
+        ] as const).map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setLibraryView(item.id);
+                exitMultiSelect();
+              }}
+              className={cn(
+                "relative inline-flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-muted transition-colors hover:text-secondary",
+                libraryView === item.id && "text-primary",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {t(`mySkills.organization.tabs.${item.id}`)}
+              <span className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                libraryView === item.id ? "bg-accent-bg text-accent-light" : "bg-surface-hover text-faint",
+              )}>
+                {item.count}
+              </span>
+              {libraryView === item.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {[
           { label: t("mySkills.foundation.managed"), value: skills.length, detail: t("mySkills.foundation.managedHint"), icon: Library },
@@ -1109,26 +1130,9 @@ export function MySkills() {
             />
           </div>
 
-          <div className="app-segmented">
-            {(["all", "needsReview"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setLibraryFilter(mode)}
-                className={cn(
-                  "app-segmented-button",
-                  libraryFilter === mode && "app-segmented-button-active"
-                )}
-              >
-                {t(`mySkills.foundation.filters.${mode}`, {
-                  count: mode === "needsReview" ? attentionCount : skills.length,
-                })}
-              </button>
-            ))}
-          </div>
-
         </div>
 
-        <div className="app-segmented">
+        {libraryView === "all" && <div className="app-segmented">
           {(() => {
             const mode = getGitToolbarMode();
             const meta = getGitStatusMeta(mode);
@@ -1192,10 +1196,10 @@ export function MySkills() {
           >
             <SquareCheck className="h-4 w-4" />
           </button>
-        </div>
+        </div>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 px-1 -mt-2 -mb-3">
+      {libraryView === "all" && <div className="flex flex-wrap items-center gap-1 px-1 -mt-2 -mb-3">
         {(["local", "import", "git", "skillssh"] as const).map((src) => (
           <button
             key={src}
@@ -1257,9 +1261,9 @@ export function MySkills() {
             })}
           </>
         )}
-      </div>
+      </div>}
 
-      {isMultiSelect && (
+      {libraryView === "all" && isMultiSelect && (
         <MultiSelectToolbar
           selectedCount={selectedIds.size}
           isAllSelected={isAllSelected}
@@ -1288,7 +1292,26 @@ export function MySkills() {
         />
       )}
 
-      {filtered.length === 0 ? (
+      {libraryView === "organize" ? (
+        <SkillOrganizeView
+          skills={skills}
+          groups={relationGroups}
+          search={search}
+          displayNames={skillDisplayNames}
+          tools={tools}
+          onOpenSkill={openSkillDetailById}
+          onShowAll={() => setLibraryView("all")}
+        />
+      ) : libraryView === "issues" ? (
+        <SkillIssuesView
+          skills={skills}
+          issues={organizationIssues}
+          search={search}
+          displayNames={skillDisplayNames}
+          tools={tools}
+          onOpenSkill={openSkillDetailById}
+        />
+      ) : filtered.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center pb-20 text-center">
           <Layers className="mb-4 h-12 w-12 text-faint" />
           <h3 className="mb-1.5 text-[14px] font-semibold text-tertiary">{t("mySkills.noSkills")}</h3>
