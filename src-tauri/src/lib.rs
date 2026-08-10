@@ -968,6 +968,7 @@ pub fn run() {
             // Skills
             commands::skills::get_managed_skills,
             commands::skills::refresh_organization_facts,
+            commands::skills::inspect_organization_health,
             commands::skills::run_organization_agent,
             commands::skills::get_skills_for_preset,
             commands::skills::get_skill_document,

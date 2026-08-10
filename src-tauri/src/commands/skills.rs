@@ -55,6 +55,19 @@ pub struct OrganizationAgentResult {
 }
 
 #[derive(Debug, Serialize)]
+pub struct OrganizationHealthIssueDto {
+    pub code: String,
+    pub severity: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationHealthInspectionDto {
+    pub skill_id: String,
+    pub issues: Vec<OrganizationHealthIssueDto>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ManagedSkillDto {
     pub id: String,
     pub name: String,
@@ -281,6 +294,330 @@ pub async fn refresh_organization_facts(
         Ok(OrganizationRefreshResult { refreshed, failed })
     })
     .await?
+}
+
+fn health_issue(
+    code: &str,
+    severity: &str,
+    detail: impl Into<String>,
+) -> OrganizationHealthIssueDto {
+    OrganizationHealthIssueDto {
+        code: code.to_string(),
+        severity: severity.to_string(),
+        detail: detail.into(),
+    }
+}
+
+fn inspect_skill_format(
+    skill: &SkillRecord,
+    targets: &[SkillTargetRecord],
+) -> OrganizationHealthInspectionDto {
+    let mut issues = Vec::new();
+    let root = Path::new(&skill.central_path);
+    let canonical_marker = root.join("SKILL.md");
+    let legacy_marker = root.join("skill.md");
+    let marker = if canonical_marker.is_file() {
+        canonical_marker
+    } else if legacy_marker.is_file() {
+        issues.push(health_issue(
+            "nonstandard_marker_case",
+            "warning",
+            "使用了 skill.md；Agent Skills 规范要求文件名为 SKILL.md",
+        ));
+        legacy_marker
+    } else {
+        issues.push(health_issue(
+            "skill_md_missing",
+            "error",
+            "中央管理副本中没有可读的 SKILL.md",
+        ));
+        return OrganizationHealthInspectionDto {
+            skill_id: skill.id.clone(),
+            issues,
+        };
+    };
+
+    let content = match std::fs::read_to_string(&marker) {
+        Ok(content) => content,
+        Err(error) => {
+            issues.push(health_issue(
+                "skill_md_unreadable",
+                "error",
+                format!("无法读取 SKILL.md：{error}"),
+            ));
+            return OrganizationHealthInspectionDto {
+                skill_id: skill.id.clone(),
+                issues,
+            };
+        }
+    };
+
+    if content.lines().count() > 500 {
+        issues.push(health_issue(
+            "skill_md_too_long",
+            "warning",
+            format!(
+                "SKILL.md 共 {} 行；官方建议主文件不超过 500 行，并将细节按需拆到 references",
+                content.lines().count()
+            ),
+        ));
+    }
+
+    let mut lines = content.lines();
+    if lines.next().map(str::trim) != Some("---") {
+        issues.push(health_issue(
+            "frontmatter_missing",
+            "error",
+            "SKILL.md 缺少起始 YAML frontmatter",
+        ));
+        return OrganizationHealthInspectionDto {
+            skill_id: skill.id.clone(),
+            issues,
+        };
+    }
+    let mut yaml_lines = Vec::new();
+    let mut closed = false;
+    for line in lines {
+        if line.trim() == "---" {
+            closed = true;
+            break;
+        }
+        yaml_lines.push(line);
+    }
+    if !closed {
+        issues.push(health_issue(
+            "frontmatter_unclosed",
+            "error",
+            "YAML frontmatter 没有结束分隔线",
+        ));
+        return OrganizationHealthInspectionDto {
+            skill_id: skill.id.clone(),
+            issues,
+        };
+    }
+
+    let yaml = match serde_yaml::from_str::<serde_yaml::Value>(&yaml_lines.join("\n")) {
+        Ok(value) => value,
+        Err(error) => {
+            issues.push(health_issue(
+                "frontmatter_invalid",
+                "error",
+                format!("YAML frontmatter 无法解析：{error}"),
+            ));
+            return OrganizationHealthInspectionDto {
+                skill_id: skill.id.clone(),
+                issues,
+            };
+        }
+    };
+
+    let name = yaml.get("name").and_then(|value| value.as_str());
+    match name {
+        None => issues.push(health_issue(
+            "name_missing",
+            "error",
+            "frontmatter 缺少字符串类型的 name",
+        )),
+        Some(name) => {
+            let char_count = name.chars().count();
+            let valid_chars = name
+                .chars()
+                .all(|value| value.is_ascii_lowercase() || value.is_ascii_digit() || value == '-');
+            if char_count == 0
+                || char_count > 64
+                || !valid_chars
+                || name.starts_with('-')
+                || name.ends_with('-')
+                || name.contains("--")
+            {
+                issues.push(health_issue(
+                    "name_invalid",
+                    "error",
+                    format!("name `{name}` 不符合 Agent Skills 命名规范"),
+                ));
+            }
+            for target in targets.iter().filter(|target| target.skill_id == skill.id) {
+                let target_name = Path::new(&target.target_path)
+                    .file_name()
+                    .and_then(|value| value.to_str());
+                if target_name.is_some_and(|target_name| target_name != name) {
+                    issues.push(health_issue(
+                        "target_name_mismatch",
+                        "warning",
+                        format!(
+                            "Agent 投放目录 `{}` 与 frontmatter name `{name}` 不一致",
+                            target.target_path
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    match yaml.get("description").and_then(|value| value.as_str()) {
+        None => issues.push(health_issue(
+            "description_missing",
+            "error",
+            "frontmatter 缺少字符串类型的 description；Agent 无法可靠发现这个 Skill",
+        )),
+        Some(description) if description.trim().is_empty() => issues.push(health_issue(
+            "description_empty",
+            "error",
+            "description 为空；Agent 无法判断何时使用这个 Skill",
+        )),
+        Some(description) if description.chars().count() > 1024 => issues.push(health_issue(
+            "description_too_long",
+            "error",
+            "description 超过 Agent Skills 规范的 1024 字符上限",
+        )),
+        _ => {}
+    }
+
+    if let Some(compatibility) = yaml.get("compatibility") {
+        match compatibility.as_str() {
+            Some(value) if value.chars().count() > 500 => issues.push(health_issue(
+                "compatibility_too_long",
+                "error",
+                "compatibility 超过 500 字符上限",
+            )),
+            None => issues.push(health_issue(
+                "compatibility_invalid_type",
+                "error",
+                "compatibility 必须是字符串",
+            )),
+            _ => {}
+        }
+    }
+    if yaml
+        .get("allowed-tools")
+        .is_some_and(|allowed_tools| !allowed_tools.is_string())
+    {
+        issues.push(health_issue(
+            "allowed_tools_invalid_type",
+            "error",
+            "allowed-tools 必须是空格分隔的字符串",
+        ));
+    }
+
+    OrganizationHealthInspectionDto {
+        skill_id: skill.id.clone(),
+        issues,
+    }
+}
+
+#[tauri::command]
+pub async fn inspect_organization_health(
+    skill_ids: Vec<String>,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<Vec<OrganizationHealthInspectionDto>, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let targets = store.get_all_targets().map_err(AppError::db)?;
+        let mut inspections = Vec::new();
+        for skill_id in skill_ids {
+            let Some(skill) = store.get_skill_by_id(&skill_id).map_err(AppError::db)? else {
+                continue;
+            };
+            inspections.push(inspect_skill_format(&skill, &targets));
+        }
+        Ok(inspections)
+    })
+    .await?
+}
+
+#[cfg(test)]
+mod organization_health_tests {
+    use super::*;
+    use std::collections::HashSet;
+    use tempfile::tempdir;
+
+    fn skill(path: &Path) -> SkillRecord {
+        SkillRecord {
+            id: "skill-1".to_string(),
+            name: "test-skill".to_string(),
+            description: Some("Test skill".to_string()),
+            source_type: "import".to_string(),
+            source_ref: None,
+            source_ref_resolved: None,
+            source_subpath: None,
+            source_branch: None,
+            source_revision: None,
+            remote_revision: None,
+            central_path: path.to_string_lossy().to_string(),
+            content_hash: None,
+            enabled: true,
+            created_at: 1,
+            updated_at: 1,
+            status: "ok".to_string(),
+            update_status: "local_only".to_string(),
+            last_checked_at: None,
+            last_check_error: None,
+        }
+    }
+
+    fn target(path: &Path) -> SkillTargetRecord {
+        SkillTargetRecord {
+            id: "target-1".to_string(),
+            skill_id: "skill-1".to_string(),
+            tool: "codex".to_string(),
+            target_path: path.to_string_lossy().to_string(),
+            mode: "symlink".to_string(),
+            status: "synced".to_string(),
+            synced_at: None,
+            last_error: None,
+            source_hash: None,
+        }
+    }
+
+    #[test]
+    fn valid_skill_passes_format_health() {
+        let tmp = tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("SKILL.md"),
+            "---\nname: test-skill\ndescription: Use for tests.\nallowed-tools: Read Bash\n---\n# Test\n",
+        )
+        .unwrap();
+        let target_path = tmp.path().join("targets/test-skill");
+        let result = inspect_skill_format(&skill(tmp.path()), &[target(&target_path)]);
+        assert!(result.issues.is_empty(), "{:?}", result.issues);
+    }
+
+    #[test]
+    fn reports_invalid_metadata_and_target_name() {
+        let tmp = tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("SKILL.md"),
+            "---\nname: Bad--Name\nallowed-tools:\n  - Read\n---\n# Test\n",
+        )
+        .unwrap();
+        let target_path = tmp.path().join("targets/different-name");
+        let result = inspect_skill_format(&skill(tmp.path()), &[target(&target_path)]);
+        let codes: HashSet<_> = result
+            .issues
+            .iter()
+            .map(|issue| issue.code.as_str())
+            .collect();
+        assert!(codes.contains("name_invalid"));
+        assert!(codes.contains("target_name_mismatch"));
+        assert!(codes.contains("description_missing"));
+        assert!(codes.contains("allowed_tools_invalid_type"));
+    }
+
+    #[test]
+    fn reports_missing_or_malformed_frontmatter() {
+        let tmp = tempdir().unwrap();
+        std::fs::write(tmp.path().join("SKILL.md"), "# No metadata\n").unwrap();
+        let result = inspect_skill_format(&skill(tmp.path()), &[]);
+        assert_eq!(result.issues[0].code, "frontmatter_missing");
+
+        std::fs::write(
+            tmp.path().join("SKILL.md"),
+            "---\nname: [broken\ndescription: x\n---\n",
+        )
+        .unwrap();
+        let result = inspect_skill_format(&skill(tmp.path()), &[]);
+        assert_eq!(result.issues[0].code, "frontmatter_invalid");
+    }
 }
 
 #[tauri::command]

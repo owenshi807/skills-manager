@@ -1,4 +1,4 @@
-import type { ManagedSkill } from "./tauri";
+import type { ManagedSkill, OrganizationHealthInspection } from "./tauri";
 
 export type SkillRelationKind = "exact_duplicate" | "name_collision" | "content_alias";
 
@@ -20,12 +20,13 @@ export interface SkillCapabilityGroup {
   skills: ManagedSkill[];
 }
 
-export type SkillIssueKind = SkillRelationKind | "source_missing" | "sync_conflict" | "read_error";
+export type SkillIssueKind = SkillRelationKind | "format_health" | "source_missing" | "sync_conflict" | "read_error";
 
 export interface SkillIssue {
   id: string;
   kind: SkillIssueKind;
   skills: ManagedSkill[];
+  details?: string[];
 }
 
 function normalizedName(name: string) {
@@ -88,6 +89,7 @@ export function buildSkillIssues(
   skills: ManagedSkill[],
   relationGroups: SkillRelationGroup[],
   conflictIds: Set<string>,
+  healthInspections: OrganizationHealthInspection[] = [],
 ): SkillIssue[] {
   const issues: SkillIssue[] = relationGroups.map((group) => ({
     id: group.id,
@@ -105,6 +107,19 @@ export function buildSkillIssues(
     if (skill.update_status === "error") {
       issues.push({ id: `error:${skill.id}`, kind: "read_error", skills: [skill] });
     }
+  }
+
+  const skillsById = new Map(skills.map((skill) => [skill.id, skill]));
+  for (const inspection of healthInspections) {
+    if (inspection.issues.length === 0) continue;
+    const skill = skillsById.get(inspection.skill_id);
+    if (!skill) continue;
+    issues.push({
+      id: `format:${skill.id}`,
+      kind: "format_health",
+      skills: [skill],
+      details: inspection.issues.map((issue) => issue.detail),
+    });
   }
 
   return issues;

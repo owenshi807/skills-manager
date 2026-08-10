@@ -58,6 +58,7 @@ import {
 import type { SkillIssue } from "../lib/skillOrganization";
 import type {
   ManagedSkill,
+  OrganizationHealthInspection,
   ToolInfo,
   GitBackupStatus,
   SkillToolToggle,
@@ -169,6 +170,7 @@ export function MySkills() {
   const resolvedOrganizationIds = useMemo(() => new Set<string>(), []);
   const [organizationAgentResult, setOrganizationAgentResult] = useState<OrganizationAgentDisplayResult | null>(null);
   const [organizationAgentError, setOrganizationAgentError] = useState<string | null>(null);
+  const [organizationHealth, setOrganizationHealth] = useState<OrganizationHealthInspection[]>([]);
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -326,8 +328,8 @@ export function MySkills() {
   const relationGroups = useMemo(() => buildSkillRelationGroups(skills), [skills]);
   const capabilityGroups = useMemo(() => buildSkillCapabilityGroups(skills), [skills]);
   const organizationIssues = useMemo(
-    () => buildSkillIssues(skills, relationGroups, conflictIds),
-    [skills, relationGroups, conflictIds],
+    () => buildSkillIssues(skills, relationGroups, conflictIds, organizationHealth),
+    [skills, relationGroups, conflictIds, organizationHealth],
   );
   const unresolvedOrganizationCount = useMemo(
     () => organizationIssues.filter((issue) => !resolvedOrganizationIds.has(issue.id)).length,
@@ -367,6 +369,21 @@ export function MySkills() {
       setOrganizationAgent(organizationExecutionOptions[0]?.id ?? "copy_prompt");
     }
   }, [organizationAgent, organizationExecutionOptions]);
+
+  useEffect(() => {
+    if (libraryView === "all" || skills.length === 0) return;
+    let cancelled = false;
+    api.inspectOrganizationHealth(skills.map((skill) => skill.id))
+      .then((inspections) => {
+        if (!cancelled) setOrganizationHealth(inspections);
+      })
+      .catch(() => {
+        if (!cancelled) setOrganizationHealth([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [libraryView, skills]);
 
   const filtered = useMemo(() => {
     const result = skills.filter((skill) => {
@@ -1104,7 +1121,7 @@ export function MySkills() {
           `- 中央库路径: ${skill.central_path}`,
           `- 原始来源: ${skill.source_ref_resolved || skill.source_ref || "未知"}`,
           `- 当前使用 Agent: ${agents.length > 0 ? agents.join("、") : "无"}`,
-          `- 内容指纹: ${skill.content_hash || "无法验证"}`,
+          `- 已有管理库指纹（legacy，仅用于发现候选，不等同 strict digest）: ${skill.content_hash || "无法验证"}`,
         ].join("\n");
       }).join("\n\n");
       return `### 事件 ${issueIndex + 1} · ${issue.kind}\n${memberContext}`;
@@ -1118,15 +1135,21 @@ export function MySkills() {
       "- Card Master 持有事实与安全边界；你负责语义比较和可审计的整理判断。",
       "- 不得删除、移动、覆盖或改写任何 Skill、来源目录、Agent 投放目录、Preset 或 Harness。",
       "- 同名不等于重复；内容相同也不自动等于同一 owner。证据不足必须标记 needs_manual_compare。",
-      "- 不得把所有 name_collision 统一判为 keep_grouped。必须逐组区分版本更替、同名不同用途、定制分叉、内容重复但 owner 不同，以及证据不足。",
-      "- 判断版本更替时，比较完整目录、核心指令、结构增删、来源、revision 与更新时间；mtime 只能作为弱证据。若一项是另一项的语义/内容严格扩展，并且没有删除关键能力，可建议保留新版、将旧版列为待归档候选。",
+      "- 不得把所有 name_collision 统一判为 keep_grouped。必须逐组区分已确认版本、疑似版本、平台适配、用户定制、不同用途、跨来源同内容、行为重叠候选和证据不足。",
+      "- 当前使用 Agent / target tool 只表示消费或投放位置，不是上游 owner；不得把 `.agents` 目录机械解释为 Cline owner。",
+      "- 证据分级：commit ancestry、immutable revision、明确 replacement、strict digest 为 strong；共同 base、结构化 diff、仅 adapter 差异为 medium；mtime、导入时间、同名和语义相似为 weak。",
+      "- 只有 strong lineage 才能判 confirmed_newer_revision。严格扩展但缺少可靠 lineage 时只能判 probable_newer_revision；mtime 不能单独确认新版。",
+      "- platform_variant 指核心意图/流程相同、差异主要是 Host 工具、路径、调用协议或兼容层；user_customization 才表示用户策略、质量门或领域内容发生改变。",
+      "- behavior_overlap_candidate 只表示需要后续使用 should-trigger / should-not-trigger / ambiguous 任务做单独与共存评测，不得据此建议删除。",
       "",
       `## 事件（共 ${issues.length} 组）`,
       eventContext,
       "",
       "## 输出协议",
-      "第一行严格输出 CARD_MASTER_JUDGMENTS。随后逐组输出：事件 ID、关系类型、建议动作、建议主项 ID、待归档候选 ID、最多三条证据、置信度和仍需人工确认的问题。",
-      "关系类型只能是 newer_revision / different_purpose / local_customization / exact_content_distinct_owner / needs_manual_compare。建议动作只能是 prefer_newer_archive_old / keep_both_grouped / keep_both_mark_fork / consolidate_after_owner_check / manual_review。",
+      "第一行严格输出 CARD_MASTER_JUDGMENTS_V1。随后逐组输出：事件 ID、关系类型、建议动作、建议主项 ID、待归档候选 ID、证据（每条标 strong/medium/weak）、置信度、是否需要行为评测、反证或仍需人工确认的问题。",
+      "关系类型只能是 confirmed_newer_revision / probable_newer_revision / platform_variant / user_customization / different_purpose / exact_artifact_multi_source / behavior_overlap_candidate / needs_manual_compare。",
+      "建议动作只能是 prefer_newer_archive_old / keep_variants_linked / keep_both_grouped / keep_both_mark_fork / consolidate_after_lineage_check / run_behavior_eval / manual_review。",
+      "置信度衡量证据充分度：仅 weak 证据上限 0.70；没有 strong lineage 时不得把 probable_newer_revision 写成 confirmed。",
       batch
         ? "必须覆盖全部事件，不能用一个统一结论代替逐组判断。"
         : "只判断当前事件，不泛化到其他同名 Skill。",

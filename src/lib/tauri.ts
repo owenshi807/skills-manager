@@ -69,6 +69,17 @@ export interface OrganizationAgentResult {
   output: string;
 }
 
+export interface OrganizationHealthIssue {
+  code: string;
+  severity: "error" | "warning";
+  detail: string;
+}
+
+export interface OrganizationHealthInspection {
+  skill_id: string;
+  issues: OrganizationHealthIssue[];
+}
+
 export interface SkillDocument {
   skill_id: string;
   filename: string;
@@ -250,6 +261,9 @@ export const getManagedSkills = () =>
 
 export const refreshOrganizationFacts = (skillIds: string[]) =>
   invoke<OrganizationRefreshResult>("refresh_organization_facts", { skillIds });
+
+export const inspectOrganizationHealth = (skillIds: string[]) =>
+  invoke<OrganizationHealthInspection[]>("inspect_organization_health", { skillIds });
 
 export const runOrganizationAgent = (agentKey: "codex" | "claude_code", prompt: string) =>
   invoke<OrganizationAgentResult>("run_organization_agent", { agentKey, prompt });

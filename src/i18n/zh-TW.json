@@ -332,13 +332,13 @@
       "needsDecision": "需要判斷",
       "relations": {
         "exactDuplicate": {
-          "fact": "名稱和內容位元組完全相同；這能證明內容重複，但還不能證明來源與維護者屬於同一條鏈路。",
-          "recommendation": "先讓 Agent 核對來源、更新鏈路和 Agent 投放，再提出保留哪項為主項；證據不足就保留兩項。",
+          "fact": "名稱和既有管理庫指紋相同；這是強重複候選，但在 strict 完整性複核前不宣稱逐位元組完全相同。",
+          "recommendation": "先做 strict 完整目錄複核，再讓 Agent 核對來源、更新鏈路和投放；證據不足就保留兩項。",
           "impact": "目前只產生判斷，不刪除任何內容；以後確認合併時，冗餘中央副本也只進入可撤銷回收站。"
         },
         "contentAlias": {
-          "fact": "名稱不同，但內容位元組完全相同；這是別名或副本候選，來源關係仍需核對。",
-          "recommendation": "先核對 owner 與更新鏈路；確認後才統一實體，並把舊名稱保留為查找線索。",
+          "fact": "名稱不同，但既有管理庫指紋相同；這是別名或副本候選，仍需 strict 內容與來源複核。",
+          "recommendation": "先做 strict 完整目錄複核，再核對 owner 與更新鏈路；確認後才統一實體。",
           "impact": "目前不刪除內容；未來確認後也必須保留全部來源和 Agent 使用關係，並可撤銷。"
         },
         "nameCollision": {
@@ -351,6 +351,7 @@
       "issuesIntro": "這裡以「事情」計數，不再把兩個相關 Skill 算成兩項問題。每件事都說明發現、建議和執行影響。",
       "duplicateCount": "重複候選",
       "nameCollisionCount": "同名異內容",
+      "formatHealthCount": "格式健康",
       "chooseAgent": "選擇處理 Agent",
       "execution": {
         "codex": "由本機 Codex CLI 審核並處理",
@@ -359,7 +360,7 @@
         "copyPrompt": "複製 Prompt，交給任意 Desktop Agent"
       },
       "batchTitle": "{{count}} 組同名異內容等待語義判斷",
-      "batchHint": "判斷 Agent 會逐組區分版本更替、不同用途與定製分叉；只給建議，不直接改檔案。",
+      "batchHint": "判斷 Agent 會逐組區分版本、平台適配、使用者定製、不同用途和行為重疊候選；證據分級，只給建議，不改檔案。",
       "batchAction": "批次判斷 {{count}} 組",
       "processingBatch": "正在批次處理…",
       "handOff": "交給 {{agent}} 判斷",
@@ -393,6 +394,12 @@
       "issues": {
         "duplicateTitle": "發現重複的 Skill",
         "nameCollisionTitle": "發現同名但不同內容的 Skill",
+        "formatHealth": {
+          "title": "Skill 格式不符合規範",
+          "fact": "固定格式檢查發現 SKILL.md 的結構、欄位或 Agent 投放名稱存在問題。",
+          "recommendation": "先修復格式健康，再進行版本、重複或行為關係判斷。",
+          "impact": "目前只報告問題，不修改 Skill；格式異常可能導致 Agent 無法發現或正確觸發它。"
+        },
         "sourceMissing": {
           "title": "Skill 的原始來源已失效",
           "fact": "技能庫中的內容仍然完整，但以後無法從原位置更新。",

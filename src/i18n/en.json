@@ -332,13 +332,13 @@
       "needsDecision": "Needs judgment",
       "relations": {
         "exactDuplicate": {
-          "fact": "The name and bytes are identical. This proves duplicate content, but not that the sources and maintainers share one lineage.",
-          "recommendation": "Have an Agent check sources, update lineage, and Agent projections before proposing a canonical entry; keep both when evidence is insufficient.",
+          "fact": "The name and current managed-library fingerprint match. This is a strong duplicate candidate, not a byte-for-byte claim until strict verification passes.",
+          "recommendation": "Run strict full-directory verification first, then check sources, update lineage, and projections; keep both when evidence is insufficient.",
           "impact": "This step only produces a judgment and deletes nothing; a future confirmed merge would place the redundant central copy in undoable trash."
         },
         "contentAlias": {
-          "fact": "The names differ, but the bytes are identical. This is an alias or copy candidate whose source relation still needs verification.",
-          "recommendation": "Check ownership and update lineage first; only then unify the entity and preserve old names as search aliases.",
+          "fact": "The names differ, but the current managed-library fingerprint matches. This alias or copy candidate still needs strict content and source verification.",
+          "recommendation": "Run strict full-directory verification, then check ownership and update lineage before unifying the entity.",
           "impact": "Nothing is deleted now; any future confirmed merge must preserve every source and Agent usage relation and remain undoable."
         },
         "nameCollision": {
@@ -351,6 +351,7 @@
       "issuesIntro": "Cases are counted as events, not flagged skills. Every event explains what was found, what we recommend, and what execution would change.",
       "duplicateCount": "Duplicate candidates",
       "nameCollisionCount": "Same name, different content",
+      "formatHealthCount": "Format health",
       "chooseAgent": "Choose processing agent",
       "execution": {
         "codex": "Reviewed and processed by local Codex CLI",
@@ -359,7 +360,7 @@
         "copyPrompt": "Copy prompt for any desktop agent"
       },
       "batchTitle": "{{count}} same-name groups await semantic judgment",
-      "batchHint": "The judgment Agent classifies revision chains, different purposes, and customization forks group by group. It recommends but does not edit files.",
+      "batchHint": "The judgment Agent separates revisions, host variants, user customizations, different purposes, and behavior-overlap candidates. Evidence is graded; files are never edited.",
       "batchAction": "Judge {{count}} groups",
       "processingBatch": "Processing batch…",
       "handOff": "Ask {{agent}} to judge",
@@ -393,6 +394,12 @@
       "issues": {
         "duplicateTitle": "Duplicate skills found",
         "nameCollisionTitle": "Same name, different content",
+        "formatHealth": {
+          "title": "Skill format does not meet the specification",
+          "fact": "Deterministic checks found a problem in SKILL.md structure, metadata, or an Agent-visible target name.",
+          "recommendation": "Fix format health before deciding revision, duplicate, or behavior relationships.",
+          "impact": "This only reports the issue. Invalid format can prevent an Agent from discovering or triggering the Skill."
+        },
         "sourceMissing": {
           "title": "Original skill source is missing",
           "fact": "The library content is intact, but it can no longer update from the original location.",

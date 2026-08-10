@@ -305,6 +305,13 @@ export function SkillOrganizeView({
 }
 
 function issueCopy(kind: SkillIssue["kind"], t: ReturnType<typeof useTranslation>["t"]) {
+  if (kind === "format_health") return {
+    title: t("mySkills.organization.issues.formatHealth.title"),
+    fact: t("mySkills.organization.issues.formatHealth.fact"),
+    recommendation: t("mySkills.organization.issues.formatHealth.recommendation"),
+    impact: t("mySkills.organization.issues.formatHealth.impact"),
+    direct: false,
+  };
   if (kind === "source_missing") return {
     title: t("mySkills.organization.issues.sourceMissing.title"),
     fact: t("mySkills.organization.issues.sourceMissing.fact"),
@@ -375,6 +382,7 @@ export function SkillIssuesView({
   });
   const duplicateCount = unresolvedIssues.filter((issue) => issue.kind === "exact_duplicate" || issue.kind === "content_alias").length;
   const nameCollisionIssues = unresolvedIssues.filter((issue) => issue.kind === "name_collision");
+  const formatHealthCount = unresolvedIssues.filter((issue) => issue.kind === "format_health").length;
   const selectedExecution = executionOptions.find((option) => option.id === executionMode) ?? executionOptions[0];
 
   return (
@@ -394,6 +402,12 @@ export function SkillIssuesView({
               <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{nameCollisionIssues.length}</div>
               <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.nameCollisionCount")}</div>
             </div>
+            {formatHealthCount > 0 && (
+              <div className="rounded-lg bg-violet-500/10 px-3 py-2 text-center">
+                <div className="text-[17px] font-semibold text-violet-600 dark:text-violet-300">{formatHealthCount}</div>
+                <div className="text-[10px] text-violet-600/80 dark:text-violet-300/80">{t("mySkills.organization.formatHealthCount")}</div>
+              </div>
+            )}
             <button
               type="button"
               onClick={onRefresh}
@@ -542,6 +556,11 @@ export function SkillIssuesView({
                       </span>
                     </div>
                     <p className="mt-1 text-[12px] leading-5 text-muted">{copy.fact}</p>
+                    {issue.details && issue.details.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-[11px] leading-4 text-amber-700 dark:text-amber-200">
+                        {issue.details.map((detail) => <li key={detail}>· {detail}</li>)}
+                      </ul>
+                    )}
                     <div className="mt-3 grid gap-2 lg:grid-cols-2">
                       {issue.skills.map((skill) => (
                         <MemberRow
