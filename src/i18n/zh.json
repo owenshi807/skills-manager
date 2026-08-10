@@ -113,6 +113,7 @@
   "dashboard": {
     "greeting": "你好！",
     "summary": "Library 中 {{skills}} 个 Skills · 已接入 {{agents}} 个 Agent · {{projects}} 个 Project",
+    "foundationSummary": "技能库中 {{skills}} 个 Skill · 已接入 {{agents}} 个 Agent",
     "librarySkills": "Library Skills",
     "syncCoverage": "同步覆盖",
     "connectedAgents": "已接入 Agent",

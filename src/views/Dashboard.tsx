@@ -40,10 +40,9 @@ export function Dashboard() {
       <div className="app-page-header">
         <h1 className="app-page-title">{t("dashboard.greeting")}</h1>
         <p className="app-page-subtitle text-tertiary">
-          {t("dashboard.summary", {
+          {t("dashboard.foundationSummary", {
             skills: totalSkills,
             agents: enabledAgents.length,
-            projects: projects.length,
           })}
         </p>
       </div>

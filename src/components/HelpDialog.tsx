@@ -1,8 +1,19 @@
 import { BookOpen, FolderTree, Globe, Layers3, Map, RefreshCw, Settings2, Sparkles, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "../context/AppContext";
+import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 
-const GUIDE_ICONS = [Map, Layers3, BookOpen, Sparkles, Globe, FolderTree, RefreshCw, Settings2];
+const GUIDE_KEYS = ["workflows", "presets", "install", "sync", "global", "projects", "backup", "settings"] as const;
+const GUIDE_ICONS = {
+  workflows: Map,
+  presets: Layers3,
+  install: BookOpen,
+  sync: Sparkles,
+  global: Globe,
+  projects: FolderTree,
+  backup: RefreshCw,
+  settings: Settings2,
+};
 
 export function HelpDialog() {
   const { t } = useTranslation();
@@ -34,8 +45,11 @@ export function HelpDialog() {
         </div>
 
         <div className="max-h-[min(72vh,720px)] space-y-3 overflow-y-auto px-5 py-5">
-          {(["workflows", "presets", "install", "sync", "global", "projects", "backup", "settings"] as const).map((key, index) => {
-            const Icon = GUIDE_ICONS[index];
+          {GUIDE_KEYS
+            .filter((key) => CARD_MASTER_PRODUCT_SURFACE.presets || key !== "presets")
+            .filter((key) => CARD_MASTER_PRODUCT_SURFACE.projects || key !== "projects")
+            .map((key) => {
+            const Icon = GUIDE_ICONS[key];
             return (
               <div
                 key={key}

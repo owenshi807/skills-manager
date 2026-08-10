@@ -71,6 +71,7 @@ import type {
   SkillToolToggle,
 } from "../lib/tauri";
 import { getErrorMessage } from "../lib/error";
+import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 import {
   DndContext,
   closestCenter,
@@ -157,7 +158,7 @@ export function MySkills() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const {
-    viewedPreset,
+    viewedPreset: upstreamViewedPreset,
     tools,
     managedSkills: skills,
     refreshPresets,
@@ -168,6 +169,7 @@ export function MySkills() {
     projects,
     refreshProjects,
   } = useApp();
+  const viewedPreset = CARD_MASTER_PRODUCT_SURFACE.presets ? upstreamViewedPreset : null;
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [libraryView, setLibraryView] = useState<"all" | "organize" | "issues">("all");
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
@@ -239,6 +241,11 @@ export function MySkills() {
   };
 
   useEffect(() => {
+    if (!CARD_MASTER_PRODUCT_SURFACE.tags) {
+      setAllTags([]);
+      setTagFilters(new Set());
+      return;
+    }
     refreshAllTags();
   }, [skills]);
 
@@ -250,6 +257,7 @@ export function MySkills() {
   // `skills`, and in that window a rename would otherwise drop the filter that
   // `replaceTagInFilters` just moved onto the new name.
   useEffect(() => {
+    if (!CARD_MASTER_PRODUCT_SURFACE.tags) return;
     if (skills.length === 0) return;
     const hasUntagged = skills.some((skill) => skill.tags.length === 0);
     const available = [...allTags, ...skills.flatMap((skill) => skill.tags)];
@@ -1541,7 +1549,7 @@ export function MySkills() {
             {t(`mySkills.sourceFilter.${src}`)}
           </button>
         ))}
-        {allTags.length > 0 && (
+        {CARD_MASTER_PRODUCT_SURFACE.tags && allTags.length > 0 && (
           <>
             <span className="mx-0.5 h-3 w-px bg-border-subtle" />
             {skills.some((s) => s.tags.length === 0) && (() => {
@@ -1615,7 +1623,7 @@ export function MySkills() {
           onToggle={handleBatchTogglePreset}
           onSelectAll={handleSelectAll}
           onCancel={exitMultiSelect}
-          onEditTags={() => setBatchTagDialogOpen(true)}
+          onEditTags={CARD_MASTER_PRODUCT_SURFACE.tags ? () => setBatchTagDialogOpen(true) : undefined}
         />
       )}
 
@@ -1687,6 +1695,11 @@ export function MySkills() {
             const enabledInPreset = viewedPreset
               ? skill.preset_ids.includes(viewedPreset.id)
               : false;
+            const isProjected = skill.targets.length > 0;
+            const statusActive = CARD_MASTER_PRODUCT_SURFACE.presets ? enabledInPreset : isProjected;
+            const statusTitle = CARD_MASTER_PRODUCT_SURFACE.presets
+              ? (enabledInPreset ? t("mySkills.enabledButton") : t("mySkills.notInPreset"))
+              : (isProjected ? t("mySkills.foundation.visible") : t("mySkills.foundation.libraryOnly"));
             const badge = statusBadge(skill);
             const hasUpdate =
               skill.update_status === "update_available" && canRefresh(skill);
@@ -1749,11 +1762,11 @@ export function MySkills() {
                             className={cn(
                               "h-2 w-2 rounded-full transition-opacity",
                               canDrag && "group-hover:opacity-0",
-                              enabledInPreset
+                              statusActive
                                 ? "bg-accent-light shadow-[0_0_0_3px_var(--color-accent-bg)]"
                                 : "bg-surface-active"
                             )}
-                            title={enabledInPreset ? t("mySkills.enabledButton") : t("mySkills.notInPreset")}
+                            title={statusTitle}
                           />
                           {dragHandle}
                         </>
@@ -1813,12 +1826,12 @@ export function MySkills() {
                             },
                           ]}
                         />
-                        <ToggleSwitch
+                        {CARD_MASTER_PRODUCT_SURFACE.presets && <ToggleSwitch
                           checked={enabledInPreset}
                           disabled={!viewedPreset}
                           onChange={() => handleTogglePreset(skill)}
                           title={enabledInPreset ? t("mySkills.enabledButton") : t("mySkills.enable")}
-                        />
+                        />}
                       </>
                     )}
                   </div>
@@ -1883,7 +1896,7 @@ export function MySkills() {
                         )}
                       </div>
                     )}
-                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                    {CARD_MASTER_PRODUCT_SURFACE.tags && <div className="mt-2 flex flex-wrap items-center gap-1">
                       {skill.tags.map((tag) => (
                         <span
                           key={tag}
@@ -1950,7 +1963,7 @@ export function MySkills() {
                           <Plus className="h-3 w-3" />
                         </button>
                       )}
-                    </div>
+                    </div>}
                   </div>
 
                   <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-faint px-3.5 py-2.5">
@@ -2019,11 +2032,11 @@ export function MySkills() {
                         className={cn(
                           "h-2 w-2 rounded-full transition-opacity",
                           canDrag && "group-hover:opacity-0",
-                          enabledInPreset
+                          statusActive
                             ? "bg-accent-light shadow-[0_0_0_3px_var(--color-accent-bg)]"
                             : "bg-surface-active"
                         )}
-                        title={enabledInPreset ? t("mySkills.enabledButton") : t("mySkills.notInPreset")}
+                        title={statusTitle}
                       />
                       {dragHandle}
                     </>
@@ -2041,7 +2054,7 @@ export function MySkills() {
                   {skill.description || "—"}
                 </p>
 
-                <div className="flex shrink-0 items-center gap-1.5">
+                {CARD_MASTER_PRODUCT_SURFACE.tags && <div className="flex shrink-0 items-center gap-1.5">
                   {skill.tags.map((tag) => (
                     <span
                       key={tag}
@@ -2053,7 +2066,7 @@ export function MySkills() {
                       {tag}
                     </span>
                   ))}
-                </div>
+                </div>}
 
                 <div className="flex shrink-0 items-center gap-2.5">
                   {duplicateNameCount > 1 && (
@@ -2170,12 +2183,12 @@ export function MySkills() {
                         },
                       ]}
                     />
-                    <ToggleSwitch
+                    {CARD_MASTER_PRODUCT_SURFACE.presets && <ToggleSwitch
                       checked={enabledInPreset}
                       disabled={!viewedPreset}
                       onChange={() => handleTogglePreset(skill)}
                       title={enabledInPreset ? t("mySkills.enabledButton") : t("mySkills.enable")}
-                    />
+                    />}
                   </div>
                 )}
               </div>
@@ -2193,11 +2206,12 @@ export function MySkills() {
         skill={selectedSkill}
         onClose={closeSkillDetail}
         tools={tools}
-        toolToggles={toolToggles}
+        toolToggles={CARD_MASTER_PRODUCT_SURFACE.presets ? toolToggles : null}
         togglingTool={togglingToolKey}
         onToggleTool={handleToggleSkillTool}
-        projects={projects}
-        onProjectsChanged={refreshProjects}
+        projects={CARD_MASTER_PRODUCT_SURFACE.projects ? projects : undefined}
+        onProjectsChanged={CARD_MASTER_PRODUCT_SURFACE.projects ? refreshProjects : undefined}
+        showTags={CARD_MASTER_PRODUCT_SURFACE.tags}
         readOnly={libraryView !== "all"}
       />
 
@@ -2216,20 +2230,20 @@ export function MySkills() {
           if (skillToDelete) handleDeleteSkill(skillToDelete);
         }}
       />
-      <ConfirmDialog
+      {CARD_MASTER_PRODUCT_SURFACE.tags && <ConfirmDialog
         open={tagToDelete !== null}
         title={t("mySkills.tags.deleteTag")}
         message={t("mySkills.tags.deleteConfirm", { tag: tagToDelete || "" })}
         onClose={() => setTagToDelete(null)}
         onConfirm={handleDeleteTag}
-      />
-      <TagRenameDialog
+      />}
+      {CARD_MASTER_PRODUCT_SURFACE.tags && <TagRenameDialog
         open={tagToRename !== null}
         currentName={tagToRename || ""}
         onClose={() => setTagToRename(null)}
         onRename={handleRenameTag}
-      />
-      {tagMenu && (
+      />}
+      {CARD_MASTER_PRODUCT_SURFACE.tags && tagMenu && (
         <>
           {/* Backdrop closes on left- or right-click outside the menu. Explicit
               z-index (z-40/z-50) to avoid the macOS WKWebView stacking bug. */}
@@ -2268,13 +2282,13 @@ export function MySkills() {
           </div>
         </>
       )}
-      <BatchTagDialog
+      {CARD_MASTER_PRODUCT_SURFACE.tags && <BatchTagDialog
         open={batchTagDialogOpen}
         skills={skills.filter((s) => selectedIds.has(s.id))}
         allTags={allTags}
         onClose={() => setBatchTagDialogOpen(false)}
         onApply={handleBatchEditTags}
-      />
+      />}
     </div>
   );
 }

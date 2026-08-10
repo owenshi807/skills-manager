@@ -6,6 +6,7 @@ import * as api from "../lib/tauri";
 import i18n from "../i18n";
 import { applyTextSize } from "../lib/textScale";
 import { toast } from "sonner";
+import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 
 interface AppState {
   presets: Preset[];
@@ -66,6 +67,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshPresets = useCallback(async () => {
+    if (!CARD_MASTER_PRODUCT_SURFACE.presets) {
+      setPresets([]);
+      setActivePreset(null);
+      return;
+    }
     try {
       const [s, active] = await Promise.all([
         api.getPresets(),
@@ -113,6 +119,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [setTranslatedError]);
 
   const refreshProjects = useCallback(async () => {
+    if (!CARD_MASTER_PRODUCT_SURFACE.projects) {
+      setProjects([]);
+      return;
+    }
     try {
       const p = await api.getProjects();
       setProjects(p);

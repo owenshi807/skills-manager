@@ -31,6 +31,7 @@ import { getErrorMessage } from "../lib/error";
 import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER } from "../lib/skillTags";
 import { AddSkillsSheet } from "../components/AddSkillsSheet";
 import type { WorkspaceConfig } from "./workspaceConfigs";
+import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 
 function compactHomePath(path: string) {
   return path.replace(/^\/Users\/[^/]+/, "~");
@@ -740,7 +741,7 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
             </div>
           </div>
 
-          {presets.length > 0 && (
+          {CARD_MASTER_PRODUCT_SURFACE.presets && presets.length > 0 && (
             <PresetBar
               presets={presets}
               managedSkills={managedSkills}
@@ -860,7 +861,7 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
           </div>
         </div>
 
-        {allLocalTags.length > 0 && (
+        {CARD_MASTER_PRODUCT_SURFACE.tags && allLocalTags.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[12px] text-muted">{t("mySkills.tags.filter")}</span>
             <button
@@ -925,7 +926,7 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
         )}
 
         {/* Preset bar */}
-        {presets.length > 0 && (
+        {CARD_MASTER_PRODUCT_SURFACE.presets && presets.length > 0 && (
           <PresetBar
             presets={presets}
             managedSkills={managedSkills}
@@ -980,7 +981,9 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
                 viewMode={viewMode}
                 title={skill.name}
                 description={skill.description || skill.relative_path}
-                tags={skill.tags.map((tag) => ({ label: tag, className: getTagColor(tag, allLocalTags) }))}
+                tags={CARD_MASTER_PRODUCT_SURFACE.tags
+                  ? skill.tags.map((tag) => ({ label: tag, className: getTagColor(tag, allLocalTags) }))
+                  : []}
                 status={statusMeta}
                 fileCount={skill.files.length}
                 active={isManaged}
@@ -1114,4 +1117,3 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
     </div>
   );
 }
-

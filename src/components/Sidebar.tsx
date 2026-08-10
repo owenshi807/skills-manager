@@ -29,6 +29,7 @@ import { AgentIcon } from "./AgentIcon";
 import * as api from "../lib/tauri";
 import type { SyncHealth, ToolCategory, ToolInfo } from "../lib/tauri";
 import { getPresetIconOption } from "../lib/presetIcons";
+import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 
 function getSyncHealthIndicator(health: SyncHealth, skillCount: number): { color: string; title: string } | null {
   if (skillCount === 0) return null;
@@ -420,7 +421,8 @@ export function Sidebar() {
         {/* Scrollable section */}
         <div className="px-2.5 flex-1 overflow-y-auto scrollbar-hide min-h-0">
 
-          {/* ── Presets ── */}
+          {CARD_MASTER_PRODUCT_SURFACE.presets && <>
+          {/* ── Presets (upstream compatibility surface) ── */}
           <div className="mb-1.5 px-2.5 flex items-center gap-1">
             <button
               onClick={() => setPresetsOpen((v) => !v)}
@@ -539,6 +541,7 @@ export function Sidebar() {
 
           {/* Divider */}
           <div className="mx-0.5 mt-3.5 mb-2.5 border-t border-border-subtle" />
+          </>}
 
           {renderToolGroup({
             category: "coding",
@@ -575,6 +578,7 @@ export function Sidebar() {
             </>
           )}
 
+          {CARD_MASTER_PRODUCT_SURFACE.projects && <>
           {/* Divider */}
           <div className="mx-0.5 mt-3.5 mb-2.5 border-t border-border-subtle" />
 
@@ -700,6 +704,7 @@ export function Sidebar() {
               </button>
             </>
           )}
+          </>}
 
         </div>
 
@@ -725,42 +730,42 @@ export function Sidebar() {
         </div>
       </div>
 
-      <CreatePresetDialog
+      {CARD_MASTER_PRODUCT_SURFACE.presets && <CreatePresetDialog
         open={showCreate}
         onClose={() => setShowCreate(false)}
         onCreate={handleCreatePreset}
-      />
+      />}
 
-      <RenamePresetDialog
+      {CARD_MASTER_PRODUCT_SURFACE.presets && <RenamePresetDialog
         open={renameTarget !== null}
         currentName={renameTarget?.name || ""}
         currentIcon={renameTarget?.icon}
         onClose={() => setRenameTarget(null)}
         onRename={handleRenamePreset}
-      />
+      />}
 
-      <ConfirmDialog
+      {CARD_MASTER_PRODUCT_SURFACE.presets && <ConfirmDialog
         open={deleteTarget !== null}
         message={t("preset.deleteConfirm", { name: deleteTarget?.name || "" })}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeletePreset}
-      />
+      />}
 
-      <AddProjectDialog
+      {CARD_MASTER_PRODUCT_SURFACE.projects && <AddProjectDialog
         open={showAddProject}
         onClose={() => setShowAddProject(false)}
         onAdded={async () => {
           await refreshProjects();
           toast.success(t("project.workspaceAdded"));
         }}
-      />
+      />}
 
-      <ConfirmDialog
+      {CARD_MASTER_PRODUCT_SURFACE.projects && <ConfirmDialog
         open={deleteProjectTarget !== null}
         message={t("project.removeConfirm", { name: deleteProjectTarget?.name || "" })}
         onClose={() => setDeleteProjectTarget(null)}
         onConfirm={handleDeleteProject}
-      />
+      />}
     </>
   );
 }

@@ -38,6 +38,7 @@ interface Props {
   projects?: Project[];
   onProjectsChanged?: () => void;
   readOnly?: boolean;
+  showTags?: boolean;
 }
 
 export function SkillDetailPanel({
@@ -50,6 +51,7 @@ export function SkillDetailPanel({
   projects,
   onProjectsChanged,
   readOnly = false,
+  showTags = true,
 }: Props) {
   if (!skill) return null;
 
@@ -74,6 +76,7 @@ export function SkillDetailPanel({
       projects={projects}
       onProjectsChanged={onProjectsChanged}
       readOnly={readOnly}
+      showTags={showTags}
     />
   );
 }
@@ -88,6 +91,7 @@ function SkillDetailPanelContent({
   projects,
   onProjectsChanged,
   readOnly,
+  showTags,
 }: {
   skill: ManagedSkill;
   onClose: () => void;
@@ -98,6 +102,7 @@ function SkillDetailPanelContent({
   projects?: Project[];
   onProjectsChanged?: () => void;
   readOnly: boolean;
+  showTags: boolean;
 }) {
   const { t } = useTranslation();
   const [doc, setDoc] = useState<SkillDocument | null>(null);
@@ -233,7 +238,7 @@ function SkillDetailPanelContent({
     <>
       <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
         {tools && <SyncDots skill={skill} tools={tools} size="sm" includeOrphan />}
-        {skill.tags.length > 0 && (
+        {showTags && skill.tags.length > 0 && (
           <>
             {tools && <span className="mx-0.5 h-3 w-px bg-border-subtle" />}
             {skill.tags.map((tag) => (

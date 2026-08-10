@@ -113,6 +113,7 @@
   "dashboard": {
     "greeting": "Hello!",
     "summary": "{{skills}} Skills in Library · {{agents}} Agents connected · {{projects}} Projects",
+    "foundationSummary": "{{skills}} Skills in Library · {{agents}} Agents connected",
     "librarySkills": "Library Skills",
     "syncCoverage": "Sync Coverage",
     "connectedAgents": "Connected Agents",

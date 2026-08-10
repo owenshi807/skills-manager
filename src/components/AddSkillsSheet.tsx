@@ -26,6 +26,7 @@ import {
   getTagColor,
   UNTAGGED_FILTER,
 } from "../lib/skillTags";
+import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 import { AgentIcon } from "./AgentIcon";
 import { SkillPickerRow } from "./SkillPickerRow";
 
@@ -148,6 +149,7 @@ function AddSkillsSheetBody({ onClose, target, managedSkills, onInstalled }: Pro
   }, [target, selectedAgents, dirNameMap, dirNameMapError]);
 
   const allTags = useMemo(() => {
+    if (!CARD_MASTER_PRODUCT_SURFACE.tags) return [];
     const tags = new Set<string>();
     for (const skill of managedSkills) {
       for (const tag of skill.tags) {
@@ -536,7 +538,7 @@ function AddSkillsSheetBody({ onClose, target, managedSkills, onInstalled }: Pro
             />
           </div>
 
-          {(allTags.length > 0 || skillsHaveUntagged) && (
+          {CARD_MASTER_PRODUCT_SURFACE.tags && (allTags.length > 0 || skillsHaveUntagged) && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="text-[12px] text-muted">{t("mySkills.tags.filter")}</span>
               <button
@@ -625,6 +627,7 @@ function AddSkillsSheetBody({ onClose, target, managedSkills, onInstalled }: Pro
                     status={status}
                     allTags={allTags}
                     sourceLabel={sourceLabel(skill.source_type)}
+                    showTags={CARD_MASTER_PRODUCT_SURFACE.tags}
                     selected={selectedIds.has(skill.id)}
                     onToggle={() => toggleSelect(skill.id)}
                   />

@@ -53,6 +53,7 @@ import { check as checkUpdater } from "@tauri-apps/plugin-updater";
 import { open as dialogOpen, confirm as dialogConfirm } from "@tauri-apps/plugin-dialog";
 import { useNavigate } from "react-router-dom";
 import { cn } from "../utils";
+import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 import { useApp } from "../context/AppContext";
 import { useThemeContext } from "../context/ThemeContext";
 import { AgentIcon } from "../components/AgentIcon";
@@ -845,7 +846,7 @@ export function Settings() {
                 {t("settings.customAgent")}
               </span>
             )}
-            {agent.is_custom && agent.project_relative_skills_dir && (
+            {CARD_MASTER_PRODUCT_SURFACE.projects && agent.is_custom && agent.project_relative_skills_dir && (
               <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
                 {t("settings.projectAgentSupported")}
               </span>
@@ -948,8 +949,8 @@ export function Settings() {
           </div>
         )}
 
-        {/* Project-relative skills path — always rendered so every card is the
-            same height, installed or not. */}
+        {CARD_MASTER_PRODUCT_SURFACE.projects && <>
+        {/* Project-relative skills path is preserved for upstream compatibility. */}
         {editingProjectPathKey === agent.key ? (
             <div className="flex items-center gap-1">
               <input
@@ -1015,6 +1016,7 @@ export function Settings() {
               )}
             </div>
           )}
+        </>}
       </div>
     </div>
   );
@@ -1116,7 +1118,7 @@ export function Settings() {
                   </button>
                 </div>
               </div>
-              <div>
+              {CARD_MASTER_PRODUCT_SURFACE.projects && <div>
                 <label className="text-[12px] text-muted mb-1 block">
                   {t("settings.projectSkillsPath")}
                 </label>
@@ -1130,7 +1132,7 @@ export function Settings() {
                 <p className="mt-1 text-[12px] text-muted">
                   {t("settings.projectSkillsPathDesc")}
                 </p>
-              </div>
+              </div>}
               <div className="flex justify-end">
                 <button
                   onClick={handleAddCustomAgent}
