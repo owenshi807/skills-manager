@@ -3,13 +3,17 @@ import {
   Bot,
   Boxes,
   CheckCircle2,
+  ChevronDown,
   CircleAlert,
   Copy,
   GitCompareArrows,
   Layers3,
   Link2,
+  Loader2,
+  RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ManagedSkill, ToolInfo } from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
@@ -35,11 +39,23 @@ interface OrganizeProps extends SharedProps {
 interface IssuesProps extends SharedProps {
   issues: SkillIssue[];
   resolvedIds: Set<string>;
-  selectedAgent: "codex" | "claude_code";
-  onAgentChange: (agent: "codex" | "claude_code") => void;
+  executionMode: OrganizationExecutionMode;
+  executionOptions: OrganizationExecutionOption[];
+  onExecutionModeChange: (mode: OrganizationExecutionMode) => void;
   onResolveIssue: (issue: SkillIssue) => void;
-  onResolveMany: (issues: SkillIssue[]) => void;
+  onExecuteBatch: (issues: SkillIssue[]) => void;
   onHandOff: (issue: SkillIssue) => void;
+  processingBatch: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+}
+
+export type OrganizationExecutionMode = "codex" | "claude_code" | "copy_prompt";
+
+export interface OrganizationExecutionOption {
+  id: OrganizationExecutionMode;
+  label: string;
+  description: string;
 }
 
 function toolNames(skill: ManagedSkill, tools: ToolInfo[]) {
@@ -318,17 +334,31 @@ function issueCopy(kind: SkillIssue["kind"], t: ReturnType<typeof useTranslation
 export function SkillIssuesView({
   issues,
   resolvedIds,
-  selectedAgent,
-  onAgentChange,
+  executionMode,
+  executionOptions,
+  onExecutionModeChange,
   onResolveIssue,
-  onResolveMany,
+  onExecuteBatch,
   onHandOff,
+  processingBatch,
+  refreshing,
+  onRefresh,
   search,
   displayNames,
   tools,
   onOpenSkill,
 }: IssuesProps) {
   const { t } = useTranslation();
+  const [executionMenuOpen, setExecutionMenuOpen] = useState(false);
+  const executionMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!executionMenuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!executionMenuRef.current?.contains(event.target as Node)) setExecutionMenuOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [executionMenuOpen]);
   const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
   const visibleIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
@@ -336,6 +366,7 @@ export function SkillIssuesView({
   });
   const duplicateCount = unresolvedIssues.filter((issue) => issue.kind === "exact_duplicate" || issue.kind === "content_alias").length;
   const nameCollisionIssues = unresolvedIssues.filter((issue) => issue.kind === "name_collision");
+  const selectedExecution = executionOptions.find((option) => option.id === executionMode) ?? executionOptions[0];
 
   return (
     <div className="space-y-4 pb-8">
@@ -354,15 +385,16 @@ export function SkillIssuesView({
               <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{nameCollisionIssues.length}</div>
               <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.nameCollisionCount")}</div>
             </div>
-            <select
-              value={selectedAgent}
-              onChange={(event) => onAgentChange(event.target.value as "codex" | "claude_code")}
-              className="app-input h-10 min-w-[132px] text-[12px]"
-              aria-label={t("mySkills.organization.chooseAgent")}
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="app-button-secondary h-10"
+              title={t("mySkills.organization.refreshHint")}
             >
-              <option value="codex">Codex</option>
-              <option value="claude_code">Claude Code</option>
-            </select>
+              <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
+              {refreshing ? t("mySkills.organization.refreshing") : t("mySkills.organization.refresh")}
+            </button>
           </div>
         </div>
         {nameCollisionIssues.length > 1 && (
@@ -373,10 +405,64 @@ export function SkillIssuesView({
               </div>
               <div className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.batchHint")}</div>
             </div>
-            <button type="button" onClick={() => onResolveMany(nameCollisionIssues)} className="app-button-primary">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {t("mySkills.organization.batchAction", { count: nameCollisionIssues.length })}
-            </button>
+            <div ref={executionMenuRef} className="relative flex shrink-0 items-stretch rounded-xl bg-emerald-600 text-white shadow-sm transition-shadow hover:shadow-md">
+              <button
+                type="button"
+                onClick={() => onExecuteBatch(nameCollisionIssues)}
+                disabled={processingBatch}
+                className="flex min-w-[230px] items-center gap-3 rounded-l-xl px-4 py-2.5 text-left transition-colors hover:bg-white/10 disabled:opacity-60"
+              >
+                {processingBatch
+                  ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                  : <CheckCircle2 className="h-5 w-5 shrink-0" />}
+                <span className="min-w-0">
+                  <span className="block text-[14px] font-semibold leading-5">
+                    {processingBatch
+                      ? t("mySkills.organization.processingBatch")
+                      : t("mySkills.organization.batchAction", { count: nameCollisionIssues.length })}
+                  </span>
+                  <span className="block truncate text-[10px] leading-4 text-white/75">
+                    {selectedExecution?.description}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setExecutionMenuOpen((open) => !open)}
+                disabled={processingBatch}
+                className="flex w-10 items-center justify-center rounded-r-xl border-l border-white/20 transition-colors hover:bg-white/10 disabled:opacity-60"
+                aria-label={t("mySkills.organization.chooseAgent")}
+                aria-expanded={executionMenuOpen}
+              >
+                <ChevronDown className={cn("h-4 w-4 transition-transform", executionMenuOpen && "rotate-180")} />
+              </button>
+              {executionMenuOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 min-w-[260px] overflow-hidden rounded-xl border border-border bg-surface p-1.5 text-primary shadow-2xl">
+                  {executionOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => {
+                        onExecutionModeChange(option.id);
+                        setExecutionMenuOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover",
+                        option.id === executionMode && "bg-accent-bg",
+                      )}
+                    >
+                      <span className="mt-0.5 flex h-4 w-4 items-center justify-center">
+                        {option.id === executionMode && <CheckCircle2 className="h-4 w-4 text-accent-light" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[12px] font-semibold text-secondary">{option.label}</span>
+                        <span className="mt-0.5 block text-[10px] leading-4 text-muted">{option.description}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -435,7 +521,9 @@ export function SkillIssuesView({
                 <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
                   <button type="button" onClick={() => onHandOff(issue)} className="app-button-secondary">
                     <Bot className="h-3.5 w-3.5" />
-                    {t("mySkills.organization.handOff", { agent: selectedAgent === "codex" ? "Codex" : "Claude Code" })}
+                    {executionMode === "copy_prompt"
+                      ? t("mySkills.organization.copyPrompt")
+                      : t("mySkills.organization.handOff", { agent: executionMode === "codex" ? "Codex" : "Claude Code" })}
                     <Copy className="h-3 w-3" />
                   </button>
                   {issue.kind === "name_collision" && (

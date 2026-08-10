@@ -330,6 +330,30 @@ impl SkillStore {
         Ok(())
     }
 
+    /// Refresh the facts derived from the managed central copy without
+    /// changing source/update relationships or any agent projection.
+    pub fn refresh_skill_facts(
+        &self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+        content_hash: Option<&str>,
+        status: &str,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        conn.execute(
+            "UPDATE skills
+             SET updated_at = CASE
+                     WHEN name = ?1 AND description IS ?2 AND content_hash IS ?3 AND status = ?4
+                     THEN updated_at ELSE ?5 END,
+                 name = ?1, description = ?2, content_hash = ?3, status = ?4
+             WHERE id = ?6",
+            params![name, description, content_hash, status, now, id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_skill_enabled(&self, id: &str, enabled: bool) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp_millis();
@@ -1385,6 +1409,71 @@ impl SkillStore {
                 .collect::<rusqlite::Result<Vec<_>>>()?
         };
         Ok(rows)
+    }
+}
+
+#[cfg(test)]
+mod organization_fact_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn skill() -> SkillRecord {
+        SkillRecord {
+            id: "skill-1".to_string(),
+            name: "old-name".to_string(),
+            description: Some("old description".to_string()),
+            source_type: "import".to_string(),
+            source_ref: Some("/external/source".to_string()),
+            source_ref_resolved: None,
+            source_subpath: None,
+            source_branch: None,
+            source_revision: None,
+            remote_revision: None,
+            central_path: "/central/skill-1".to_string(),
+            content_hash: Some("old-hash".to_string()),
+            enabled: true,
+            created_at: 1,
+            updated_at: 42,
+            status: "ok".to_string(),
+            update_status: "update_available".to_string(),
+            last_checked_at: None,
+            last_check_error: None,
+        }
+    }
+
+    #[test]
+    fn refresh_skill_facts_is_noop_for_unchanged_snapshot_and_preserves_source_state() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store.insert_skill(&skill()).unwrap();
+
+        store
+            .refresh_skill_facts(
+                "skill-1",
+                "old-name",
+                Some("old description"),
+                Some("old-hash"),
+                "ok",
+            )
+            .unwrap();
+        let unchanged = store.get_skill_by_id("skill-1").unwrap().unwrap();
+        assert_eq!(unchanged.updated_at, 42);
+
+        store
+            .refresh_skill_facts(
+                "skill-1",
+                "new-name",
+                Some("new description"),
+                Some("new-hash"),
+                "ok",
+            )
+            .unwrap();
+        let refreshed = store.get_skill_by_id("skill-1").unwrap().unwrap();
+        assert_eq!(refreshed.name, "new-name");
+        assert_eq!(refreshed.content_hash.as_deref(), Some("new-hash"));
+        assert!(refreshed.updated_at > 42);
+        assert_eq!(refreshed.source_ref.as_deref(), Some("/external/source"));
+        assert_eq!(refreshed.update_status, "update_available");
     }
 }
 

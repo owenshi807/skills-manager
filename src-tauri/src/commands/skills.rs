@@ -44,6 +44,17 @@ pub struct BatchDeleteSkillsResult {
 }
 
 #[derive(Debug, Serialize)]
+pub struct OrganizationRefreshResult {
+    pub refreshed: usize,
+    pub failed: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationAgentResult {
+    pub output: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ManagedSkillDto {
     pub id: String,
     pub name: String,
@@ -203,6 +214,132 @@ pub async fn get_managed_skills(
         Ok(dtos)
     })
     .await?
+}
+
+#[tauri::command]
+pub async fn refresh_organization_facts(
+    skill_ids: Vec<String>,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<OrganizationRefreshResult, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _lock = RepoLock::acquire_foreground("refresh organization facts")
+            .map_err(AppError::db)?;
+        let mut refreshed = 0;
+        let mut failed = Vec::new();
+        for skill_id in skill_ids {
+            let Some(skill) = store.get_skill_by_id(&skill_id).map_err(AppError::db)? else {
+                failed.push(skill_id);
+                continue;
+            };
+            let central_path = Path::new(&skill.central_path);
+            if !central_path.is_dir() {
+                store
+                    .refresh_skill_facts(
+                        &skill.id,
+                        &skill.name,
+                        skill.description.as_deref(),
+                        None,
+                        "error",
+                    )
+                    .map_err(AppError::db)?;
+                failed.push(skill.id);
+                continue;
+            }
+            let parsed = skill_metadata::parse_skill_md(central_path);
+            let name = parsed
+                .name
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| skill.name.clone());
+            match crate::core::content_hash::hash_directory(central_path) {
+                Ok(hash) => {
+                    store
+                        .refresh_skill_facts(
+                            &skill.id,
+                            &name,
+                            parsed.description.as_deref(),
+                            Some(&hash),
+                            "ok",
+                        )
+                        .map_err(AppError::db)?;
+                    refreshed += 1;
+                }
+                Err(_) => {
+                    store
+                        .refresh_skill_facts(
+                            &skill.id,
+                            &name,
+                            parsed.description.as_deref(),
+                            None,
+                            "error",
+                        )
+                        .map_err(AppError::db)?;
+                    failed.push(skill.id);
+                }
+            }
+        }
+        Ok(OrganizationRefreshResult { refreshed, failed })
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn run_organization_agent(
+    agent_key: String,
+    prompt: String,
+) -> Result<OrganizationAgentResult, AppError> {
+    if prompt.trim().is_empty() || prompt.len() > 500_000 {
+        return Err(AppError::invalid_input("Organization prompt is empty or too large"));
+    }
+    if agent_key != "codex" && agent_key != "claude_code" {
+        return Err(AppError::invalid_input("Unsupported organization agent"));
+    }
+
+    let skills_root = central_repo::skills_dir();
+    let mut command = if agent_key == "codex" {
+        let mut command = tokio::process::Command::new("codex");
+        command.args([
+            "exec",
+            "--sandbox",
+            "read-only",
+            "--ask-for-approval",
+            "never",
+            "--skip-git-repo-check",
+            "--ephemeral",
+            "-C",
+        ]);
+        command.arg(&skills_root).arg(&prompt);
+        command
+    } else {
+        let mut command = tokio::process::Command::new("claude");
+        command.args([
+            "--print",
+            "--permission-mode",
+            "plan",
+            "--no-session-persistence",
+            "--output-format",
+            "text",
+        ]);
+        command.arg(&prompt);
+        command
+    };
+    command.current_dir(&skills_root).kill_on_drop(true);
+
+    let output = tokio::time::timeout(std::time::Duration::from_secs(600), command.output())
+        .await
+        .map_err(|_| AppError::internal("Organization agent timed out after 10 minutes"))?
+        .map_err(AppError::io)?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AppError::internal(if stderr.is_empty() {
+            "Organization agent exited without a result".to_string()
+        } else {
+            stderr
+        }));
+    }
+    Ok(OrganizationAgentResult {
+        output: String::from_utf8_lossy(&output.stdout).trim().to_string(),
+    })
 }
 
 #[tauri::command]

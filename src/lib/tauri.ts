@@ -60,6 +60,15 @@ export interface SkillToolToggle {
   enabled: boolean;
 }
 
+export interface OrganizationRefreshResult {
+  refreshed: number;
+  failed: string[];
+}
+
+export interface OrganizationAgentResult {
+  output: string;
+}
+
 export interface SkillDocument {
   skill_id: string;
   filename: string;
@@ -238,6 +247,12 @@ export const removeCustomTool = (key: string) =>
 
 export const getManagedSkills = () =>
   invoke<ManagedSkill[]>("get_managed_skills");
+
+export const refreshOrganizationFacts = (skillIds: string[]) =>
+  invoke<OrganizationRefreshResult>("refresh_organization_facts", { skillIds });
+
+export const runOrganizationAgent = (agentKey: "codex" | "claude_code", prompt: string) =>
+  invoke<OrganizationAgentResult>("run_organization_agent", { agentKey, prompt });
 
 export const getSkillsForPreset = (presetId: string) =>
   invoke<ManagedSkill[]>("get_skills_for_preset", {

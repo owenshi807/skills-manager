@@ -967,6 +967,8 @@ pub fn run() {
             commands::tools::remove_custom_tool,
             // Skills
             commands::skills::get_managed_skills,
+            commands::skills::refresh_organization_facts,
+            commands::skills::run_organization_agent,
             commands::skills::get_skills_for_preset,
             commands::skills::get_skill_document,
             commands::skills::get_source_skill_document,
