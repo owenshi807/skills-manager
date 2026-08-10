@@ -277,6 +277,9 @@ impl CodexHostDescriptor {
 }
 
 pub fn resolve_codex_home() -> Result<PathBuf> {
+    if let Some(home) = super::tool_adapters::runtime_home_dir_override() {
+        return Ok(home.join(".codex"));
+    }
     if let Some(value) = std::env::var_os("CODEX_HOME") {
         if value.is_empty() {
             bail!("CODEX_HOME is empty");

@@ -438,6 +438,12 @@ fn main() {
 }
 
 fn run(cli: Cli) -> anyhow::Result<()> {
+    let evaluation_runtime = app_lib::core::evaluation_runtime::apply_from_env()?;
+    if evaluation_runtime.is_some() && cli.skills_root.is_some() {
+        anyhow::bail!(
+            "SKILLS_MANAGER_EVAL_ROOT cannot be combined with --skills-root; use the evaluation root's central/skills directory"
+        );
+    }
     if let Some(skills_root) = &cli.skills_root {
         let base = central_repo::external_base_dir(skills_root);
         central_repo::set_runtime_base_dir_override(Some(base));

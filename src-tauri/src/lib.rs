@@ -778,6 +778,8 @@ pub fn quit_app(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    core::evaluation_runtime::apply_from_env()
+        .expect("Failed to configure isolated evaluation runtime");
     let pre_builder_start = Instant::now();
     let (store, startup_timings) =
         core::app_state::initialize_store().expect("Failed to initialize app state");
