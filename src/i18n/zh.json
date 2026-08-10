@@ -314,7 +314,7 @@
       "familyRecommendation": "先确认这组是否符合你的能力理解；分组只帮助人理解，不会自动改变 Agent 可见范围。",
       "confirmedRelations": "已确认的关系整理 {{count}} 组",
       "confirmedRelationsHint": "这些本机判断已从待处理移入整理结果；没有修改、移动或删除任何 Skill。",
-      "confirmedKeepGrouped": "已记录：内容不同，全部保留并视为同一关系组。",
+      "confirmedKeepGrouped": "已记住你对这组同名 Skill 的关系判断；Skill 内容与 Agent 投放未改变。",
       "confirmedRelation": "已确认这组 Skill 的关系。",
       "families": {
         "business": { "label": "商业与经营", "description": "围绕市场、客户、销售、财务和商业判断形成的能力。" },
@@ -332,12 +332,12 @@
       "needsDecision": "需要判断",
       "relations": {
         "exactDuplicate": {
-          "fact": "名称和已有管理库指纹相同；这是强重复候选，但在 strict 完整性复核前不宣称逐字节完全相同。",
-          "recommendation": "先做 strict 完整目录复核，再让 Agent 核对来源、更新链路和投放；证据不足就保留两项。",
+          "fact": "名称和已有管理库指纹相同。Card Master 会用 strict 完整目录复核；只有通过才标为“系统已确认事实”。",
+          "recommendation": "系统先做 strict 完整目录复核。内容关系可由规则确认；来源取舍仍由你决定，不交给 Agent 猜。",
           "impact": "当前只生成判断，不删除任何内容；以后确认合并时，冗余中央副本也只进入可撤销回收站。"
         },
         "contentAlias": {
-          "fact": "名称不同，但已有管理库指纹相同；这是别名或副本候选，仍需 strict 内容与来源复核。",
+          "fact": "名称不同，但已有管理库指纹相同。Card Master 会用 strict 完整目录复核，确认它们当前是否完全一致。",
           "recommendation": "先做 strict 完整目录复核，再核对 owner 与更新链路；确认后才统一实体。",
           "impact": "当前不删除内容；未来确认后也必须保留全部来源和 Agent 使用关系，并可撤销。"
         },
@@ -352,6 +352,10 @@
       "duplicateCount": "重复候选",
       "nameCollisionCount": "同名异内容",
       "formatHealthCount": "格式健康",
+      "ruleDiagnosedCount": "系统已确认事实",
+      "semanticCount": "需要比较",
+      "blockedCount": "当前无法判断",
+      "tiers": { "rule_diagnosed": "系统已确认事实", "needs_semantic": "需要比较", "blocked": "当前无法判断" },
       "chooseAgent": "选择处理 Agent",
       "execution": {
         "codex": "由本机 Codex CLI 审核并处理",
@@ -359,9 +363,9 @@
         "copyLabel": "复制 Prompt",
         "copyPrompt": "复制 Prompt，交给任意 Desktop Agent"
       },
-      "batchTitle": "{{count}} 组同名异内容等待语义判断",
+      "batchTitle": "剩余 {{count}} 组需要内容比较",
       "batchHint": "判断 Agent 会逐组区分版本、平台适配、用户定制、不同用途和行为重叠候选；证据分级，只给建议，不改文件。",
-      "batchAction": "批量判断 {{count}} 组",
+      "batchAction": "批量比较 {{count}} 组",
       "processingBatch": "正在批量处理…",
       "handOff": "交给 {{agent}} 判断",
       "copyPrompt": "复制 Prompt",
@@ -381,6 +385,17 @@
       "agentErrorHint": "完整错误保留在这里，便于修复；不会对 Skill 产生任何改动。",
       "copyResult": "复制结果",
       "resultCopied": "判断结果已复制",
+      "agentNotNeeded": "这件事已有规则证据，不需要 Agent 猜测",
+      "decisionEvidenceMissing": "证据尚未闭合，请先刷新检查",
+      "decisionSaved": "判断已记住；未改动任何 Skill",
+      "decisionFailed": "无法保存这次判断",
+      "decisionUndone": "判断已撤销",
+      "undoDecision": "撤销判断",
+      "keepDistinct": "确认分别保留",
+      "confirmRelated": "确认用途相关",
+      "compareItems": "比较这两项",
+      "confirmRelation": "确认这个关系",
+      "recheck": "重新检查",
       "refresh": "刷新结果",
       "refreshing": "正在重新扫描…",
       "refreshHint": "重新读取相关 Skill，检查问题是否已经减少",

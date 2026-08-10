@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
 /// Current schema version. Bump this when adding a new migration.
-const LATEST_VERSION: u32 = 8;
+const LATEST_VERSION: u32 = 9;
 
 /// Run all pending migrations on the database.
 ///
@@ -55,6 +55,7 @@ fn migrate_step(conn: &Connection, from_version: u32) -> Result<()> {
         5 => migrate_v5_to_v6(conn),
         6 => migrate_v6_to_v7(conn),
         7 => migrate_v7_to_v8(conn),
+        8 => migrate_v8_to_v9(conn),
         _ => bail!("unknown migration version: {from_version}"),
     }
 }
@@ -338,6 +339,24 @@ fn migrate_v7_to_v8(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v8 → v9: remember a user's non-destructive judgment about one
+/// organization case. The evidence fingerprint makes the judgment stale as
+/// soon as any member or relevant evidence changes.
+fn migrate_v8_to_v9(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS organization_decisions (
+            case_key TEXT PRIMARY KEY,
+            evidence_fingerprint TEXT NOT NULL,
+            disposition TEXT NOT NULL,
+            decided_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        ",
+    )?;
+    Ok(())
+}
+
 // ── Helpers ──
 
 fn add_column_if_missing(
@@ -406,6 +425,7 @@ mod tests {
         assert!(tables.contains(&"skill_tags".to_string()));
         assert!(tables.contains(&"scenario_skill_tools".to_string()));
         assert!(tables.contains(&"audit_log".to_string()));
+        assert!(tables.contains(&"organization_decisions".to_string()));
         assert!(has_column(&conn, "discovered_skills", "owner_ref").unwrap());
         assert!(has_column(&conn, "discovered_skills", "digest_algorithm").unwrap());
         assert!(has_column(&conn, "discovered_skills", "content_error").unwrap());

@@ -105,7 +105,24 @@ Codex 首轮输出证明逐组阅读有价值，但不能原样成为 taxonomy�
 
 这批样本验证的是分层方法，而不是原始五分类枚举。
 
-## 5. 行业依据
+## 5. 执行主体与 Decision Tier
+
+六道 Gate 采用“确定性三明治”，不是“全部交给 Agent”，也不是“全部硬编码”：
+
+1. Card Master 用确定性规则取得事实并关闭可证明关系；
+2. Agent 只比较规则无法证明的语义残差；
+3. 用户只决定来源、保留策略等价值取舍；
+4. 未来真实写入仍由可恢复的确定性引擎执行。
+
+待处理页只显示三种证据状态：
+
+- `rule_diagnosed`：系统已确认事实；不等于可以合并或归档；
+- `needs_semantic`：事实可读，但版本、变体或用途关系仍需比较；
+- `blocked`：内容不可完整证明或证据矛盾，禁止交给 Agent 猜。
+
+legacy `content_hash` 只用于候选召回。只有本次 `scm-dir-v2` 完整复核成功，才能把制品关系升级为 `rule_diagnosed`。当前无损整理只保存用户对一个 case 的判断；记录绑定 `case_revision`，证据变化后自动失效并重新进入待处理。该记录不修改 Skill、来源、Preset 或 Agent 投放，也不授权任何文件动作。
+
+## 6. 行业依据
 
 - Agent Skills format 与 progressive disclosure：<https://agentskills.io/specification>
 - GitHub CLI 的 source tracking、pin、tree SHA 与 dry-run：<https://cli.github.com/manual/gh_skill_install>、<https://cli.github.com/manual/gh_skill_update>

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ManagedSkill, ToolInfo } from "../lib/tauri";
+import type { ManagedSkill, OrganizationDisposition, ToolInfo } from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
 import type { SkillCapabilityGroup } from "../lib/skillOrganization";
 import { countSkillsInCapabilityGroups } from "../lib/skillOrganization";
@@ -34,6 +34,7 @@ interface OrganizeProps extends SharedProps {
   relationshipGroups: SkillRelationGroup[];
   resolvedIds: Set<string>;
   onShowIssues: () => void;
+  onUndoDecision: (caseKey: string) => void;
 }
 
 interface IssuesProps extends SharedProps {
@@ -50,6 +51,7 @@ interface IssuesProps extends SharedProps {
   processingBatch: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
 }
 
 export type OrganizationExecutionMode = "codex" | "claude_code" | "copy_prompt";
@@ -158,6 +160,7 @@ export function SkillOrganizeView({
   tools,
   onOpenSkill,
   onShowIssues,
+  onUndoDecision,
 }: OrganizeProps) {
   const { t } = useTranslation();
   const groupedSkillCount = countSkillsInCapabilityGroups(capabilityGroups);
@@ -293,7 +296,13 @@ export function SkillOrganizeView({
                           : t("mySkills.organization.confirmedRelation")}
                       </p>
                     </div>
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                    <button
+                      type="button"
+                      onClick={() => onUndoDecision(group.id)}
+                      className="app-button-secondary shrink-0"
+                    >
+                      {t("mySkills.organization.undoDecision")}
+                    </button>
                   </div>
                 </article>
               ))}
@@ -359,6 +368,7 @@ export function SkillIssuesView({
   processingBatch,
   refreshing,
   onRefresh,
+  onDecide,
   search,
   displayNames,
   tools,
@@ -380,9 +390,9 @@ export function SkillIssuesView({
     const copy = issueCopy(issue.kind, t);
     return matchesSearch(issue.skills, copy.title, search);
   });
-  const duplicateCount = unresolvedIssues.filter((issue) => issue.kind === "exact_duplicate" || issue.kind === "content_alias").length;
-  const nameCollisionIssues = unresolvedIssues.filter((issue) => issue.kind === "name_collision");
-  const formatHealthCount = unresolvedIssues.filter((issue) => issue.kind === "format_health").length;
+  const ruleDiagnosedIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "rule_diagnosed");
+  const semanticIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "needs_semantic");
+  const blockedIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "blocked");
   const selectedExecution = executionOptions.find((option) => option.id === executionMode) ?? executionOptions[0];
 
   return (
@@ -394,18 +404,18 @@ export function SkillIssuesView({
             <p className="mt-1 text-[12px] leading-5 text-muted">{t("mySkills.organization.issuesIntro")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div className="rounded-lg bg-red-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-red-600 dark:text-red-300">{duplicateCount}</div>
-              <div className="text-[10px] text-red-600/80 dark:text-red-300/80">{t("mySkills.organization.duplicateCount")}</div>
+            <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-center">
+              <div className="text-[17px] font-semibold text-emerald-600 dark:text-emerald-300">{ruleDiagnosedIssues.length}</div>
+              <div className="text-[10px] text-emerald-600/80 dark:text-emerald-300/80">{t("mySkills.organization.ruleDiagnosedCount")}</div>
             </div>
             <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{nameCollisionIssues.length}</div>
-              <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.nameCollisionCount")}</div>
+              <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{semanticIssues.length}</div>
+              <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.semanticCount")}</div>
             </div>
-            {formatHealthCount > 0 && (
+            {blockedIssues.length > 0 && (
               <div className="rounded-lg bg-violet-500/10 px-3 py-2 text-center">
-                <div className="text-[17px] font-semibold text-violet-600 dark:text-violet-300">{formatHealthCount}</div>
-                <div className="text-[10px] text-violet-600/80 dark:text-violet-300/80">{t("mySkills.organization.formatHealthCount")}</div>
+                <div className="text-[17px] font-semibold text-red-600 dark:text-red-300">{blockedIssues.length}</div>
+                <div className="text-[10px] text-red-600/80 dark:text-red-300/80">{t("mySkills.organization.blockedCount")}</div>
               </div>
             )}
             <button
@@ -420,18 +430,18 @@ export function SkillIssuesView({
             </button>
           </div>
         </div>
-        {nameCollisionIssues.length > 1 && (
+        {semanticIssues.length > 1 && (
           <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/20 bg-accent-bg px-3 py-2.5">
             <div>
               <div className="text-[12px] font-semibold text-secondary">
-                {t("mySkills.organization.batchTitle", { count: nameCollisionIssues.length })}
+                {t("mySkills.organization.batchTitle", { count: semanticIssues.length })}
               </div>
               <div className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.batchHint")}</div>
             </div>
             <div ref={executionMenuRef} className="relative flex shrink-0 items-stretch rounded-xl bg-emerald-600 text-white shadow-sm transition-shadow hover:shadow-md">
               <button
                 type="button"
-                onClick={() => onExecuteBatch(nameCollisionIssues)}
+                onClick={() => onExecuteBatch(semanticIssues)}
                 disabled={processingBatch}
                 className="flex min-w-[230px] items-center gap-3 rounded-l-xl px-4 py-2.5 text-left transition-colors hover:bg-white/10 disabled:opacity-60"
               >
@@ -442,7 +452,7 @@ export function SkillIssuesView({
                   <span className="block text-[14px] font-semibold leading-5">
                     {processingBatch
                       ? t("mySkills.organization.processingBatch")
-                      : t("mySkills.organization.batchAction", { count: nameCollisionIssues.length })}
+                      : t("mySkills.organization.batchAction", { count: semanticIssues.length })}
                   </span>
                   <span className="block truncate text-[10px] leading-4 text-white/75">
                     {selectedExecution?.description}
@@ -542,17 +552,33 @@ export function SkillIssuesView({
                 <div className="flex items-start gap-4 p-4">
                   <div className={cn(
                     "mt-0.5 rounded-lg p-2",
-                    copy.direct
+                    issue.decisionTier === "rule_diagnosed"
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
-                      : "bg-amber-500/10 text-amber-600 dark:text-amber-300",
+                      : issue.decisionTier === "blocked"
+                        ? "bg-red-500/10 text-red-600 dark:text-red-300"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-300",
                   )}>
-                    {copy.direct ? <ShieldCheck className="h-4 w-4" /> : <GitCompareArrows className="h-4 w-4" />}
+                    {issue.decisionTier === "rule_diagnosed"
+                      ? <ShieldCheck className="h-4 w-4" />
+                      : issue.decisionTier === "blocked"
+                        ? <CircleAlert className="h-4 w-4" />
+                        : <GitCompareArrows className="h-4 w-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="text-[14px] font-semibold text-primary">{copy.title}</h3>
                       <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
                         {t("mySkills.organization.skillCount", { count: issue.skills.length })}
+                      </span>
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                        issue.decisionTier === "rule_diagnosed"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : issue.decisionTier === "blocked"
+                            ? "bg-red-500/10 text-red-700 dark:text-red-300"
+                            : "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                      )}>
+                        {t(`mySkills.organization.tiers.${issue.decisionTier}`)}
                       </span>
                     </div>
                     <p className="mt-1 text-[12px] leading-5 text-muted">{copy.fact}</p>
@@ -585,13 +611,32 @@ export function SkillIssuesView({
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
-                  <button type="button" onClick={() => onHandOff(issue)} className="app-button-secondary">
-                    <Bot className="h-3.5 w-3.5" />
-                    {executionMode === "copy_prompt"
-                      ? t("mySkills.organization.copyPrompt")
-                      : t("mySkills.organization.handOff", { agent: executionMode === "codex" ? "Codex" : "Claude Code" })}
-                    <Copy className="h-3 w-3" />
-                  </button>
+                  {issue.decisionTier === "needs_semantic" && (
+                    <>
+                      <button type="button" onClick={() => onDecide(issue, "intentional_distinct")} className="app-button-secondary">
+                        {t("mySkills.organization.keepDistinct")}
+                      </button>
+                      <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-secondary">
+                        {t("mySkills.organization.confirmRelated")}
+                      </button>
+                      <button type="button" onClick={() => onHandOff(issue)} className="app-button-primary">
+                        <Bot className="h-3.5 w-3.5" />
+                        {t("mySkills.organization.compareItems")}
+                      </button>
+                    </>
+                  )}
+                  {issue.decisionTier === "rule_diagnosed" && issue.caseRevision && (
+                    <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-primary">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {t("mySkills.organization.confirmRelation")}
+                    </button>
+                  )}
+                  {issue.decisionTier === "blocked" && (
+                    <button type="button" onClick={onRefresh} className="app-button-secondary">
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      {t("mySkills.organization.recheck")}
+                    </button>
+                  )}
                 </div>
               </article>
             );

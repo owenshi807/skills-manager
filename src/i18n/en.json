@@ -314,7 +314,7 @@
       "familyRecommendation": "Confirm whether this matches your understanding of the capability. Grouping helps people understand the library and does not change agent visibility.",
       "confirmedRelations": "Confirmed relation groups {{count}}",
       "confirmedRelationsHint": "These local decisions moved from review into the organized result; no Skill was edited, moved, or deleted.",
-      "confirmedKeepGrouped": "Recorded: content differs, so every Skill is kept and treated as one relation group.",
+      "confirmedKeepGrouped": "Your judgment about this same-name group is remembered. Skill content and Agent projections did not change.",
       "confirmedRelation": "The relationship among these skills is confirmed.",
       "families": {
         "business": { "label": "Business & operations", "description": "Capabilities for markets, customers, sales, finance, and commercial judgment." },
@@ -332,12 +332,12 @@
       "needsDecision": "Needs judgment",
       "relations": {
         "exactDuplicate": {
-          "fact": "The name and current managed-library fingerprint match. This is a strong duplicate candidate, not a byte-for-byte claim until strict verification passes.",
-          "recommendation": "Run strict full-directory verification first, then check sources, update lineage, and projections; keep both when evidence is insufficient.",
+          "fact": "The name and current managed-library fingerprint match. Card Master runs strict full-directory verification and only then marks the fact as confirmed.",
+          "recommendation": "Card Master runs strict full-directory verification first. Rules can confirm content facts; you choose source ownership instead of asking an Agent to guess.",
           "impact": "This step only produces a judgment and deletes nothing; a future confirmed merge would place the redundant central copy in undoable trash."
         },
         "contentAlias": {
-          "fact": "The names differ, but the current managed-library fingerprint matches. This alias or copy candidate still needs strict content and source verification.",
+          "fact": "The names differ, but the managed-library fingerprint matches. Card Master runs strict full-directory verification to confirm whether the current artifacts are identical.",
           "recommendation": "Run strict full-directory verification, then check ownership and update lineage before unifying the entity.",
           "impact": "Nothing is deleted now; any future confirmed merge must preserve every source and Agent usage relation and remain undoable."
         },
@@ -352,6 +352,10 @@
       "duplicateCount": "Duplicate candidates",
       "nameCollisionCount": "Same name, different content",
       "formatHealthCount": "Format health",
+      "ruleDiagnosedCount": "Facts confirmed",
+      "semanticCount": "Needs comparison",
+      "blockedCount": "Cannot judge yet",
+      "tiers": { "rule_diagnosed": "Facts confirmed", "needs_semantic": "Needs comparison", "blocked": "Cannot judge yet" },
       "chooseAgent": "Choose processing agent",
       "execution": {
         "codex": "Reviewed and processed by local Codex CLI",
@@ -359,9 +363,9 @@
         "copyLabel": "Copy prompt",
         "copyPrompt": "Copy prompt for any desktop agent"
       },
-      "batchTitle": "{{count}} same-name groups await semantic judgment",
+      "batchTitle": "{{count}} remaining groups need content comparison",
       "batchHint": "The judgment Agent separates revisions, host variants, user customizations, different purposes, and behavior-overlap candidates. Evidence is graded; files are never edited.",
-      "batchAction": "Judge {{count}} groups",
+      "batchAction": "Compare {{count}} groups",
       "processingBatch": "Processing batch…",
       "handOff": "Ask {{agent}} to judge",
       "copyPrompt": "Copy prompt",
@@ -381,6 +385,17 @@
       "agentErrorHint": "The full error stays here for diagnosis. No Skill was changed.",
       "copyResult": "Copy result",
       "resultCopied": "Judgment result copied",
+      "agentNotNeeded": "Rules already proved this fact; no Agent guess is needed",
+      "decisionEvidenceMissing": "Evidence is not closed yet. Refresh the case first",
+      "decisionSaved": "Decision remembered; no Skill changed",
+      "decisionFailed": "Could not save this decision",
+      "decisionUndone": "Decision undone",
+      "undoDecision": "Undo decision",
+      "keepDistinct": "Keep as distinct",
+      "confirmRelated": "Confirm related purpose",
+      "compareItems": "Compare these items",
+      "confirmRelation": "Confirm relation",
+      "recheck": "Check again",
       "refresh": "Refresh results",
       "refreshing": "Rescanning…",
       "refreshHint": "Read affected skills again and check whether issues decreased",

@@ -314,7 +314,7 @@
       "familyRecommendation": "先確認這組是否符合你的能力理解；分組只幫助人理解，不會自動改變 Agent 可見範圍。",
       "confirmedRelations": "已確認的關係整理 {{count}} 組",
       "confirmedRelationsHint": "這些本機判斷已從待處理移入整理結果；沒有修改、移動或刪除任何 Skill。",
-      "confirmedKeepGrouped": "已記錄：內容不同，全部保留並視為同一關係組。",
+      "confirmedKeepGrouped": "已記住你對這組同名 Skill 的關係判斷；Skill 內容與 Agent 投放未改變。",
       "confirmedRelation": "已確認這組 Skill 的關係。",
       "families": {
         "business": { "label": "商業與經營", "description": "圍繞市場、客戶、銷售、財務和商業判斷形成的能力。" },
@@ -332,12 +332,12 @@
       "needsDecision": "需要判斷",
       "relations": {
         "exactDuplicate": {
-          "fact": "名稱和既有管理庫指紋相同；這是強重複候選，但在 strict 完整性複核前不宣稱逐位元組完全相同。",
-          "recommendation": "先做 strict 完整目錄複核，再讓 Agent 核對來源、更新鏈路和投放；證據不足就保留兩項。",
+          "fact": "名稱和既有管理庫指紋相同。Card Master 會用 strict 完整目錄複核；只有通過才標為「系統已確認事實」。",
+          "recommendation": "系統先做 strict 完整目錄複核。內容關係可由規則確認；來源取捨仍由你決定，不交給 Agent 猜。",
           "impact": "目前只產生判斷，不刪除任何內容；以後確認合併時，冗餘中央副本也只進入可撤銷回收站。"
         },
         "contentAlias": {
-          "fact": "名稱不同，但既有管理庫指紋相同；這是別名或副本候選，仍需 strict 內容與來源複核。",
+          "fact": "名稱不同，但既有管理庫指紋相同。Card Master 會用 strict 完整目錄複核，確認它們目前是否完全一致。",
           "recommendation": "先做 strict 完整目錄複核，再核對 owner 與更新鏈路；確認後才統一實體。",
           "impact": "目前不刪除內容；未來確認後也必須保留全部來源和 Agent 使用關係，並可撤銷。"
         },
@@ -352,6 +352,10 @@
       "duplicateCount": "重複候選",
       "nameCollisionCount": "同名異內容",
       "formatHealthCount": "格式健康",
+      "ruleDiagnosedCount": "系統已確認事實",
+      "semanticCount": "需要比較",
+      "blockedCount": "目前無法判斷",
+      "tiers": { "rule_diagnosed": "系統已確認事實", "needs_semantic": "需要比較", "blocked": "目前無法判斷" },
       "chooseAgent": "選擇處理 Agent",
       "execution": {
         "codex": "由本機 Codex CLI 審核並處理",
@@ -359,9 +363,9 @@
         "copyLabel": "複製 Prompt",
         "copyPrompt": "複製 Prompt，交給任意 Desktop Agent"
       },
-      "batchTitle": "{{count}} 組同名異內容等待語義判斷",
+      "batchTitle": "剩餘 {{count}} 組需要內容比較",
       "batchHint": "判斷 Agent 會逐組區分版本、平台適配、使用者定製、不同用途和行為重疊候選；證據分級，只給建議，不改檔案。",
-      "batchAction": "批次判斷 {{count}} 組",
+      "batchAction": "批次比較 {{count}} 組",
       "processingBatch": "正在批次處理…",
       "handOff": "交給 {{agent}} 判斷",
       "copyPrompt": "複製 Prompt",
@@ -381,6 +385,17 @@
       "agentErrorHint": "完整錯誤保留在這裡，便於修復；不會對 Skill 產生任何改動。",
       "copyResult": "複製結果",
       "resultCopied": "判斷結果已複製",
+      "agentNotNeeded": "這件事已有規則證據，不需要 Agent 猜測",
+      "decisionEvidenceMissing": "證據尚未閉合，請先重新檢查",
+      "decisionSaved": "判斷已記住；未改動任何 Skill",
+      "decisionFailed": "無法儲存這次判斷",
+      "decisionUndone": "判斷已撤銷",
+      "undoDecision": "撤銷判斷",
+      "keepDistinct": "確認分別保留",
+      "confirmRelated": "確認用途相關",
+      "compareItems": "比較這兩項",
+      "confirmRelation": "確認這個關係",
+      "recheck": "重新檢查",
       "refresh": "重新整理結果",
       "refreshing": "正在重新掃描…",
       "refreshHint": "重新讀取相關 Skill，檢查問題是否已經減少",

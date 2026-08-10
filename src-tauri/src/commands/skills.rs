@@ -1,4 +1,5 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -65,6 +66,84 @@ pub struct OrganizationHealthIssueDto {
 pub struct OrganizationHealthInspectionDto {
     pub skill_id: String,
     pub issues: Vec<OrganizationHealthIssueDto>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OrganizationCaseRequest {
+    pub case_id: String,
+    pub issue_kind: String,
+    pub member_ids: Vec<String>,
+    pub verify_strict_artifact: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationArtifactEvidenceDto {
+    pub status: String,
+    pub digest_algorithm: Option<String>,
+    pub digest_by_member: HashMap<String, String>,
+    pub observed_at: i64,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationProvenanceEvidenceDto {
+    pub skill_id: String,
+    pub source_type: String,
+    pub source_ref: Option<String>,
+    pub source_subpath: Option<String>,
+    pub source_revision: Option<String>,
+    pub completeness: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationDecisionEvidenceDto {
+    pub tier: String,
+    pub rule_id: String,
+    pub rule_version: String,
+    pub reason_codes: Vec<String>,
+    pub unresolved_gates: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationCaseEvidenceDto {
+    pub case_id: String,
+    pub case_revision: String,
+    pub member_ids: Vec<String>,
+    pub issue_kind: String,
+    pub artifact: OrganizationArtifactEvidenceDto,
+    pub provenance: Vec<OrganizationProvenanceEvidenceDto>,
+    pub decision: OrganizationDecisionEvidenceDto,
+}
+
+fn organization_decision_for_artifact(
+    artifact_status: &str,
+) -> (String, Vec<String>, Vec<String>) {
+    let (tier, reason_codes, unresolved_gates) = match artifact_status {
+        "unknown" => (
+            "blocked",
+            vec!["strict_artifact_unreadable".to_string()],
+            vec!["artifact_integrity".to_string()],
+        ),
+        "verified_match" => (
+            "rule_diagnosed",
+            vec!["strict_artifact_match".to_string()],
+            vec!["provenance_lineage".to_string(), "safe_action".to_string()],
+        ),
+        "verified_different" => (
+            "needs_semantic",
+            vec!["strict_artifact_differs".to_string()],
+            vec!["variant_classification".to_string()],
+        ),
+        _ => (
+            "needs_semantic",
+            vec!["legacy_candidate_only".to_string()],
+            vec![
+                "artifact_integrity".to_string(),
+                "variant_classification".to_string(),
+            ],
+        ),
+    };
+    (tier.to_string(), reason_codes, unresolved_gates)
 }
 
 #[derive(Debug, Serialize)]
@@ -525,6 +604,234 @@ pub async fn inspect_organization_health(
     .await?
 }
 
+#[tauri::command]
+pub async fn inspect_organization_cases(
+    cases: Vec<OrganizationCaseRequest>,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<Vec<OrganizationCaseEvidenceDto>, AppError> {
+    if cases.len() > 500 {
+        return Err(AppError::invalid_input("Too many organization cases"));
+    }
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut results = Vec::with_capacity(cases.len());
+        for case in cases {
+            let unique_members = case.member_ids.iter().collect::<HashSet<_>>();
+            if case.case_id.is_empty()
+                || case.case_id.len() > 512
+                || case.member_ids.len() < 2
+                || unique_members.len() != case.member_ids.len()
+                || !matches!(
+                    case.issue_kind.as_str(),
+                    "exact_duplicate" | "name_collision" | "content_alias"
+                )
+            {
+                return Err(AppError::invalid_input("Invalid organization case"));
+            }
+
+            let mut skills = Vec::with_capacity(case.member_ids.len());
+            for skill_id in &case.member_ids {
+                let Some(skill) = store.get_skill_by_id(skill_id).map_err(AppError::db)? else {
+                    return Err(AppError::invalid_input(
+                        "Organization case member not found",
+                    ));
+                };
+                skills.push(skill);
+            }
+
+            let observed_at = chrono::Utc::now().timestamp_millis();
+            let mut digest_by_member = HashMap::new();
+            let mut diagnostics = Vec::new();
+            if case.verify_strict_artifact {
+                for skill in &skills {
+                    match crate::core::content_hash::hash_directory_strict_v2(Path::new(
+                        &skill.central_path,
+                    )) {
+                        Ok(digest) => {
+                            digest_by_member.insert(skill.id.clone(), digest);
+                        }
+                        Err(error) => diagnostics.push(format!("{}: {error:#}", skill.id)),
+                    }
+                }
+            }
+
+            let artifact_status = if !case.verify_strict_artifact {
+                "not_checked"
+            } else if !diagnostics.is_empty() || digest_by_member.len() != skills.len() {
+                "unknown"
+            } else if digest_by_member.values().collect::<HashSet<_>>().len() == 1 {
+                "verified_match"
+            } else {
+                "verified_different"
+            };
+
+            let (tier, reason_codes, unresolved_gates) =
+                organization_decision_for_artifact(artifact_status);
+
+            let provenance = skills
+                .iter()
+                .map(|skill| {
+                    let source_ref = skill
+                        .source_ref_resolved
+                        .clone()
+                        .or_else(|| skill.source_ref.clone());
+                    let completeness = if skill.source_type == "git"
+                        && source_ref.is_some()
+                        && skill.source_revision.is_some()
+                    {
+                        "strong"
+                    } else if source_ref.is_some() {
+                        "partial"
+                    } else {
+                        "unknown"
+                    };
+                    OrganizationProvenanceEvidenceDto {
+                        skill_id: skill.id.clone(),
+                        source_type: skill.source_type.clone(),
+                        source_ref,
+                        source_subpath: skill.source_subpath.clone(),
+                        source_revision: skill.source_revision.clone(),
+                        completeness: completeness.to_string(),
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let mut revision = Sha256::new();
+            revision.update(b"card-master-organization-case-v1\0");
+            revision.update(case.case_id.as_bytes());
+            revision.update(b"\0");
+            revision.update(case.issue_kind.as_bytes());
+            for skill in &skills {
+                revision.update(b"\0member\0");
+                revision.update(skill.id.as_bytes());
+                revision.update(b"\0");
+                revision.update(skill.updated_at.to_be_bytes());
+                revision.update(
+                    skill
+                        .content_hash
+                        .as_deref()
+                        .unwrap_or("unknown")
+                        .as_bytes(),
+                );
+                revision.update(b"\0");
+                revision.update(skill.source_ref.as_deref().unwrap_or("unknown").as_bytes());
+                revision.update(b"\0");
+                revision.update(
+                    skill
+                        .source_ref_resolved
+                        .as_deref()
+                        .unwrap_or("unknown")
+                        .as_bytes(),
+                );
+                revision.update(b"\0");
+                revision.update(
+                    skill
+                        .source_subpath
+                        .as_deref()
+                        .unwrap_or("unknown")
+                        .as_bytes(),
+                );
+                revision.update(b"\0");
+                revision.update(
+                    skill
+                        .source_revision
+                        .as_deref()
+                        .unwrap_or("unknown")
+                        .as_bytes(),
+                );
+                if let Some(digest) = digest_by_member.get(&skill.id) {
+                    revision.update(b"\0strict\0");
+                    revision.update(digest.as_bytes());
+                }
+            }
+
+            results.push(OrganizationCaseEvidenceDto {
+                case_id: case.case_id,
+                case_revision: hex::encode(revision.finalize()),
+                member_ids: case.member_ids,
+                issue_kind: case.issue_kind,
+                artifact: OrganizationArtifactEvidenceDto {
+                    status: artifact_status.to_string(),
+                    digest_algorithm: case.verify_strict_artifact.then(|| {
+                        crate::core::content_hash::STRICT_DIRECTORY_DIGEST_ALGORITHM.to_string()
+                    }),
+                    digest_by_member,
+                    observed_at,
+                    diagnostics,
+                },
+                provenance,
+                decision: OrganizationDecisionEvidenceDto {
+                    tier,
+                    rule_id: "organization-case-routing".to_string(),
+                    rule_version: "1".to_string(),
+                    reason_codes,
+                    unresolved_gates,
+                },
+            });
+        }
+        Ok(results)
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn get_organization_decisions(
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<Vec<crate::core::skill_store::OrganizationDecisionRecord>, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        store.get_organization_decisions().map_err(AppError::db)
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn set_organization_decision(
+    case_key: String,
+    evidence_fingerprint: String,
+    disposition: String,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<crate::core::skill_store::OrganizationDecisionRecord, AppError> {
+    const ALLOWED: &[&str] = &[
+        "intentional_distinct",
+        "same_intent",
+        "related",
+        "defer",
+        "dismissed",
+    ];
+    if case_key.is_empty()
+        || case_key.len() > 512
+        || evidence_fingerprint.len() != 64
+        || !ALLOWED.contains(&disposition.as_str())
+    {
+        return Err(AppError::invalid_input("Invalid organization decision"));
+    }
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        store
+            .set_organization_decision(&case_key, &evidence_fingerprint, &disposition)
+            .map_err(AppError::db)
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn clear_organization_decision(
+    case_key: String,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<(), AppError> {
+    if case_key.is_empty() || case_key.len() > 512 {
+        return Err(AppError::invalid_input("Invalid organization case key"));
+    }
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        store
+            .clear_organization_decision(&case_key)
+            .map_err(AppError::db)
+    })
+    .await?
+}
+
 #[cfg(test)]
 mod organization_health_tests {
     use super::*;
@@ -617,6 +924,25 @@ mod organization_health_tests {
         .unwrap();
         let result = inspect_skill_format(&skill(tmp.path()), &[]);
         assert_eq!(result.issues[0].code, "frontmatter_invalid");
+    }
+
+    #[test]
+    fn strict_match_is_rule_diagnosed_without_agent_guess() {
+        let (tier, reasons, gates) = organization_decision_for_artifact("verified_match");
+        assert_eq!(tier, "rule_diagnosed");
+        assert_eq!(reasons, vec!["strict_artifact_match"]);
+        assert!(gates.contains(&"safe_action".to_string()));
+    }
+
+    #[test]
+    fn legacy_candidate_stays_semantic_and_unreadable_strict_blocks() {
+        let (legacy_tier, _, legacy_gates) = organization_decision_for_artifact("not_checked");
+        assert_eq!(legacy_tier, "needs_semantic");
+        assert!(legacy_gates.contains(&"artifact_integrity".to_string()));
+
+        let (blocked_tier, _, blocked_gates) = organization_decision_for_artifact("unknown");
+        assert_eq!(blocked_tier, "blocked");
+        assert_eq!(blocked_gates, vec!["artifact_integrity"]);
     }
 }
 

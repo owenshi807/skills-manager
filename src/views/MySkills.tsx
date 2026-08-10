@@ -58,6 +58,9 @@ import {
 import type { SkillIssue } from "../lib/skillOrganization";
 import type {
   ManagedSkill,
+  OrganizationCaseEvidence,
+  OrganizationDecision,
+  OrganizationDisposition,
   OrganizationHealthInspection,
   ToolInfo,
   GitBackupStatus,
@@ -167,10 +170,11 @@ export function MySkills() {
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
   const [refreshingOrganization, setRefreshingOrganization] = useState(false);
-  const resolvedOrganizationIds = useMemo(() => new Set<string>(), []);
   const [organizationAgentResult, setOrganizationAgentResult] = useState<OrganizationAgentDisplayResult | null>(null);
   const [organizationAgentError, setOrganizationAgentError] = useState<string | null>(null);
   const [organizationHealth, setOrganizationHealth] = useState<OrganizationHealthInspection[]>([]);
+  const [organizationCaseEvidence, setOrganizationCaseEvidence] = useState<OrganizationCaseEvidence[]>([]);
+  const [organizationDecisions, setOrganizationDecisions] = useState<OrganizationDecision[]>([]);
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -327,9 +331,22 @@ export function MySkills() {
 
   const relationGroups = useMemo(() => buildSkillRelationGroups(skills), [skills]);
   const capabilityGroups = useMemo(() => buildSkillCapabilityGroups(skills), [skills]);
+  const evidenceByCaseId = useMemo(
+    () => new Map(organizationCaseEvidence.map((evidence) => [evidence.case_id, evidence])),
+    [organizationCaseEvidence],
+  );
+  const resolvedOrganizationIds = useMemo(() => new Set(
+    organizationDecisions
+      .filter((decision) => {
+        const evidence = evidenceByCaseId.get(decision.case_key);
+        return decision.disposition !== "defer"
+          && evidence?.case_revision === decision.evidence_fingerprint;
+      })
+      .map((decision) => decision.case_key),
+  ), [evidenceByCaseId, organizationDecisions]);
   const organizationIssues = useMemo(
-    () => buildSkillIssues(skills, relationGroups, conflictIds, organizationHealth),
-    [skills, relationGroups, conflictIds, organizationHealth],
+    () => buildSkillIssues(skills, relationGroups, conflictIds, organizationHealth, organizationCaseEvidence),
+    [skills, relationGroups, conflictIds, organizationHealth, organizationCaseEvidence],
   );
   const unresolvedOrganizationCount = useMemo(
     () => organizationIssues.filter((issue) => !resolvedOrganizationIds.has(issue.id)).length,
@@ -384,6 +401,32 @@ export function MySkills() {
       cancelled = true;
     };
   }, [libraryView, skills]);
+
+  useEffect(() => {
+    if (libraryView === "all" || relationGroups.length === 0) return;
+    let cancelled = false;
+    const cases: api.OrganizationCaseRequest[] = relationGroups.map((group) => ({
+      case_id: group.id,
+      issue_kind: group.kind,
+      member_ids: group.skills.map((skill) => skill.id),
+      verify_strict_artifact: group.kind === "exact_duplicate" || group.kind === "content_alias",
+    }));
+    Promise.all([
+      api.inspectOrganizationCases(cases),
+      api.getOrganizationDecisions(),
+    ]).then(([evidence, decisions]) => {
+      if (cancelled) return;
+      setOrganizationCaseEvidence(evidence);
+      setOrganizationDecisions(decisions);
+    }).catch(() => {
+      if (cancelled) return;
+      setOrganizationCaseEvidence([]);
+      setOrganizationDecisions([]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [libraryView, relationGroups]);
 
   const filtered = useMemo(() => {
     const result = skills.filter((skill) => {
@@ -1124,7 +1167,14 @@ export function MySkills() {
           `- 已有管理库指纹（legacy，仅用于发现候选，不等同 strict digest）: ${skill.content_hash || "无法验证"}`,
         ].join("\n");
       }).join("\n\n");
-      return `### 事件 ${issueIndex + 1} · ${issue.kind}\n${memberContext}`;
+      return [
+        `### 事件 ${issueIndex + 1} · ${issue.kind}`,
+        `- Case revision: ${issue.caseRevision || "Unknown"}`,
+        `- 制品证据: ${issue.artifactStatus || "Unknown"}`,
+        `- 规则已确认: ${(issue.reasonCodes || []).join("、") || "无"}`,
+        `- 未闭合 Gate: ${(issue.unresolvedGates || []).join("、") || "无"}`,
+        memberContext,
+      ].join("\n");
     }).join("\n\n");
     return [
       `# Card Master ${batch ? "批量" : "单项"}整理任务`,
@@ -1166,6 +1216,10 @@ export function MySkills() {
   }, []);
 
   const handOffOrganizationIssue = useCallback(async (issue: SkillIssue) => {
+    if (issue.decisionTier !== "needs_semantic") {
+      toast.info(t("mySkills.organization.agentNotNeeded"));
+      return;
+    }
     const prompt = buildOrganizationPrompt([issue], false);
     if (organizationAgent === "copy_prompt") {
       await writeOrganizationClipboard(prompt);
@@ -1188,7 +1242,12 @@ export function MySkills() {
   }, [buildOrganizationPrompt, organizationAgent, t, writeOrganizationClipboard]);
 
   const executeOrganizationBatch = useCallback(async (issues: SkillIssue[]) => {
-    const prompt = buildOrganizationPrompt(issues, true);
+    const semanticIssues = issues.filter((issue) => issue.decisionTier === "needs_semantic");
+    if (semanticIssues.length === 0) {
+      toast.info(t("mySkills.organization.agentNotNeeded"));
+      return;
+    }
+    const prompt = buildOrganizationPrompt(semanticIssues, true);
     if (organizationAgent === "copy_prompt") {
       await writeOrganizationClipboard(prompt);
       toast.success(t("mySkills.organization.promptCopied"));
@@ -1200,13 +1259,13 @@ export function MySkills() {
     setOrganizationAgentError(null);
     const toastId = toast.loading(t("mySkills.organization.agentRunningBatch", {
       agent: agentName,
-      count: issues.length,
+      count: semanticIssues.length,
     }));
     try {
       const result = await api.runOrganizationAgent(organizationAgent, prompt);
       await writeOrganizationClipboard(result.output);
       setOrganizationAgentResult({ agentName, output: result.output });
-      toast.success(t("mySkills.organization.agentBatchJudged", { agent: agentName, count: issues.length }), { id: toastId });
+      toast.success(t("mySkills.organization.agentBatchJudged", { agent: agentName, count: semanticIssues.length }), { id: toastId });
     } catch (error) {
       setOrganizationAgentError(getErrorMessage(error, t("mySkills.organization.agentFailed")));
       toast.error(t("mySkills.organization.agentFailed"), { id: toastId });
@@ -1214,6 +1273,36 @@ export function MySkills() {
       setProcessingOrganizationBatch(false);
     }
   }, [buildOrganizationPrompt, organizationAgent, t, writeOrganizationClipboard]);
+
+  const decideOrganizationIssue = useCallback(async (
+    issue: SkillIssue,
+    disposition: OrganizationDisposition,
+  ) => {
+    if (!issue.caseRevision) {
+      toast.error(t("mySkills.organization.decisionEvidenceMissing"));
+      return;
+    }
+    try {
+      const decision = await api.setOrganizationDecision(issue.id, issue.caseRevision, disposition);
+      setOrganizationDecisions((current) => [
+        decision,
+        ...current.filter((item) => item.case_key !== decision.case_key),
+      ]);
+      toast.success(t("mySkills.organization.decisionSaved"));
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("mySkills.organization.decisionFailed")));
+    }
+  }, [t]);
+
+  const undoOrganizationDecision = useCallback(async (caseKey: string) => {
+    try {
+      await api.clearOrganizationDecision(caseKey);
+      setOrganizationDecisions((current) => current.filter((item) => item.case_key !== caseKey));
+      toast.success(t("mySkills.organization.decisionUndone"));
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("mySkills.organization.decisionFailed")));
+    }
+  }, [t]);
 
   const refreshOrganizationFacts = useCallback(async () => {
     const affectedIds = [...new Set(organizationIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)))];
@@ -1507,6 +1596,7 @@ export function MySkills() {
           tools={tools}
           onOpenSkill={openSkillDetailById}
           onShowIssues={() => setLibraryView("issues")}
+          onUndoDecision={undoOrganizationDecision}
         />
       ) : libraryView === "issues" ? (
         <SkillIssuesView
@@ -1529,6 +1619,7 @@ export function MySkills() {
           processingBatch={processingOrganizationBatch}
           refreshing={refreshingOrganization}
           onRefresh={refreshOrganizationFacts}
+          onDecide={decideOrganizationIssue}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}

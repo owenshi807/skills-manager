@@ -80,6 +80,59 @@ export interface OrganizationHealthInspection {
   issues: OrganizationHealthIssue[];
 }
 
+export type OrganizationDecisionTier = "rule_diagnosed" | "needs_semantic" | "blocked";
+
+export interface OrganizationCaseRequest {
+  case_id: string;
+  issue_kind: string;
+  member_ids: string[];
+  verify_strict_artifact: boolean;
+}
+
+export interface OrganizationCaseEvidence {
+  case_id: string;
+  case_revision: string;
+  member_ids: string[];
+  issue_kind: string;
+  artifact: {
+    status: "verified_match" | "verified_different" | "not_checked" | "unknown";
+    digest_algorithm: string | null;
+    digest_by_member: Record<string, string>;
+    observed_at: number;
+    diagnostics: string[];
+  };
+  provenance: Array<{
+    skill_id: string;
+    source_type: string;
+    source_ref: string | null;
+    source_subpath: string | null;
+    source_revision: string | null;
+    completeness: "strong" | "partial" | "unknown";
+  }>;
+  decision: {
+    tier: OrganizationDecisionTier;
+    rule_id: string;
+    rule_version: string;
+    reason_codes: string[];
+    unresolved_gates: string[];
+  };
+}
+
+export type OrganizationDisposition =
+  | "intentional_distinct"
+  | "same_intent"
+  | "related"
+  | "defer"
+  | "dismissed";
+
+export interface OrganizationDecision {
+  case_key: string;
+  evidence_fingerprint: string;
+  disposition: OrganizationDisposition;
+  decided_at: number;
+  updated_at: number;
+}
+
 export interface SkillDocument {
   skill_id: string;
   filename: string;
@@ -264,6 +317,25 @@ export const refreshOrganizationFacts = (skillIds: string[]) =>
 
 export const inspectOrganizationHealth = (skillIds: string[]) =>
   invoke<OrganizationHealthInspection[]>("inspect_organization_health", { skillIds });
+
+export const inspectOrganizationCases = (cases: OrganizationCaseRequest[]) =>
+  invoke<OrganizationCaseEvidence[]>("inspect_organization_cases", { cases });
+
+export const getOrganizationDecisions = () =>
+  invoke<OrganizationDecision[]>("get_organization_decisions");
+
+export const setOrganizationDecision = (
+  caseKey: string,
+  evidenceFingerprint: string,
+  disposition: OrganizationDisposition,
+) => invoke<OrganizationDecision>("set_organization_decision", {
+  caseKey,
+  evidenceFingerprint,
+  disposition,
+});
+
+export const clearOrganizationDecision = (caseKey: string) =>
+  invoke<void>("clear_organization_decision", { caseKey });
 
 export const runOrganizationAgent = (agentKey: "codex" | "claude_code", prompt: string) =>
   invoke<OrganizationAgentResult>("run_organization_agent", { agentKey, prompt });

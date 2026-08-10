@@ -1,4 +1,9 @@
-import type { ManagedSkill, OrganizationHealthInspection } from "./tauri";
+import type {
+  ManagedSkill,
+  OrganizationCaseEvidence,
+  OrganizationDecisionTier,
+  OrganizationHealthInspection,
+} from "./tauri";
 
 export type SkillRelationKind = "exact_duplicate" | "name_collision" | "content_alias";
 
@@ -27,6 +32,11 @@ export interface SkillIssue {
   kind: SkillIssueKind;
   skills: ManagedSkill[];
   details?: string[];
+  decisionTier: OrganizationDecisionTier;
+  caseRevision?: string;
+  artifactStatus?: OrganizationCaseEvidence["artifact"]["status"];
+  reasonCodes?: string[];
+  unresolvedGates?: string[];
 }
 
 function normalizedName(name: string) {
@@ -90,22 +100,34 @@ export function buildSkillIssues(
   relationGroups: SkillRelationGroup[],
   conflictIds: Set<string>,
   healthInspections: OrganizationHealthInspection[] = [],
+  caseEvidence: OrganizationCaseEvidence[] = [],
 ): SkillIssue[] {
-  const issues: SkillIssue[] = relationGroups.map((group) => ({
-    id: group.id,
-    kind: group.kind,
-    skills: group.skills,
-  }));
+  const evidenceByCase = new Map(caseEvidence.map((evidence) => [evidence.case_id, evidence]));
+  const issues: SkillIssue[] = relationGroups.map((group) => {
+    const evidence = evidenceByCase.get(group.id);
+    return {
+      id: group.id,
+      kind: group.kind,
+      skills: group.skills,
+      decisionTier: evidence?.decision.tier
+        ?? (group.kind === "name_collision" ? "needs_semantic" : "blocked"),
+      caseRevision: evidence?.case_revision,
+      artifactStatus: evidence?.artifact.status,
+      reasonCodes: evidence?.decision.reason_codes,
+      unresolvedGates: evidence?.decision.unresolved_gates,
+      details: evidence?.artifact.diagnostics,
+    };
+  });
 
   for (const skill of skills) {
     if (conflictIds.has(skill.id)) {
-      issues.push({ id: `conflict:${skill.id}`, kind: "sync_conflict", skills: [skill] });
+      issues.push({ id: `conflict:${skill.id}`, kind: "sync_conflict", skills: [skill], decisionTier: "blocked" });
     }
     if (skill.update_status === "source_missing") {
-      issues.push({ id: `source:${skill.id}`, kind: "source_missing", skills: [skill] });
+      issues.push({ id: `source:${skill.id}`, kind: "source_missing", skills: [skill], decisionTier: "rule_diagnosed" });
     }
     if (skill.update_status === "error") {
-      issues.push({ id: `error:${skill.id}`, kind: "read_error", skills: [skill] });
+      issues.push({ id: `error:${skill.id}`, kind: "read_error", skills: [skill], decisionTier: "blocked" });
     }
   }
 
@@ -119,6 +141,9 @@ export function buildSkillIssues(
       kind: "format_health",
       skills: [skill],
       details: inspection.issues.map((issue) => issue.detail),
+      decisionTier: inspection.issues.some((issue) => issue.severity === "error")
+        ? "blocked"
+        : "rule_diagnosed",
     });
   }
 

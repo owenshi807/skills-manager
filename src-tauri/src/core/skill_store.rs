@@ -66,6 +66,15 @@ pub struct PendingConflictRow {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct OrganizationDecisionRecord {
+    pub case_key: String,
+    pub evidence_fingerprint: String,
+    pub disposition: String,
+    pub decided_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct DiscoveredSkillRecord {
     pub id: String,
     pub tool: String,
@@ -137,6 +146,65 @@ impl SkillStore {
     }
 
     // ── Skills CRUD ──
+
+    pub fn get_organization_decisions(&self) -> Result<Vec<OrganizationDecisionRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT case_key, evidence_fingerprint, disposition, decided_at, updated_at
+             FROM organization_decisions ORDER BY updated_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(OrganizationDecisionRecord {
+                case_key: row.get(0)?,
+                evidence_fingerprint: row.get(1)?,
+                disposition: row.get(2)?,
+                decided_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?;
+        Ok(rows.filter_map(|row| row.ok()).collect())
+    }
+
+    pub fn set_organization_decision(
+        &self,
+        case_key: &str,
+        evidence_fingerprint: &str,
+        disposition: &str,
+    ) -> Result<OrganizationDecisionRecord> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        conn.execute(
+            "INSERT INTO organization_decisions
+                (case_key, evidence_fingerprint, disposition, decided_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?4)
+             ON CONFLICT(case_key) DO UPDATE SET
+                evidence_fingerprint = excluded.evidence_fingerprint,
+                disposition = excluded.disposition,
+                updated_at = excluded.updated_at",
+            params![case_key, evidence_fingerprint, disposition, now],
+        )?;
+        let decided_at = conn.query_row(
+            "SELECT decided_at FROM organization_decisions WHERE case_key = ?1",
+            params![case_key],
+            |row| row.get(0),
+        )?;
+        Ok(OrganizationDecisionRecord {
+            case_key: case_key.to_string(),
+            evidence_fingerprint: evidence_fingerprint.to_string(),
+            disposition: disposition.to_string(),
+            decided_at,
+            updated_at: now,
+        })
+    }
+
+    pub fn clear_organization_decision(&self, case_key: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM organization_decisions WHERE case_key = ?1",
+            params![case_key],
+        )?;
+        Ok(())
+    }
 
     pub fn insert_skill(&self, skill: &SkillRecord) -> Result<()> {
         let conn = self.conn.lock().unwrap();
@@ -1838,6 +1906,36 @@ fn map_skill_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SkillRecord> {
         last_checked_at: row.get(17)?,
         last_check_error: row.get(18)?,
     })
+}
+
+#[cfg(test)]
+mod organization_decision_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn decision_round_trips_updates_and_clears() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+
+        let first = store
+            .set_organization_decision("name:docx", &"a".repeat(64), "related")
+            .unwrap();
+        assert_eq!(first.disposition, "related");
+        assert_eq!(store.get_organization_decisions().unwrap().len(), 1);
+
+        let updated = store
+            .set_organization_decision("name:docx", &"b".repeat(64), "intentional_distinct")
+            .unwrap();
+        assert_eq!(updated.disposition, "intentional_distinct");
+        assert_eq!(updated.decided_at, first.decided_at);
+        let stored = store.get_organization_decisions().unwrap();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].evidence_fingerprint, "b".repeat(64));
+
+        store.clear_organization_decision("name:docx").unwrap();
+        assert!(store.get_organization_decisions().unwrap().is_empty());
+    }
 }
 
 #[cfg(test)]
