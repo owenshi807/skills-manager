@@ -1140,12 +1140,12 @@ export function MySkills() {
       return `### 事件 ${issueIndex + 1} · ${issue.kind}\n${memberContext}`;
     }).join("\n\n");
     return [
-      `# Skill Manager ${batch ? "批量" : "单项"}整理任务`,
+      `# Card Master ${batch ? "批量" : "单项"}整理任务`,
       "",
-      "你正在替 Skill Manager 执行有边界的语义判断。请读取下列中央库路径中的 SKILL.md 和必要说明，判断每组 Skill 的关系。",
+      "你正在替 Card Master 执行有边界的语义判断。请读取下列中央库路径中的 SKILL.md 和必要说明，判断每组 Skill 的关系。",
       "",
       "## 产品约束",
-      "- Skill Manager 持有事实与安全边界；你负责语义比较和可审计的整理判断。",
+      "- Card Master 持有事实与安全边界；你负责语义比较和可审计的整理判断。",
       "- 不得删除、移动、覆盖或改写任何 Skill、来源目录、Agent 投放目录、Preset 或 Harness。",
       "- 同名不等于重复；内容相同也不自动等于同一 owner。证据不足必须标记 needs_manual_compare。",
       "- 对 name_collision 的默认安全建议是 keep_grouped：内容全部保留，只建立关系组并建议清楚的显示名称。",
@@ -1157,7 +1157,7 @@ export function MySkills() {
       batch
         ? "只有当全部事件都适合 keep_grouped 时，第一行严格输出 APPROVE_BATCH；否则第一行输出 REVIEW_REQUIRED，并列出例外事件。"
         : "若建议可以安全采用，第一行严格输出 APPROVE_SINGLE；否则第一行输出 REVIEW_REQUIRED。",
-      "随后给出简短人类可读结论和 JSON 计划。只返回计划，实际写入由 Skill Manager 完成。",
+      "随后给出简短人类可读结论和 JSON 计划。只返回计划，实际写入由 Card Master 完成。",
     ].join("\n");
   }, [skillDisplayNames, tools]);
 

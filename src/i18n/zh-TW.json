@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Skills Manager"
+    "name": "Card Master"
   },
   "sidebar": {
     "dashboard": "Dashboard",
@@ -30,7 +30,7 @@
     "scanSummary": "掃描 {{agents}} 個 Agent · 發現 {{locations}} 個位置 · 對應 {{skills}} 個 Skill 來源",
     "scanning": "正在掃描…",
     "rescan": "重新掃描",
-    "desktopOnly": "目前是網頁預覽，無法讀取本機檔案。請使用 Skills Manager 桌面應用程式中的「整理」頁面。",
+    "desktopOnly": "目前是網頁預覽，無法讀取本機檔案。請使用 Card Master 桌面應用程式中的「整理」頁面。",
     "queueLabel": "整理結果",
     "queues": { "pending": "待收入", "issues": "重複 / 衝突", "managed": "已納管" },
     "search": "搜尋名稱、Agent 或路徑…",
@@ -59,7 +59,7 @@
   },
   "help": {
     "eyebrow": "操作指南",
-    "title": "快速上手 Skills Manager",
+    "title": "快速上手 Card Master",
     "description": "最快路徑：先用「整理」盤點散落的 Skills → 在技能庫確認已納管內容 → 再到 Agent 工作區決定投放。按 ⌘K 可隨時呼出命令面板。",
     "items": {
       "workflows": {
@@ -80,7 +80,7 @@
       },
       "global": {
         "title": "全域工作區",
-        "description": "每個 Agent 都有自己的頁面，列出其全域目錄裡的所有 Skills（包括不是透過 Skills Manager 安裝的），與 Agent 實際看到的內容保持一致。點 + 新增 Skills 即可從中央庫挑選，並透過內嵌的 Agent 標籤選擇目標；也可透過「全部 Agents」總覽跨所有已安裝 Agent 統一管理。只存在於某個 Agent 目錄的 Skills 可直接在卡片上刪除。"
+        "description": "每個 Agent 都有自己的頁面，列出其全域目錄裡的所有 Skills（包括不是透過 Card Master 安裝的），與 Agent 實際看到的內容保持一致。點 + 新增 Skills 即可從中央庫挑選，並透過內嵌的 Agent 標籤選擇目標；也可透過「全部 Agents」總覽跨所有已安裝 Agent 統一管理。只存在於某個 Agent 目錄的 Skills 可直接在卡片上刪除。"
       },
       "projects": {
         "title": "專案工作區",
@@ -313,8 +313,8 @@
       },
       "familyRecommendation": "先確認這組是否符合你的能力理解；分組只幫助人理解，不會自動改變 Agent 可見範圍。",
       "confirmedRelations": "已確認的關係整理 {{count}} 組",
-      "confirmedRelationsHint": "這些判斷已從待處理移入整理結果，並保留撤銷入口。",
-      "confirmedKeepGrouped": "已確認：內容不同，全部保留並歸入同一關係組。",
+      "confirmedRelationsHint": "這些本機判斷已從待處理移入整理結果；沒有修改、移動或刪除任何 Skill。",
+      "confirmedKeepGrouped": "已記錄：內容不同，全部保留並視為同一關係組。",
       "confirmedRelation": "已確認這組 Skill 的關係。",
       "families": {
         "business": { "label": "商業與經營", "description": "圍繞市場、客戶、銷售、財務和商業判斷形成的能力。" },
@@ -332,14 +332,14 @@
       "needsDecision": "需要判斷",
       "relations": {
         "exactDuplicate": {
-          "fact": "名稱和內容都完全相同，可以確認它們是重複收入的同一份能力。",
-          "recommendation": "統一管理為一個 Skill，並保留所有來源和 Agent 使用關係。",
-          "impact": "技能庫兩項變一項；Agent 繼續使用原能力；舊項進入可撤銷歸檔後才執行。"
+          "fact": "名稱和內容位元組完全相同；這能證明內容重複，但還不能證明來源與維護者屬於同一條鏈路。",
+          "recommendation": "先讓 Agent 核對來源、更新鏈路和 Agent 投放，再提出保留哪項為主項；證據不足就保留兩項。",
+          "impact": "目前只產生判斷，不刪除任何內容；以後確認合併時，冗餘中央副本也只進入可撤銷回收站。"
         },
         "contentAlias": {
-          "fact": "名稱不同，但內容完全相同；它們很可能是同一份能力的別名或副本。",
-          "recommendation": "統一為一個 Skill，保留舊名稱作為查找線索。",
-          "impact": "減少重複內容，不改變 Agent 當前可見的能力；來源記錄全部保留。"
+          "fact": "名稱不同，但內容位元組完全相同；這是別名或副本候選，來源關係仍需核對。",
+          "recommendation": "先核對 owner 與更新鏈路；確認後才統一實體，並把舊名稱保留為查找線索。",
+          "impact": "目前不刪除內容；未來確認後也必須保留全部來源和 Agent 使用關係，並可撤銷。"
         },
         "nameCollision": {
           "fact": "名稱相同，但內容不同。它們有關聯，卻不能被當成重複項直接合併。",
@@ -359,7 +359,7 @@
         "copyPrompt": "複製 Prompt，交給任意 Desktop Agent"
       },
       "batchTitle": "{{count}} 組同名異內容可採用同一個安全建議",
-      "batchHint": "全部保留、歸入各自關係組並記錄判斷；不修改內容、觸發方式或 Agent 投放。",
+      "batchHint": "全部保留，並在本機記錄為各自的關係組；不修改內容、觸發方式、來源或 Agent 投放。",
       "batchAction": "批次處理 {{count}} 組",
       "processingBatch": "正在批次處理…",
       "handOff": "交給 {{agent}} 判斷",
@@ -370,7 +370,7 @@
       "agentRunning": "{{agent}} 正在處理這件整理任務…",
       "agentRunningBatch": "{{agent}} 正在審核 {{count}} 組整理任務…",
       "agentResultCopied": "{{agent}} 已完成，結果已複製",
-      "agentBatchApproved": "{{agent}} 已確認批次建議並完成整理記錄",
+      "agentBatchApproved": "{{agent}} 已確認批次建議；本機已記錄關係，未改動 Skill",
       "agentNeedsReview": "{{agent}} 發現需要人工判斷的例外，結果已複製",
       "agentFailed": "Agent 執行失敗",
       "refresh": "重新整理結果",
@@ -378,7 +378,7 @@
       "refreshHint": "重新讀取相關 Skill，檢查問題是否已經減少",
       "refreshDone": "已重新掃描 {{count}} 個 Skill，{{failed}} 個無法驗證",
       "refreshFailed": "重新掃描失敗",
-      "resolvedToast": "已完成 {{count}} 件整理，可立即撤銷",
+      "resolvedToast": "已在本機記錄 {{count}} 件關係；未改動任何 Skill",
       "undo": "撤銷",
       "noIssues": "目前沒有需要處理的整理事件",
       "recommendation": "建議",
@@ -751,7 +751,7 @@
     "language": "語言",
     "help": "說明",
     "about": "關於",
-    "version": "Skills Manager 1.28.5",
+    "version": "Card Master 1.28.5",
     "tagline": "跨平台。極簡、高效、無感多 Preset 切換。",
     "checkUpdate": "檢查更新",
     "checking": "檢查中…",
@@ -771,7 +771,7 @@
     "exportLogsHint": "把最近日誌和操作紀錄打包成 zip 儲存到下載資料夾",
     "exportLogsDone": "已匯出日誌（{{count}} 個檔案），請把 zip 拖到 GitHub issue 附件區。",
     "exportLogsFailed": "匯出日誌失敗。",
-    "panicBanner": "上次執行 Skills Manager 時發生崩潰（{{time}}）。",
+    "panicBanner": "上次執行 Card Master 時發生崩潰（{{time}}）。",
     "repoWarning_config_unreadable": "中央庫設定檔已損壞或無法讀取，本次啟動已回退到預設路徑（~/.skills-manager）。如果技能庫看起來是空的，你的資料仍在先前設定的路徑裡——請到「中央倉庫路徑」重新指定。",
     "repoWarning_repo_path_invalid": "設定的中央倉庫路徑無效，本次啟動已回退到預設路徑（~/.skills-manager）。如果技能庫看起來是空的，請到「中央倉庫路徑」重新指定資料所在位置。",
     "repoWarning_migration_incomplete": "將中央庫遷移到新位置的操作沒有完成，本次啟動仍在使用原位置的現有技能庫——資料沒有遺失。要完成遷移，請打開設定，把「中央倉庫路徑」指向一個空的、可寫的資料夾（點「編輯」可查看你選擇的目標位置），然後重新啟動。遷移成功前，目前的技能庫會留在原地——請不要刪除它。",
