@@ -46,7 +46,7 @@ import { SkillIssuesView, SkillOrganizeView } from "../components/SkillOrganizat
 import type {
   OrganizationExecutionMode,
   OrganizationExecutionOption,
-  OrganizationAgentDisplayResult,
+  OrganizationAgentDisplayAssessment,
 } from "../components/SkillOrganizationViews";
 import * as api from "../lib/tauri";
 import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER } from "../lib/skillTags";
@@ -61,6 +61,10 @@ import type {
   OrganizationCaseEvidence,
   OrganizationDecision,
   OrganizationDisposition,
+  OrganizationAgentAssessment,
+  OrganizationAgentAssessmentRecord,
+  OrganizationAgentCapability,
+  OrganizationAgentCaseTask,
   OrganizationHealthInspection,
   ToolInfo,
   GitBackupStatus,
@@ -170,7 +174,8 @@ export function MySkills() {
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
   const [refreshingOrganization, setRefreshingOrganization] = useState(false);
-  const [organizationAgentResult, setOrganizationAgentResult] = useState<OrganizationAgentDisplayResult | null>(null);
+  const [organizationAgentCapabilities, setOrganizationAgentCapabilities] = useState<OrganizationAgentCapability[]>([]);
+  const [organizationAssessmentRecords, setOrganizationAssessmentRecords] = useState<OrganizationAgentAssessmentRecord[]>([]);
   const [organizationAgentError, setOrganizationAgentError] = useState<string | null>(null);
   const [organizationHealth, setOrganizationHealth] = useState<OrganizationHealthInspection[]>([]);
   const [organizationCaseEvidence, setOrganizationCaseEvidence] = useState<OrganizationCaseEvidence[]>([]);
@@ -353,39 +358,81 @@ export function MySkills() {
     [organizationIssues, resolvedOrganizationIds],
   );
   const organizationExecutionOptions = useMemo<OrganizationExecutionOption[]>(() => {
-    const options: OrganizationExecutionOption[] = [];
-    if (tools.some((tool) => tool.key === "codex" && tool.installed && tool.enabled)) {
-      options.push({
-        id: "codex",
-        label: "Codex CLI",
-        description: t("mySkills.organization.execution.codex"),
-      });
-    }
-    if (tools.some((tool) => tool.key === "claude_code" && tool.installed && tool.enabled)) {
-      options.push({
-        id: "claude_code",
-        label: "Claude Code CLI",
-        description: t("mySkills.organization.execution.claudeCode"),
-      });
-    }
+    const descriptionByKey: Record<string, string> = {
+      codex: t("mySkills.organization.execution.codex"),
+      claude_code: t("mySkills.organization.execution.claudeCode"),
+      hermes: t("mySkills.organization.execution.hermes"),
+    };
+    const options: OrganizationExecutionOption[] = organizationAgentCapabilities
+      .filter((capability) => capability.available)
+      .map((capability) => ({
+        id: capability.key,
+        label: capability.display_name,
+        description: descriptionByKey[capability.key],
+      } satisfies OrganizationExecutionOption));
     options.push({
       id: "copy_prompt",
       label: t("mySkills.organization.execution.copyLabel"),
       description: t("mySkills.organization.execution.copyPrompt"),
     });
     return options;
-  }, [t, tools]);
+  }, [organizationAgentCapabilities, t]);
 
   useEffect(() => {
-    if (!organizationModeInitializedRef.current && organizationExecutionOptions.length > 0) {
+    let cancelled = false;
+    Promise.all([
+      api.getOrganizationAgentCapabilities(),
+      api.getOrganizationAgentAssessments(),
+      api.getSettings("organization_default_agent").catch(() => null),
+    ]).then(([capabilities, assessments, savedAgent]) => {
+      if (cancelled) return;
+      setOrganizationAgentCapabilities(capabilities);
+      setOrganizationAssessmentRecords(assessments);
+      const availableAgentKeys = capabilities
+        .filter((capability) => capability.available)
+        .map((capability) => capability.key);
+      if (savedAgent && [...availableAgentKeys, "copy_prompt"].includes(savedAgent as OrganizationExecutionMode)) {
+        setOrganizationAgent(savedAgent as OrganizationExecutionMode);
+      } else {
+        setOrganizationAgent(availableAgentKeys[0] ?? "copy_prompt");
+      }
       organizationModeInitializedRef.current = true;
-      setOrganizationAgent(organizationExecutionOptions[0].id);
-      return;
-    }
+    }).catch(() => {
+      if (!cancelled) setOrganizationAgentCapabilities([]);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!organizationModeInitializedRef.current) return;
     if (!organizationExecutionOptions.some((option) => option.id === organizationAgent)) {
       setOrganizationAgent(organizationExecutionOptions[0]?.id ?? "copy_prompt");
     }
   }, [organizationAgent, organizationExecutionOptions]);
+
+  const organizationAgentAssessments = useMemo(() => {
+    const result = new Map<string, OrganizationAgentDisplayAssessment>();
+    const capabilityNames = new Map<string, string>(
+      organizationAgentCapabilities.map((item) => [item.key, item.display_name]),
+    );
+    for (const issue of organizationIssues) {
+      const records = organizationAssessmentRecords.filter((record) => record.case_key === issue.id);
+      const record = records.find((item) => item.case_revision === issue.caseRevision) ?? records[0];
+      if (!record) continue;
+      try {
+        const assessment = JSON.parse(record.payload_json) as OrganizationAgentAssessment;
+        result.set(issue.id, {
+          agentName: capabilityNames.get(record.agent_key) ?? record.agent_key,
+          assessment,
+          stale: assessment.case_revision !== issue.caseRevision,
+          createdAt: record.created_at,
+        });
+      } catch {
+        // Invalid legacy/cache rows are ignored. The backend only writes validated JSON.
+      }
+    }
+    return result;
+  }, [organizationAgentCapabilities, organizationAssessmentRecords, organizationIssues]);
 
   useEffect(() => {
     if (libraryView === "all" || skills.length === 0) return;
@@ -1153,60 +1200,6 @@ export function MySkills() {
     return null;
   };
 
-  const buildOrganizationPrompt = useCallback((issues: SkillIssue[], batch: boolean) => {
-    const eventContext = issues.map((issue, issueIndex) => {
-      const memberContext = issue.skills.map((skill, skillIndex) => {
-        const agents = [...new Set(skill.targets.map((target) => getToolDisplayName(target.tool, tools)))];
-        return [
-          `#### Skill ${skillIndex + 1}: ${skillDisplayNames.get(skill.id) || skill.name}`,
-          `- ID: ${skill.id}`,
-          `- 用途: ${skill.description || "未提供"}`,
-          `- 中央库路径: ${skill.central_path}`,
-          `- 原始来源: ${skill.source_ref_resolved || skill.source_ref || "未知"}`,
-          `- 当前使用 Agent: ${agents.length > 0 ? agents.join("、") : "无"}`,
-          `- 已有管理库指纹（legacy，仅用于发现候选，不等同 strict digest）: ${skill.content_hash || "无法验证"}`,
-        ].join("\n");
-      }).join("\n\n");
-      return [
-        `### 事件 ${issueIndex + 1} · ${issue.kind}`,
-        `- Case revision: ${issue.caseRevision || "Unknown"}`,
-        `- 制品证据: ${issue.artifactStatus || "Unknown"}`,
-        `- 规则已确认: ${(issue.reasonCodes || []).join("、") || "无"}`,
-        `- 未闭合 Gate: ${(issue.unresolvedGates || []).join("、") || "无"}`,
-        memberContext,
-      ].join("\n");
-    }).join("\n\n");
-    return [
-      `# Card Master ${batch ? "批量" : "单项"}整理任务`,
-      "",
-      "你正在替 Card Master 执行有边界的语义判断。请读取下列中央库路径中的 SKILL.md 和必要说明，判断每组 Skill 的关系。",
-      "",
-      "## 产品约束",
-      "- Card Master 持有事实与安全边界；你负责语义比较和可审计的整理判断。",
-      "- 不得删除、移动、覆盖或改写任何 Skill、来源目录、Agent 投放目录、Preset 或 Harness。",
-      "- 同名不等于重复；内容相同也不自动等于同一 owner。证据不足必须标记 needs_manual_compare。",
-      "- 不得把所有 name_collision 统一判为 keep_grouped。必须逐组区分已确认版本、疑似版本、平台适配、用户定制、不同用途、跨来源同内容、行为重叠候选和证据不足。",
-      "- 当前使用 Agent / target tool 只表示消费或投放位置，不是上游 owner；不得把 `.agents` 目录机械解释为 Cline owner。",
-      "- 证据分级：commit ancestry、immutable revision、明确 replacement、strict digest 为 strong；共同 base、结构化 diff、仅 adapter 差异为 medium；mtime、导入时间、同名和语义相似为 weak。",
-      "- 只有 strong lineage 才能判 confirmed_newer_revision。严格扩展但缺少可靠 lineage 时只能判 probable_newer_revision；mtime 不能单独确认新版。",
-      "- platform_variant 指核心意图/流程相同、差异主要是 Host 工具、路径、调用协议或兼容层；user_customization 才表示用户策略、质量门或领域内容发生改变。",
-      "- behavior_overlap_candidate 只表示需要后续使用 should-trigger / should-not-trigger / ambiguous 任务做单独与共存评测，不得据此建议删除。",
-      "",
-      `## 事件（共 ${issues.length} 组）`,
-      eventContext,
-      "",
-      "## 输出协议",
-      "第一行严格输出 CARD_MASTER_JUDGMENTS_V1。随后逐组输出：事件 ID、关系类型、建议动作、建议主项 ID、待归档候选 ID、证据（每条标 strong/medium/weak）、置信度、是否需要行为评测、反证或仍需人工确认的问题。",
-      "关系类型只能是 confirmed_newer_revision / probable_newer_revision / platform_variant / user_customization / different_purpose / exact_artifact_multi_source / behavior_overlap_candidate / needs_manual_compare。",
-      "建议动作只能是 prefer_newer_archive_old / keep_variants_linked / keep_both_grouped / keep_both_mark_fork / consolidate_after_lineage_check / run_behavior_eval / manual_review。",
-      "置信度衡量证据充分度：仅 weak 证据上限 0.70；没有 strong lineage 时不得把 probable_newer_revision 写成 confirmed。",
-      batch
-        ? "必须覆盖全部事件，不能用一个统一结论代替逐组判断。"
-        : "只判断当前事件，不泛化到其他同名 Skill。",
-      "只返回判断计划，实际写入由 Card Master 的确定性操作引擎在用户确认后完成。",
-    ].join("\n");
-  }, [skillDisplayNames, tools]);
-
   const writeOrganizationClipboard = useCallback(async (content: string) => {
     try {
       await clipboardWriteText(content);
@@ -1215,31 +1208,53 @@ export function MySkills() {
     }
   }, []);
 
+  const organizationCaseTask = useCallback((issue: SkillIssue): OrganizationAgentCaseTask => {
+    if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    return {
+      case_id: issue.id,
+      case_revision: issue.caseRevision,
+      issue_kind: issue.kind,
+      member_ids: issue.skills.map((skill) => skill.id),
+    };
+  }, [t]);
+
+  const selectedOrganizationAgentName = useMemo(
+    () => organizationExecutionOptions.find((option) => option.id === organizationAgent)?.label ?? organizationAgent,
+    [organizationAgent, organizationExecutionOptions],
+  );
+
+  const reloadOrganizationAssessments = useCallback(async () => {
+    setOrganizationAssessmentRecords(await api.getOrganizationAgentAssessments());
+  }, []);
+
   const handOffOrganizationIssue = useCallback(async (issue: SkillIssue) => {
     if (issue.decisionTier !== "needs_semantic") {
       toast.info(t("mySkills.organization.agentNotNeeded"));
       return;
     }
-    const prompt = buildOrganizationPrompt([issue], false);
     if (organizationAgent === "copy_prompt") {
-      await writeOrganizationClipboard(prompt);
-      toast.success(t("mySkills.organization.promptCopied"));
+      try {
+        const { prompt } = await api.prepareOrganizationAgentPrompt([organizationCaseTask(issue)]);
+        await writeOrganizationClipboard(prompt);
+        toast.success(t("mySkills.organization.promptCopied"));
+      } catch (error) {
+        setOrganizationAgentError(getErrorMessage(error, t("mySkills.organization.agentFailed")));
+        toast.error(t("mySkills.organization.agentFailed"));
+      }
       return;
     }
-    const agentName = organizationAgent === "codex" ? "Codex CLI" : "Claude Code CLI";
+    const agentName = selectedOrganizationAgentName;
     const toastId = toast.loading(t("mySkills.organization.agentRunning", { agent: agentName }));
-    setOrganizationAgentResult(null);
     setOrganizationAgentError(null);
     try {
-      const result = await api.runOrganizationAgent(organizationAgent, prompt);
-      await writeOrganizationClipboard(result.output);
-      setOrganizationAgentResult({ agentName, output: result.output });
-      toast.success(t("mySkills.organization.agentResultCopied", { agent: agentName }), { id: toastId });
+      await api.runOrganizationAgentTask(organizationAgent, [organizationCaseTask(issue)]);
+      await reloadOrganizationAssessments();
+      toast.success(t("mySkills.organization.agentAssessmentReady", { agent: agentName }), { id: toastId });
     } catch (error) {
       setOrganizationAgentError(getErrorMessage(error, t("mySkills.organization.agentFailed")));
       toast.error(t("mySkills.organization.agentFailed"), { id: toastId });
     }
-  }, [buildOrganizationPrompt, organizationAgent, t, writeOrganizationClipboard]);
+  }, [organizationAgent, organizationCaseTask, reloadOrganizationAssessments, selectedOrganizationAgentName, t, writeOrganizationClipboard]);
 
   const executeOrganizationBatch = useCallback(async (issues: SkillIssue[]) => {
     const semanticIssues = issues.filter((issue) => issue.decisionTier === "needs_semantic");
@@ -1247,24 +1262,38 @@ export function MySkills() {
       toast.info(t("mySkills.organization.agentNotNeeded"));
       return;
     }
-    const prompt = buildOrganizationPrompt(semanticIssues, true);
     if (organizationAgent === "copy_prompt") {
-      await writeOrganizationClipboard(prompt);
-      toast.success(t("mySkills.organization.promptCopied"));
+      try {
+        const prompts: string[] = [];
+        for (let index = 0; index < semanticIssues.length; index += 8) {
+          const { prompt } = await api.prepareOrganizationAgentPrompt(
+            semanticIssues.slice(index, index + 8).map(organizationCaseTask),
+          );
+          prompts.push(prompt);
+        }
+        await writeOrganizationClipboard(prompts.join("\n\n--- CARD MASTER NEXT BATCH ---\n\n"));
+        toast.success(t("mySkills.organization.promptCopied"));
+      } catch (error) {
+        setOrganizationAgentError(getErrorMessage(error, t("mySkills.organization.agentFailed")));
+        toast.error(t("mySkills.organization.agentFailed"));
+      }
       return;
     }
-    const agentName = organizationAgent === "codex" ? "Codex CLI" : "Claude Code CLI";
+    const agentName = selectedOrganizationAgentName;
     setProcessingOrganizationBatch(true);
-    setOrganizationAgentResult(null);
     setOrganizationAgentError(null);
     const toastId = toast.loading(t("mySkills.organization.agentRunningBatch", {
       agent: agentName,
       count: semanticIssues.length,
     }));
     try {
-      const result = await api.runOrganizationAgent(organizationAgent, prompt);
-      await writeOrganizationClipboard(result.output);
-      setOrganizationAgentResult({ agentName, output: result.output });
+      for (let index = 0; index < semanticIssues.length; index += 8) {
+        await api.runOrganizationAgentTask(
+          organizationAgent,
+          semanticIssues.slice(index, index + 8).map(organizationCaseTask),
+        );
+      }
+      await reloadOrganizationAssessments();
       toast.success(t("mySkills.organization.agentBatchJudged", { agent: agentName, count: semanticIssues.length }), { id: toastId });
     } catch (error) {
       setOrganizationAgentError(getErrorMessage(error, t("mySkills.organization.agentFailed")));
@@ -1272,7 +1301,7 @@ export function MySkills() {
     } finally {
       setProcessingOrganizationBatch(false);
     }
-  }, [buildOrganizationPrompt, organizationAgent, t, writeOrganizationClipboard]);
+  }, [organizationAgent, organizationCaseTask, reloadOrganizationAssessments, selectedOrganizationAgentName, t, writeOrganizationClipboard]);
 
   const decideOrganizationIssue = useCallback(async (
     issue: SkillIssue,
@@ -1605,17 +1634,14 @@ export function MySkills() {
           resolvedIds={resolvedOrganizationIds}
           executionMode={organizationAgent}
           executionOptions={organizationExecutionOptions}
-          onExecutionModeChange={setOrganizationAgent}
+          onExecutionModeChange={(mode) => {
+            setOrganizationAgent(mode);
+            void api.setSettings("organization_default_agent", mode).catch(() => {});
+          }}
           onExecuteBatch={executeOrganizationBatch}
           onHandOff={handOffOrganizationIssue}
-          agentResult={organizationAgentResult}
+          agentAssessments={organizationAgentAssessments}
           agentError={organizationAgentError}
-          onCopyAgentResult={() => {
-            if (!organizationAgentResult) return;
-            void writeOrganizationClipboard(organizationAgentResult.output).then(() => {
-              toast.success(t("mySkills.organization.resultCopied"));
-            });
-          }}
           processingBatch={processingOrganizationBatch}
           refreshing={refreshingOrganization}
           onRefresh={refreshOrganizationFacts}

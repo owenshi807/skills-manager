@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
 /// Current schema version. Bump this when adding a new migration.
-const LATEST_VERSION: u32 = 9;
+const LATEST_VERSION: u32 = 10;
 
 /// Run all pending migrations on the database.
 ///
@@ -56,6 +56,7 @@ fn migrate_step(conn: &Connection, from_version: u32) -> Result<()> {
         6 => migrate_v6_to_v7(conn),
         7 => migrate_v7_to_v8(conn),
         8 => migrate_v8_to_v9(conn),
+        9 => migrate_v9_to_v10(conn),
         _ => bail!("unknown migration version: {from_version}"),
     }
 }
@@ -357,6 +358,28 @@ fn migrate_v8_to_v9(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v9 → v10: cache only validated Agent assessments. A case revision and
+/// method version are part of the key, so changed evidence never silently
+/// reuses an old judgment.
+fn migrate_v9_to_v10(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS organization_agent_assessments (
+            case_key TEXT NOT NULL,
+            case_revision TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            agent_key TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY(case_key, case_revision, method_version, agent_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_organization_agent_assessments_case
+            ON organization_agent_assessments(case_key, created_at DESC);
+        ",
+    )?;
+    Ok(())
+}
+
 // ── Helpers ──
 
 fn add_column_if_missing(
@@ -426,6 +449,7 @@ mod tests {
         assert!(tables.contains(&"scenario_skill_tools".to_string()));
         assert!(tables.contains(&"audit_log".to_string()));
         assert!(tables.contains(&"organization_decisions".to_string()));
+        assert!(tables.contains(&"organization_agent_assessments".to_string()));
         assert!(has_column(&conn, "discovered_skills", "owner_ref").unwrap());
         assert!(has_column(&conn, "discovered_skills", "digest_algorithm").unwrap());
         assert!(has_column(&conn, "discovered_skills", "content_error").unwrap());
@@ -444,6 +468,23 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
         assert_eq!(version, LATEST_VERSION);
+    }
+
+    #[test]
+    fn test_v9_database_upgrades_to_v10_with_agent_assessments() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA user_version = 9;").unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        let table: String = conn
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='organization_agent_assessments'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(table, "organization_agent_assessments");
     }
 
     #[test]

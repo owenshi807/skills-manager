@@ -56,6 +56,16 @@ pub struct SkillTargetRecord {
     pub source_hash: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct OrganizationAgentAssessmentRecord {
+    pub case_key: String,
+    pub case_revision: String,
+    pub method_version: String,
+    pub agent_key: String,
+    pub payload_json: String,
+    pub created_at: i64,
+}
+
 /// One row of the pending-conflict projection (merge-engine design §4).
 #[derive(Debug, Clone, Serialize)]
 pub struct PendingConflictRow {
@@ -204,6 +214,63 @@ impl SkillStore {
             params![case_key],
         )?;
         Ok(())
+    }
+
+    pub fn get_organization_agent_assessments(
+        &self,
+    ) -> Result<Vec<OrganizationAgentAssessmentRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT case_key, case_revision, method_version, agent_key, payload_json, created_at
+             FROM organization_agent_assessments ORDER BY created_at DESC LIMIT 1000",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(OrganizationAgentAssessmentRecord {
+                case_key: row.get(0)?,
+                case_revision: row.get(1)?,
+                method_version: row.get(2)?,
+                agent_key: row.get(3)?,
+                payload_json: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })?;
+        Ok(rows.filter_map(|row| row.ok()).collect())
+    }
+
+    pub fn upsert_organization_agent_assessment(
+        &self,
+        case_key: &str,
+        case_revision: &str,
+        method_version: &str,
+        agent_key: &str,
+        payload_json: &str,
+    ) -> Result<OrganizationAgentAssessmentRecord> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp_millis();
+        conn.execute(
+            "INSERT INTO organization_agent_assessments
+                (case_key, case_revision, method_version, agent_key, payload_json, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(case_key, case_revision, method_version, agent_key) DO UPDATE SET
+                payload_json = excluded.payload_json,
+                created_at = excluded.created_at",
+            params![
+                case_key,
+                case_revision,
+                method_version,
+                agent_key,
+                payload_json,
+                now
+            ],
+        )?;
+        Ok(OrganizationAgentAssessmentRecord {
+            case_key: case_key.to_string(),
+            case_revision: case_revision.to_string(),
+            method_version: method_version.to_string(),
+            agent_key: agent_key.to_string(),
+            payload_json: payload_json.to_string(),
+            created_at: now,
+        })
     }
 
     pub fn insert_skill(&self, skill: &SkillRecord) -> Result<()> {
@@ -1935,6 +2002,41 @@ mod organization_decision_tests {
 
         store.clear_organization_decision("name:docx").unwrap();
         assert!(store.get_organization_decisions().unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod organization_agent_assessment_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn validated_assessment_round_trips_and_replaces_same_evidence_key() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store
+            .upsert_organization_agent_assessment(
+                "name:docx",
+                "revision-1",
+                "method-1",
+                "codex",
+                r#"{"confidence":0.7}"#,
+            )
+            .unwrap();
+        store
+            .upsert_organization_agent_assessment(
+                "name:docx",
+                "revision-1",
+                "method-1",
+                "codex",
+                r#"{"confidence":0.9}"#,
+            )
+            .unwrap();
+
+        let rows = store.get_organization_agent_assessments().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].case_key, "name:docx");
+        assert!(rows[0].payload_json.contains("0.9"));
     }
 }
 

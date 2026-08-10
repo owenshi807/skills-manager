@@ -65,8 +65,51 @@ export interface OrganizationRefreshResult {
   failed: string[];
 }
 
-export interface OrganizationAgentResult {
-  output: string;
+export interface OrganizationAgentCapability {
+  key: "codex" | "claude_code" | "hermes";
+  display_name: string;
+  available: boolean;
+  version: string | null;
+  reason: string | null;
+}
+
+export interface OrganizationAgentCaseTask {
+  case_id: string;
+  case_revision: string;
+  issue_kind: string;
+  member_ids: string[];
+}
+
+export interface OrganizationAssessmentEvidence {
+  strength: "strong" | "medium" | "weak";
+  claim: string;
+}
+
+export interface OrganizationAgentAssessment {
+  case_id: string;
+  case_revision: string;
+  relation_hypothesis: string;
+  difference_summary: string;
+  evidence: OrganizationAssessmentEvidence[];
+  counter_evidence: OrganizationAssessmentEvidence[];
+  unresolved_questions: string[];
+  behavior_eval_required: boolean;
+  suggested_actions: string[];
+  confidence: number;
+}
+
+export interface OrganizationAgentTaskResult {
+  agent_key: string;
+  assessments: OrganizationAgentAssessment[];
+}
+
+export interface OrganizationAgentAssessmentRecord {
+  case_key: string;
+  case_revision: string;
+  method_version: string;
+  agent_key: string;
+  payload_json: string;
+  created_at: number;
 }
 
 export interface OrganizationHealthIssue {
@@ -337,8 +380,19 @@ export const setOrganizationDecision = (
 export const clearOrganizationDecision = (caseKey: string) =>
   invoke<void>("clear_organization_decision", { caseKey });
 
-export const runOrganizationAgent = (agentKey: "codex" | "claude_code", prompt: string) =>
-  invoke<OrganizationAgentResult>("run_organization_agent", { agentKey, prompt });
+export const getOrganizationAgentCapabilities = () =>
+  invoke<OrganizationAgentCapability[]>("get_organization_agent_capabilities");
+
+export const prepareOrganizationAgentPrompt = (cases: OrganizationAgentCaseTask[]) =>
+  invoke<{ prompt: string }>("prepare_organization_agent_prompt_cmd", { cases });
+
+export const runOrganizationAgentTask = (
+  agentKey: "codex" | "claude_code" | "hermes",
+  cases: OrganizationAgentCaseTask[],
+) => invoke<OrganizationAgentTaskResult>("run_organization_agent_task", { agentKey, cases });
+
+export const getOrganizationAgentAssessments = () =>
+  invoke<OrganizationAgentAssessmentRecord[]>("get_organization_agent_assessments");
 
 export const getSkillsForPreset = (presetId: string) =>
   invoke<ManagedSkill[]>("get_skills_for_preset", {

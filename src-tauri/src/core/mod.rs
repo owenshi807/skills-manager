@@ -18,6 +18,7 @@ pub mod installer;
 pub mod log_sanitize;
 pub mod merge;
 pub mod migrations;
+pub mod organization_agent;
 pub mod panic_log;
 pub mod path_guard;
 pub mod project_scanner;

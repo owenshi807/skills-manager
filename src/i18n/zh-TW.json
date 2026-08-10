@@ -360,6 +360,7 @@
       "execution": {
         "codex": "由本機 Codex CLI 審核並處理",
         "claudeCode": "由本機 Claude Code CLI 審核並處理",
+        "hermes": "由本機 Hermes CLI 審核並處理",
         "copyLabel": "複製 Prompt",
         "copyPrompt": "複製 Prompt，交給任意 Desktop Agent"
       },
@@ -381,6 +382,28 @@
       "agentFailed": "Agent 執行失敗",
       "agentResultTitle": "{{agent}} 的判斷結果",
       "agentResultHint": "這是 Agent 根據內容與來源生成的建議，不是 Card Master 的硬編碼結論，也尚未執行檔案操作。",
+      "agentAssessmentReady": "{{agent}} 已完成比較，結論已寫回對應事件",
+      "agentAssessmentHint": "Agent 只完成比較；Card Master 尚未修改、封存或刪除任何 Skill。",
+      "agentResultStale": "Skill 或證據已變化，這個結論已過期。請重新比較。",
+      "agentRelations": {
+        "confirmed_newer_revision": "已確認新版替代舊版",
+        "probable_newer_revision": "疑似新版與舊版",
+        "platform_variant": "同一能力的平台適配版本",
+        "user_customization": "使用者自訂分支",
+        "different_purpose": "同名但用途不同",
+        "exact_artifact_multi_source": "內容一致但來源不同",
+        "behavior_overlap_candidate": "行為重疊候選",
+        "needs_manual_compare": "證據不足，需人工判斷"
+      },
+      "agentActions": {
+        "prefer_newer_archive_old": "建議新版優先，舊版待封存",
+        "keep_variants_linked": "保留變體並建立關聯",
+        "keep_both_grouped": "兩項保留並歸組",
+        "keep_both_mark_fork": "兩項保留，標記自訂分支",
+        "consolidate_after_lineage_check": "核實來源鏈後再統一",
+        "run_behavior_eval": "先做觸發行為評測",
+        "manual_review": "需要人工確認"
+      },
       "agentErrorTitle": "判斷 Agent 沒有成功執行",
       "agentErrorHint": "完整錯誤保留在這裡，便於修復；不會對 Skill 產生任何改動。",
       "copyResult": "複製結果",

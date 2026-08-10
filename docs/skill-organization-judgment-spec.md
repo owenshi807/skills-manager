@@ -122,10 +122,27 @@ Codex 首轮输出证明逐组阅读有价值，但不能原样成为 taxonomy�
 
 legacy `content_hash` 只用于候选召回。只有本次 `scm-dir-v2` 完整复核成功，才能把制品关系升级为 `rule_diagnosed`。当前无损整理只保存用户对一个 case 的判断；记录绑定 `case_revision`，证据变化后自动失效并重新进入待处理。该记录不修改 Skill、来源、Preset 或 Agent 投放，也不授权任何文件动作。
 
-## 6. 行业依据
+## 6. Agent Execution Gateway
+
+Card Master 不内置另一套 Agent runtime。它通过一个薄的 Execution Adapter 调用用户电脑已有的 Codex CLI、Claude Code CLI 或 Hermes CLI；CLI 是否可用必须由运行时 `--version` 探测，不能根据 Skill 目录或 Agent 投放关系推断。用户选择会被记住，“复制 Prompt”始终作为 Desktop Agent fallback。
+
+Agent 调用合同：
+
+- Manager 从当前 DB 重新计算 case evidence，并要求 UI 提交的 `case_revision` 完全一致；变化即停止并要求刷新。
+- 每次最多比较10组，UI 批量任务按8组分片，避免把394项库或2.4GB资产一次暴露给模型。
+- 快照只包含当前 case 成员的常规文件 `SKILL.md`，单文件上限64 KiB、批次文本上限400 KB；不跟随 symlink，不读取附件、脚本、缓存或外部 source，也不把 central path 写进 Prompt。
+- Skill 文本被明确标记为 untrusted data；其中的工具调用、读路径、泄密或改文件指令一律忽略。
+- Agent 只能返回 `card-master-six-gates-v1` 的 JSON assessment。Card Master 校验 schema、taxonomy、case completeness、revision、evidence strength、action enum 与 confidence 后才接受。
+- 通过校验的 assessment 以 `(case, revision, method, agent)` 持久化；Skill 或证据改变后旧结果在 UI 标为过期，不能继续作为当前建议。
+- Agent 输出只写入事件卡的判断区域，不直接操纵 UI，不修改 Skill/source/target/Preset/Harness，也不授权 merge/archive/delete。
+
+当前 Adapter：Codex 使用 read-only sandbox 与 ephemeral session；Claude Code 使用 print mode、plan permission 与 no session persistence；Hermes 使用官方 scripted one-shot `hermes -z` 并关闭 rules 注入。
+
+## 7. 行业依据
 
 - Agent Skills format 与 progressive disclosure：<https://agentskills.io/specification>
 - GitHub CLI 的 source tracking、pin、tree SHA 与 dry-run：<https://cli.github.com/manual/gh_skill_install>、<https://cli.github.com/manual/gh_skill_update>
 - Anthropic 企业 Skill 的 triggering / isolation / coexistence / instruction following / output quality 评测：<https://platform.claude.com/docs/en/agents-and-tools/agent-skills/enterprise>
 - Skills Manager 的 keep mine / use remote / keep both、snapshot 与 restore：<https://github.com/xingkongliang/skills-manager>
 - Agent Skills package manifest / lockfile 提案（非正式标准）：<https://github.com/agentskills/agentskills/discussions/210>
+- Hermes CLI one-shot contract：<https://github.com/NousResearch/hermes-agent/blob/main/website/docs/reference/cli-commands.md#hermes--z-prompt--scripted-one-shot>

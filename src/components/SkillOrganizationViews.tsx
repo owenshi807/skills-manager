@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleAlert,
-  Copy,
   GitCompareArrows,
   Layers3,
   Link2,
@@ -15,7 +14,12 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ManagedSkill, OrganizationDisposition, ToolInfo } from "../lib/tauri";
+import type {
+  ManagedSkill,
+  OrganizationAgentAssessment,
+  OrganizationDisposition,
+  ToolInfo,
+} from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
 import type { SkillCapabilityGroup } from "../lib/skillOrganization";
 import { countSkillsInCapabilityGroups } from "../lib/skillOrganization";
@@ -45,16 +49,15 @@ interface IssuesProps extends SharedProps {
   onExecutionModeChange: (mode: OrganizationExecutionMode) => void;
   onExecuteBatch: (issues: SkillIssue[]) => void;
   onHandOff: (issue: SkillIssue) => void;
-  agentResult: OrganizationAgentDisplayResult | null;
+  agentAssessments: Map<string, OrganizationAgentDisplayAssessment>;
   agentError: string | null;
-  onCopyAgentResult: () => void;
   processingBatch: boolean;
   refreshing: boolean;
   onRefresh: () => void;
   onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
 }
 
-export type OrganizationExecutionMode = "codex" | "claude_code" | "copy_prompt";
+export type OrganizationExecutionMode = "codex" | "claude_code" | "hermes" | "copy_prompt";
 
 export interface OrganizationExecutionOption {
   id: OrganizationExecutionMode;
@@ -62,9 +65,11 @@ export interface OrganizationExecutionOption {
   description: string;
 }
 
-export interface OrganizationAgentDisplayResult {
+export interface OrganizationAgentDisplayAssessment {
   agentName: string;
-  output: string;
+  assessment: OrganizationAgentAssessment;
+  stale: boolean;
+  createdAt: number;
 }
 
 function toolNames(skill: ManagedSkill, tools: ToolInfo[]) {
@@ -362,9 +367,8 @@ export function SkillIssuesView({
   onExecutionModeChange,
   onExecuteBatch,
   onHandOff,
-  agentResult,
+  agentAssessments,
   agentError,
-  onCopyAgentResult,
   processingBatch,
   refreshing,
   onRefresh,
@@ -500,40 +504,23 @@ export function SkillIssuesView({
         )}
       </div>
 
-      {(agentResult || agentError) && (
-        <section className={cn(
-          "rounded-xl border p-4 shadow-card",
-          agentError
-            ? "border-red-500/25 bg-red-500/5"
-            : "border-accent/20 bg-accent-bg",
-        )}>
+      {agentError && (
+        <section className="rounded-xl border border-red-500/25 bg-red-500/5 p-4 shadow-card">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-start gap-3">
-              {agentError
-                ? <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                : <Bot className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />}
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
               <div className="min-w-0">
                 <h3 className="text-[13px] font-semibold text-primary">
-                  {agentError
-                    ? t("mySkills.organization.agentErrorTitle")
-                    : t("mySkills.organization.agentResultTitle", { agent: agentResult?.agentName })}
+                  {t("mySkills.organization.agentErrorTitle")}
                 </h3>
                 <p className="mt-1 text-[11px] leading-4 text-muted">
-                  {agentError
-                    ? t("mySkills.organization.agentErrorHint")
-                    : t("mySkills.organization.agentResultHint")}
+                  {t("mySkills.organization.agentErrorHint")}
                 </p>
               </div>
             </div>
-            {agentResult && (
-              <button type="button" onClick={onCopyAgentResult} className="app-button-secondary shrink-0">
-                <Copy className="h-3.5 w-3.5" />
-                {t("mySkills.organization.copyResult")}
-              </button>
-            )}
           </div>
           <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-border-faint bg-bg-secondary/70 p-3 text-[11px] leading-5 text-secondary">
-            {agentError || agentResult?.output}
+            {agentError}
           </pre>
         </section>
       )}
@@ -547,6 +534,7 @@ export function SkillIssuesView({
         <div className="space-y-3">
           {visibleIssues.map((issue) => {
             const copy = issueCopy(issue.kind, t);
+            const agentAssessment = agentAssessments.get(issue.id);
             return (
               <article key={issue.id} className="app-panel overflow-hidden shadow-card">
                 <div className="flex items-start gap-4 p-4">
@@ -598,6 +586,54 @@ export function SkillIssuesView({
                         />
                       ))}
                     </div>
+                    {agentAssessment && (
+                      <div className={cn(
+                        "mt-3 rounded-lg border px-3 py-3",
+                        agentAssessment.stale
+                          ? "border-amber-500/25 bg-amber-500/5"
+                          : "border-accent/20 bg-accent-bg",
+                      )}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-2">
+                            <Bot className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />
+                            <div>
+                              <div className="text-[11px] font-semibold text-secondary">
+                                {agentAssessment.agentName} · {t(`mySkills.organization.agentRelations.${agentAssessment.assessment.relation_hypothesis}`)}
+                              </div>
+                              <p className="mt-1 text-[12px] leading-5 text-secondary">
+                                {agentAssessment.assessment.difference_summary}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[10px] text-muted">
+                            {Math.round(agentAssessment.assessment.confidence * 100)}%
+                          </span>
+                        </div>
+                        {agentAssessment.stale ? (
+                          <p className="mt-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                            {t("mySkills.organization.agentResultStale")}
+                          </p>
+                        ) : (
+                          <>
+                            <ul className="mt-2 space-y-1 text-[11px] leading-4 text-muted">
+                              {agentAssessment.assessment.evidence.slice(0, 3).map((item, index) => (
+                                <li key={`${item.strength}-${index}`}>· {item.claim}</li>
+                              ))}
+                            </ul>
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {agentAssessment.assessment.suggested_actions.map((action) => (
+                                <span key={action} className="rounded-full bg-surface px-2 py-1 text-[10px] font-medium text-secondary">
+                                  {t(`mySkills.organization.agentActions.${action}`)}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-[10px] text-faint">
+                              {t("mySkills.organization.agentAssessmentHint")}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="grid border-t border-border-faint bg-bg-secondary/40 md:grid-cols-2">
