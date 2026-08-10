@@ -302,8 +302,6 @@ pub async fn run_organization_agent(
             "exec",
             "--sandbox",
             "read-only",
-            "--ask-for-approval",
-            "never",
             "--skip-git-repo-check",
             "--ephemeral",
             "-C",

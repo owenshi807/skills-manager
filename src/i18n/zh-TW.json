@@ -343,8 +343,8 @@
         },
         "nameCollision": {
           "fact": "名稱相同，但內容不同。它們有關聯，卻不能被當成重複項直接合併。",
-          "recommendation": "兩項都保留，歸在同一關係組，並按來源或用途區分顯示名稱。",
-          "impact": "先只幫助人分清兩項，不修改 Skill 內容、觸發方式或 Agent 使用狀態。"
+          "recommendation": "先由判斷 Agent 比較內容與來源，識別它們是新版/舊版、不同用途，還是定製分叉。",
+          "impact": "版本更替可建議保留新版並歸檔舊版；不同用途或定製分叉才建議兩項都保留。目前不改檔案。"
         }
       },
       "issuesTitle": "逐件理解，再執行整理建議",
@@ -358,9 +358,9 @@
         "copyLabel": "複製 Prompt",
         "copyPrompt": "複製 Prompt，交給任意 Desktop Agent"
       },
-      "batchTitle": "{{count}} 組同名異內容可採用同一個安全建議",
-      "batchHint": "全部保留，並在本機記錄為各自的關係組；不修改內容、觸發方式、來源或 Agent 投放。",
-      "batchAction": "批次處理 {{count}} 組",
+      "batchTitle": "{{count}} 組同名異內容等待語義判斷",
+      "batchHint": "判斷 Agent 會逐組區分版本更替、不同用途與定製分叉；只給建議，不直接改檔案。",
+      "batchAction": "批次判斷 {{count}} 組",
       "processingBatch": "正在批次處理…",
       "handOff": "交給 {{agent}} 判斷",
       "copyPrompt": "複製 Prompt",
@@ -370,9 +370,16 @@
       "agentRunning": "{{agent}} 正在處理這件整理任務…",
       "agentRunningBatch": "{{agent}} 正在審核 {{count}} 組整理任務…",
       "agentResultCopied": "{{agent}} 已完成，結果已複製",
+      "agentBatchJudged": "{{agent}} 已完成 {{count}} 組判斷，結果顯示在下方並已複製",
       "agentBatchApproved": "{{agent}} 已確認批次建議；本機已記錄關係，未改動 Skill",
       "agentNeedsReview": "{{agent}} 發現需要人工判斷的例外，結果已複製",
       "agentFailed": "Agent 執行失敗",
+      "agentResultTitle": "{{agent}} 的判斷結果",
+      "agentResultHint": "這是 Agent 根據內容與來源生成的建議，不是 Card Master 的硬編碼結論，也尚未執行檔案操作。",
+      "agentErrorTitle": "判斷 Agent 沒有成功執行",
+      "agentErrorHint": "完整錯誤保留在這裡，便於修復；不會對 Skill 產生任何改動。",
+      "copyResult": "複製結果",
+      "resultCopied": "判斷結果已複製",
       "refresh": "重新整理結果",
       "refreshing": "正在重新掃描…",
       "refreshHint": "重新讀取相關 Skill，檢查問題是否已經減少",

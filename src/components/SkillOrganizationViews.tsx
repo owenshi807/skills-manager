@@ -42,9 +42,11 @@ interface IssuesProps extends SharedProps {
   executionMode: OrganizationExecutionMode;
   executionOptions: OrganizationExecutionOption[];
   onExecutionModeChange: (mode: OrganizationExecutionMode) => void;
-  onResolveIssue: (issue: SkillIssue) => void;
   onExecuteBatch: (issues: SkillIssue[]) => void;
   onHandOff: (issue: SkillIssue) => void;
+  agentResult: OrganizationAgentDisplayResult | null;
+  agentError: string | null;
+  onCopyAgentResult: () => void;
   processingBatch: boolean;
   refreshing: boolean;
   onRefresh: () => void;
@@ -56,6 +58,11 @@ export interface OrganizationExecutionOption {
   id: OrganizationExecutionMode;
   label: string;
   description: string;
+}
+
+export interface OrganizationAgentDisplayResult {
+  agentName: string;
+  output: string;
 }
 
 function toolNames(skill: ManagedSkill, tools: ToolInfo[]) {
@@ -337,9 +344,11 @@ export function SkillIssuesView({
   executionMode,
   executionOptions,
   onExecutionModeChange,
-  onResolveIssue,
   onExecuteBatch,
   onHandOff,
+  agentResult,
+  agentError,
+  onCopyAgentResult,
   processingBatch,
   refreshing,
   onRefresh,
@@ -467,6 +476,44 @@ export function SkillIssuesView({
         )}
       </div>
 
+      {(agentResult || agentError) && (
+        <section className={cn(
+          "rounded-xl border p-4 shadow-card",
+          agentError
+            ? "border-red-500/25 bg-red-500/5"
+            : "border-accent/20 bg-accent-bg",
+        )}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              {agentError
+                ? <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                : <Bot className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />}
+              <div className="min-w-0">
+                <h3 className="text-[13px] font-semibold text-primary">
+                  {agentError
+                    ? t("mySkills.organization.agentErrorTitle")
+                    : t("mySkills.organization.agentResultTitle", { agent: agentResult?.agentName })}
+                </h3>
+                <p className="mt-1 text-[11px] leading-4 text-muted">
+                  {agentError
+                    ? t("mySkills.organization.agentErrorHint")
+                    : t("mySkills.organization.agentResultHint")}
+                </p>
+              </div>
+            </div>
+            {agentResult && (
+              <button type="button" onClick={onCopyAgentResult} className="app-button-secondary shrink-0">
+                <Copy className="h-3.5 w-3.5" />
+                {t("mySkills.organization.copyResult")}
+              </button>
+            )}
+          </div>
+          <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-border-faint bg-bg-secondary/70 p-3 text-[11px] leading-5 text-secondary">
+            {agentError || agentResult?.output}
+          </pre>
+        </section>
+      )}
+
       {visibleIssues.length === 0 ? (
         <div className="app-panel py-16 text-center">
           <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500" />
@@ -526,12 +573,6 @@ export function SkillIssuesView({
                       : t("mySkills.organization.handOff", { agent: executionMode === "codex" ? "Codex" : "Claude Code" })}
                     <Copy className="h-3 w-3" />
                   </button>
-                  {issue.kind === "name_collision" && (
-                    <button type="button" onClick={() => onResolveIssue(issue)} className="app-button-primary">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {t("mySkills.organization.acceptRecommendation")}
-                    </button>
-                  )}
                 </div>
               </article>
             );
