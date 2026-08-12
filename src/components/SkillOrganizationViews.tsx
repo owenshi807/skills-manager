@@ -1,9 +1,13 @@
 import {
+  ArrowLeft,
   ArrowRight,
   Bot,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
+  Copy,
+  FileWarning,
   GitCompareArrows,
   Link2,
   Loader2,
@@ -185,6 +189,19 @@ function issueCopy(kind: SkillIssue["kind"], t: ReturnType<typeof useTranslation
   };
 }
 
+type IssueCategory = "duplicate" | "same_name" | "format" | "source";
+
+function issueCategory(issue: SkillIssue): IssueCategory {
+  if (issue.kind === "exact_duplicate" || issue.kind === "content_alias") return "duplicate";
+  if (issue.kind === "name_collision") return "same_name";
+  if (issue.kind === "format_health") return "format";
+  return "source";
+}
+
+function issueMemberNames(issue: SkillIssue, displayNames: Map<string, string>) {
+  return issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ");
+}
+
 export function SkillIssuesView({
   issues,
   resolvedIds,
@@ -207,6 +224,9 @@ export function SkillIssuesView({
 }: IssuesProps) {
   const { t } = useTranslation();
   const [executionMenuOpen, setExecutionMenuOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<IssueCategory | null>(null);
+  const [selectedHealthCode, setSelectedHealthCode] = useState<string | null>(null);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const executionMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!executionMenuOpen) return;
@@ -218,38 +238,104 @@ export function SkillIssuesView({
   }, [executionMenuOpen]);
   const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
   const resolvedIssues = issues.filter((issue) => resolvedIds.has(issue.id));
-  const visibleIssues = unresolvedIssues.filter((issue) => {
+  const searchedIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
     return matchesSearch(issue.skills, copy.title, search);
   });
-  const ruleDiagnosedIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "rule_diagnosed");
-  const semanticIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "needs_semantic");
-  const blockedIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "blocked");
+  const categoryDefinitions = [
+    { id: "duplicate" as const, icon: Copy, tone: "text-emerald-500 bg-emerald-500/10" },
+    { id: "same_name" as const, icon: GitCompareArrows, tone: "text-amber-500 bg-amber-500/10" },
+    { id: "format" as const, icon: FileWarning, tone: "text-rose-500 bg-rose-500/10" },
+    { id: "source" as const, icon: Link2, tone: "text-violet-500 bg-violet-500/10" },
+  ];
+  const categories = categoryDefinitions.map((definition) => {
+    const categoryIssues = unresolvedIssues.filter((issue) => issueCategory(issue) === definition.id);
+    return {
+      ...definition,
+      issues: categoryIssues,
+      skillCount: new Set(categoryIssues.flatMap((issue) => issue.skills.map((skill) => skill.id))).size,
+    };
+  });
+  const currentCategory = categories.find((category) => category.id === selectedCategory);
+  const categoryIssues = searchedIssues.filter((issue) => issueCategory(issue) === selectedCategory);
+  const formatBuckets = [...new Set(
+    unresolvedIssues
+      .filter((issue) => issueCategory(issue) === "format")
+      .flatMap((issue) => issue.healthCodes ?? ["unknown"]),
+  )].map((code) => {
+    const bucketIssues = unresolvedIssues.filter((issue) =>
+      issueCategory(issue) === "format" && (issue.healthCodes ?? ["unknown"]).includes(code));
+    return {
+      code,
+      issues: bucketIssues,
+      skillCount: new Set(bucketIssues.flatMap((issue) => issue.skills.map((skill) => skill.id))).size,
+    };
+  }).sort((a, b) => b.issues.length - a.issues.length || a.code.localeCompare(b.code));
+  const narrowedIssues = categoryIssues.filter((issue) =>
+    selectedCategory !== "format" || !selectedHealthCode || (issue.healthCodes ?? ["unknown"]).includes(selectedHealthCode));
+  const activeIssue = narrowedIssues.find((issue) => issue.id === selectedIssueId) ?? narrowedIssues[0];
+  const visibleIssues = activeIssue ? [activeIssue] : [];
+  const semanticIssues = selectedCategory === "same_name"
+    ? categoryIssues.filter((issue) => issue.decisionTier === "needs_semantic")
+    : [];
   const selectedExecution = executionOptions.find((option) => option.id === executionMode) ?? executionOptions[0];
+
+  const openCategory = (category: IssueCategory) => {
+    const first = unresolvedIssues.find((issue) => issueCategory(issue) === category);
+    setSelectedCategory(category);
+    setSelectedHealthCode(null);
+    setSelectedIssueId(first?.id ?? null);
+  };
+
+  const openHealthBucket = (code: string, bucketIssues: SkillIssue[]) => {
+    setSelectedHealthCode(code);
+    setSelectedIssueId(bucketIssues[0]?.id ?? null);
+  };
+
+  const returnToDirectory = () => {
+    setSelectedCategory(null);
+    setSelectedHealthCode(null);
+    setSelectedIssueId(null);
+  };
 
   return (
     <div className="space-y-4 pb-8">
       <div className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-[15px] font-semibold text-primary">{t("mySkills.organization.issuesTitle")}</h2>
-            <p className="mt-1 text-[12px] leading-5 text-muted">{t("mySkills.organization.issuesIntro")}</p>
+          <div className="min-w-0">
+            {selectedCategory ? (
+              <button
+                type="button"
+                onClick={selectedCategory === "format" && selectedHealthCode
+                  ? () => {
+                    setSelectedHealthCode(null);
+                    setSelectedIssueId(null);
+                  }
+                  : returnToDirectory}
+                className="mb-2 inline-flex items-center gap-1 text-[11px] font-medium text-muted transition-colors hover:text-primary"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                {selectedCategory === "format" && selectedHealthCode
+                  ? t("mySkills.organization.issueDirectory.allFormatCauses")
+                  : t("mySkills.organization.issueDirectory.allCategories")}
+              </button>
+            ) : null}
+            <h2 className="text-[15px] font-semibold text-primary">
+              {currentCategory
+                ? t(`mySkills.organization.issueDirectory.categories.${currentCategory.id}.title`)
+                : t("mySkills.organization.issueDirectory.title")}
+            </h2>
+            <p className="mt-1 text-[12px] leading-5 text-muted">
+              {currentCategory
+                ? t(`mySkills.organization.issueDirectory.categories.${currentCategory.id}.hint`)
+                : t("mySkills.organization.issueDirectory.intro")}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-emerald-600 dark:text-emerald-300">{ruleDiagnosedIssues.length}</div>
-              <div className="text-[10px] text-emerald-600/80 dark:text-emerald-300/80">{t("mySkills.organization.ruleDiagnosedCount")}</div>
+            <div className="rounded-lg bg-bg-secondary px-3 py-2 text-center">
+              <div className="text-[17px] font-semibold text-primary">{currentCategory?.issues.length ?? unresolvedIssues.length}</div>
+              <div className="text-[10px] text-muted">{t("mySkills.organization.issueDirectory.events")}</div>
             </div>
-            <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{semanticIssues.length}</div>
-              <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.semanticCount")}</div>
-            </div>
-            {blockedIssues.length > 0 && (
-              <div className="rounded-lg bg-violet-500/10 px-3 py-2 text-center">
-                <div className="text-[17px] font-semibold text-red-600 dark:text-red-300">{blockedIssues.length}</div>
-                <div className="text-[10px] text-red-600/80 dark:text-red-300/80">{t("mySkills.organization.blockedCount")}</div>
-              </div>
-            )}
             <button
               type="button"
               onClick={onRefresh}
@@ -262,6 +348,34 @@ export function SkillIssuesView({
             </button>
           </div>
         </div>
+        {!selectedCategory && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {categories.map((category) => {
+              const Icon = category.icon;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => openCategory(category.id)}
+                  disabled={category.issues.length === 0}
+                  className="group rounded-xl border border-border-faint bg-bg-secondary/55 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-border-subtle hover:shadow-sm disabled:pointer-events-none disabled:opacity-45"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className={cn("rounded-lg p-2", category.tone)}><Icon className="h-4 w-4" /></span>
+                    <ChevronRight className="h-4 w-4 text-faint transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                  <div className="mt-4 text-[24px] font-semibold tracking-tight text-primary">{category.issues.length}</div>
+                  <div className="mt-0.5 text-[13px] font-semibold text-secondary">
+                    {t(`mySkills.organization.issueDirectory.categories.${category.id}.title`)}
+                  </div>
+                  <div className="mt-1 text-[11px] leading-4 text-muted">
+                    {t("mySkills.organization.issueDirectory.affectedSkills", { count: category.skillCount })}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {semanticIssues.length > 1 && (
           <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/20 bg-accent-bg px-3 py-2.5">
             <div>
@@ -353,13 +467,70 @@ export function SkillIssuesView({
         </section>
       )}
 
-      {visibleIssues.length === 0 ? (
-        <div className="app-panel py-16 text-center">
-          <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500" />
-          <div className="text-[13px] font-medium text-secondary">{t("mySkills.organization.noIssues")}</div>
-        </div>
-      ) : (
-        <div className="space-y-3">
+      {selectedCategory === "format" && !selectedHealthCode ? (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-[13px] font-semibold text-primary">{t("mySkills.organization.issueDirectory.formatCauses")}</h3>
+            <p className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.issueDirectory.formatCausesHint")}</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {formatBuckets.map((bucket) => (
+              <button
+                key={bucket.code}
+                type="button"
+                onClick={() => openHealthBucket(bucket.code, bucket.issues)}
+                className="group flex items-center justify-between gap-3 rounded-xl border border-border-faint bg-surface p-3.5 text-left shadow-card transition-colors hover:border-border-subtle hover:bg-surface-hover"
+              >
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold text-secondary">
+                    {t(`mySkills.organization.issueDirectory.healthCodes.${bucket.code}`, { defaultValue: bucket.code })}
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted">
+                    {t("mySkills.organization.issueDirectory.affectedSkills", { count: bucket.skillCount })}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-[18px] font-semibold text-primary">{bucket.issues.length}</span>
+                  <ChevronRight className="h-4 w-4 text-faint transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : selectedCategory ? (
+        <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="app-panel max-h-[680px] overflow-y-auto p-2 shadow-card lg:sticky lg:top-4">
+            <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
+              {t("mySkills.organization.issueDirectory.caseList", { count: narrowedIssues.length })}
+            </div>
+            <div className="space-y-1">
+              {narrowedIssues.map((issue, index) => (
+                <button
+                  key={issue.id}
+                  type="button"
+                  onClick={() => setSelectedIssueId(issue.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
+                    activeIssue?.id === issue.id ? "bg-accent-bg text-primary" : "text-secondary hover:bg-surface-hover",
+                  )}
+                >
+                  <span className="w-6 shrink-0 text-[10px] tabular-nums text-faint">{index + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[11px] font-semibold">{issueMemberNames(issue, displayNames)}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-muted">{issueCopy(issue.kind, t).title}</span>
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-faint" />
+                </button>
+              ))}
+            </div>
+          </aside>
+          {visibleIssues.length === 0 ? (
+            <div className="app-panel py-16 text-center">
+              <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500" />
+              <div className="text-[13px] font-medium text-secondary">{t("mySkills.organization.noIssues")}</div>
+            </div>
+          ) : (
+          <div className="min-w-0 space-y-3">
           {visibleIssues.map((issue) => {
             const copy = issueCopy(issue.kind, t);
             const agentAssessment = agentAssessments.get(issue.id);
@@ -505,8 +676,10 @@ export function SkillIssuesView({
               </article>
             );
           })}
+          </div>
+          )}
         </div>
-      )}
+      ) : null}
 
       {resolvedIssues.length > 0 && (
         <section className="space-y-2 pt-2">
