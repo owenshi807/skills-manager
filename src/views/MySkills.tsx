@@ -430,7 +430,8 @@ export function MySkills() {
         result.set(issue.id, {
           agentName: capabilityNames.get(record.agent_key) ?? record.agent_key,
           assessment,
-          stale: assessment.case_revision !== issue.caseRevision,
+          stale: assessment.case_revision !== issue.caseRevision
+            || !["archive_one", "keep_both", "needs_more_evidence"].includes(assessment.recommended_action),
           createdAt: record.created_at,
         });
       } catch {
@@ -1344,6 +1345,70 @@ export function MySkills() {
     }
   }, [t]);
 
+  const previewOrganizationArchive = useCallback(async (
+    issue: SkillIssue,
+    keepSkillId: string,
+    archiveSkillId: string,
+  ) => {
+    if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    try {
+      return await api.previewOrganizationArchive({
+        case: {
+          case_id: issue.id,
+          issue_kind: issue.kind,
+          member_ids: issue.skills.map((skill) => skill.id),
+          verify_strict_artifact: true,
+        },
+        evidence_fingerprint: issue.caseRevision,
+        keep_skill_id: keepSkillId,
+        archive_skill_id: archiveSkillId,
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, t("mySkills.organization.actionPlan.previewFailed"));
+      toast.error(message);
+      throw error;
+    }
+  }, [t]);
+
+  const applyOrganizationArchive = useCallback(async (
+    issue: SkillIssue,
+    keepSkillId: string,
+    archiveSkillId: string,
+  ) => {
+    if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    const request: api.OrganizationArchiveRequest = {
+      case: {
+        case_id: issue.id,
+        issue_kind: issue.kind,
+        member_ids: issue.skills.map((skill) => skill.id),
+        verify_strict_artifact: true,
+      },
+      evidence_fingerprint: issue.caseRevision,
+      keep_skill_id: keepSkillId,
+      archive_skill_id: archiveSkillId,
+    };
+    try {
+      const result = await api.applyOrganizationArchive(request);
+      await refreshManagedSkills();
+      toast.success(t("mySkills.organization.actionPlan.applied"), {
+        action: {
+          label: t("mySkills.organization.undo"),
+          onClick: () => {
+            void api.undoOrganizationArchive(result.operation_id)
+              .then(async () => {
+                await refreshManagedSkills();
+                toast.success(t("mySkills.organization.actionPlan.undone"));
+              })
+              .catch((error) => toast.error(getErrorMessage(error, t("mySkills.organization.actionPlan.undoFailed"))));
+          },
+        },
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("mySkills.organization.actionPlan.applyFailed")));
+      throw error;
+    }
+  }, [refreshManagedSkills, t]);
+
   const refreshOrganizationFacts = useCallback(async () => {
     const affectedIds = [...new Set(organizationIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)))];
     if (affectedIds.length === 0) {
@@ -1642,6 +1707,8 @@ export function MySkills() {
           onRefresh={refreshOrganizationFacts}
           onDecide={decideOrganizationIssue}
           onUndoDecision={undoOrganizationDecision}
+          onPreviewArchive={previewOrganizationArchive}
+          onApplyArchive={applyOrganizationArchive}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}

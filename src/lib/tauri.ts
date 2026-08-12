@@ -95,6 +95,9 @@ export interface OrganizationAgentAssessment {
   unresolved_questions: string[];
   behavior_eval_required: boolean;
   suggested_actions: string[];
+  recommended_action: "archive_one" | "keep_both" | "needs_more_evidence";
+  recommended_keep_skill_id: string | null;
+  recommendation_reason: string;
   confidence: number;
 }
 
@@ -188,6 +191,36 @@ export interface OrganizationDecision {
   disposition: OrganizationDisposition;
   decided_at: number;
   updated_at: number;
+}
+
+export interface OrganizationArchiveRequest {
+  case: OrganizationCaseRequest;
+  evidence_fingerprint: string;
+  keep_skill_id: string;
+  archive_skill_id: string;
+}
+
+export interface OrganizationArchivePreview {
+  keep_skill_id: string;
+  keep_name: string;
+  archive_skill_id: string;
+  archive_name: string;
+  target_effects: Array<{
+    tool: string;
+    target_path: string;
+    action: "remove_redundant" | "rewire_to_keep";
+  }>;
+  source_effect: {
+    tool: string;
+    source_path: string;
+    action: "archive_and_rewire_to_keep";
+  } | null;
+  source_preserved: boolean;
+}
+
+export interface OrganizationOperationResult {
+  operation_id: string;
+  status: string;
 }
 
 export interface SkillDocument {
@@ -393,6 +426,15 @@ export const setOrganizationDecision = (
 
 export const clearOrganizationDecision = (caseKey: string) =>
   invoke<void>("clear_organization_decision", { caseKey });
+
+export const previewOrganizationArchive = (request: OrganizationArchiveRequest) =>
+  invoke<OrganizationArchivePreview>("preview_organization_archive", { request });
+
+export const applyOrganizationArchive = (request: OrganizationArchiveRequest) =>
+  invoke<OrganizationOperationResult>("apply_organization_archive", { request });
+
+export const undoOrganizationArchive = (operationId: string) =>
+  invoke<OrganizationOperationResult>("undo_organization_archive", { operationId });
 
 export const getOrganizationAgentCapabilities = () =>
   invoke<OrganizationAgentCapability[]>("get_organization_agent_capabilities");

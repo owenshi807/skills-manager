@@ -18,7 +18,7 @@ use crate::core::{
     repo_lock::RepoLock,
     scanner,
     skill_metadata::{self, is_valid_skill_dir},
-    skill_store::{SkillRecord, SkillStore, SkillTargetRecord},
+    skill_store::{OrganizationOperationRecord, SkillRecord, SkillStore, SkillTargetRecord},
     sync_engine, sync_metadata,
     timing::should_log_first_or_slow,
 };
@@ -133,6 +133,57 @@ pub struct OrganizationCaseEvidenceDto {
     pub artifact: OrganizationArtifactEvidenceDto,
     pub provenance: Vec<OrganizationProvenanceEvidenceDto>,
     pub decision: OrganizationDecisionEvidenceDto,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OrganizationArchiveRequest {
+    pub case: OrganizationCaseRequest,
+    pub evidence_fingerprint: String,
+    pub keep_skill_id: String,
+    pub archive_skill_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationArchiveTargetEffect {
+    pub tool: String,
+    pub target_path: String,
+    pub action: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationArchiveSourceEffect {
+    pub tool: String,
+    pub source_path: String,
+    pub action: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationArchivePreview {
+    pub keep_skill_id: String,
+    pub keep_name: String,
+    pub archive_skill_id: String,
+    pub archive_name: String,
+    pub target_effects: Vec<OrganizationArchiveTargetEffect>,
+    pub source_effect: Option<OrganizationArchiveSourceEffect>,
+    pub source_preserved: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationOperationResult {
+    pub operation_id: String,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OrganizationArchivePayload {
+    original_central_path: String,
+    archive_path: String,
+    original_status: String,
+    original_enabled: bool,
+    original_targets: Vec<SkillTargetRecord>,
+    original_source_path: Option<String>,
+    archived_source_path: Option<String>,
+    source_tool: Option<String>,
 }
 
 fn organization_decision_for_artifact(artifact_status: &str) -> (String, Vec<String>, Vec<String>) {
@@ -867,10 +918,531 @@ pub async fn clear_organization_decision(
     .await?
 }
 
+fn organization_archive_preview_sync(
+    request: &OrganizationArchiveRequest,
+    store: &SkillStore,
+) -> Result<OrganizationArchivePreview, AppError> {
+    if request.case.member_ids.len() != 2
+        || request.keep_skill_id == request.archive_skill_id
+        || request.evidence_fingerprint.len() != 64
+        || !request.case.member_ids.contains(&request.keep_skill_id)
+        || !request.case.member_ids.contains(&request.archive_skill_id)
+    {
+        return Err(AppError::invalid_input(
+            "Invalid organization archive request",
+        ));
+    }
+    let current = inspect_organization_cases_sync(
+        vec![OrganizationCaseRequest {
+            case_id: request.case.case_id.clone(),
+            issue_kind: request.case.issue_kind.clone(),
+            member_ids: request.case.member_ids.clone(),
+            verify_strict_artifact: true,
+        }],
+        store,
+    )?
+    .into_iter()
+    .next()
+    .ok_or_else(|| AppError::invalid_input("Organization case not found"))?;
+    if current.case_revision != request.evidence_fingerprint || current.decision.tier == "blocked" {
+        return Err(AppError::invalid_input(
+            "Organization evidence changed or is incomplete; refresh before applying",
+        ));
+    }
+    let keep = store
+        .get_skill_by_id(&request.keep_skill_id)
+        .map_err(AppError::db)?
+        .filter(|skill| skill.status != "archived")
+        .ok_or_else(|| AppError::invalid_input("Keep skill is not active"))?;
+    let archive = store
+        .get_skill_by_id(&request.archive_skill_id)
+        .map_err(AppError::db)?
+        .filter(|skill| skill.status != "archived")
+        .ok_or_else(|| AppError::invalid_input("Archive skill is not active"))?;
+    if store
+        .skill_has_organization_dependencies(&archive.id)
+        .map_err(AppError::db)?
+    {
+        return Err(AppError::invalid_input(
+            "This Skill belongs to a tag or deck. Move those relationships before archiving it",
+        ));
+    }
+    let pending = store.list_pending_conflicts().map_err(AppError::db)?;
+    if pending
+        .iter()
+        .any(|row| row.skill_id == keep.id || row.skill_id == archive.id)
+    {
+        return Err(AppError::invalid_input(
+            "Resolve pending sync conflicts before archiving",
+        ));
+    }
+    let archive_targets = store
+        .get_targets_for_skill(&archive.id)
+        .map_err(AppError::db)?;
+    let keep_targets = store
+        .get_targets_for_skill(&keep.id)
+        .map_err(AppError::db)?;
+    let archive_central = Path::new(&archive.central_path);
+    let source_effect = archive
+        .source_ref_resolved
+        .as_deref()
+        .filter(|path| !path.is_empty())
+        .or(archive.source_ref.as_deref())
+        .and_then(|source| {
+            let source_path = Path::new(source);
+            if source_path == archive_central || source_path == Path::new(&keep.central_path) {
+                return None;
+            }
+            let metadata = std::fs::symlink_metadata(source_path).ok()?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return None;
+            }
+            let source_hash = crate::core::content_hash::hash_directory(source_path).ok()?;
+            if Some(source_hash) != archive.content_hash {
+                return None;
+            }
+            let target = archive_targets.iter().find(|target| {
+                let target_path = Path::new(&target.target_path);
+                target_path != source_path && target_path.parent() == source_path.parent()
+            })?;
+            Some(OrganizationArchiveSourceEffect {
+                tool: target.tool.clone(),
+                source_path: source.to_string(),
+                action: "archive_and_rewire_to_keep".to_string(),
+            })
+        });
+    let mut target_effects = Vec::with_capacity(archive_targets.len());
+    for target in archive_targets {
+        let target_path = Path::new(&target.target_path);
+        let mode = match target.mode.as_str() {
+            "symlink" => sync_engine::SyncMode::Symlink,
+            "copy" => sync_engine::SyncMode::Copy,
+            _ => return Err(AppError::invalid_input("Unsupported projection mode")),
+        };
+        let owned = match mode {
+            sync_engine::SyncMode::Symlink => {
+                sync_engine::is_target_current(archive_central, target_path, mode, None, None)
+            }
+            sync_engine::SyncMode::Copy => {
+                let target_hash = crate::core::content_hash::hash_directory(target_path).ok();
+                target_hash.is_some() && target_hash == archive.content_hash
+            }
+        };
+        if !owned {
+            return Err(AppError::invalid_input(format!(
+                "Projection changed outside Card Master: {}",
+                target.target_path
+            )));
+        }
+        let action = if source_effect
+            .as_ref()
+            .is_some_and(|effect| effect.tool == target.tool)
+            || keep_targets.iter().any(|item| item.tool == target.tool)
+        {
+            "remove_redundant"
+        } else {
+            "rewire_to_keep"
+        };
+        target_effects.push(OrganizationArchiveTargetEffect {
+            tool: target.tool,
+            target_path: target.target_path,
+            action: action.to_string(),
+        });
+    }
+    Ok(OrganizationArchivePreview {
+        keep_skill_id: keep.id,
+        keep_name: keep.name,
+        archive_skill_id: archive.id,
+        archive_name: archive.name,
+        target_effects,
+        source_preserved: archive.source_ref.is_some() && source_effect.is_none(),
+        source_effect,
+    })
+}
+
+#[tauri::command]
+pub async fn preview_organization_archive(
+    request: OrganizationArchiveRequest,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<OrganizationArchivePreview, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        organization_archive_preview_sync(&request, &store)
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn apply_organization_archive(
+    request: OrganizationArchiveRequest,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<OrganizationOperationResult, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(
+        move || -> Result<OrganizationOperationResult, AppError> {
+            let _lock = RepoLock::acquire_foreground("archive redundant organization skill")
+                .map_err(AppError::db)?;
+            let preview = organization_archive_preview_sync(&request, &store)?;
+            let keep = store
+                .get_skill_by_id(&request.keep_skill_id)
+                .map_err(AppError::db)?
+                .ok_or_else(|| AppError::not_found("Keep skill not found"))?;
+            let archive = store
+                .get_skill_by_id(&request.archive_skill_id)
+                .map_err(AppError::db)?
+                .ok_or_else(|| AppError::not_found("Archive skill not found"))?;
+            let original_targets = store
+                .get_targets_for_skill(&archive.id)
+                .map_err(AppError::db)?;
+            let operation_id = uuid::Uuid::new_v4().to_string();
+            let central = PathBuf::from(&archive.central_path);
+            let central_root = central
+                .parent()
+                .and_then(Path::parent)
+                .ok_or_else(|| AppError::invalid_input("Invalid managed central path"))?;
+            let archive_path = central_root
+                .join(".trash")
+                .join("organization")
+                .join(&operation_id)
+                .join(
+                    central
+                        .file_name()
+                        .ok_or_else(|| AppError::invalid_input("Invalid managed central path"))?,
+                );
+            let archived_source_path = preview.source_effect.as_ref().map(|effect| {
+                archive_path
+                    .parent()
+                    .expect("organization archive path has an operation parent")
+                    .join("source")
+                    .join(
+                        Path::new(&effect.source_path)
+                            .file_name()
+                            .expect("validated source path has a file name"),
+                    )
+            });
+            let payload = OrganizationArchivePayload {
+                original_central_path: archive.central_path.clone(),
+                archive_path: archive_path.to_string_lossy().to_string(),
+                original_status: archive.status.clone(),
+                original_enabled: archive.enabled,
+                original_targets: original_targets.clone(),
+                original_source_path: preview
+                    .source_effect
+                    .as_ref()
+                    .map(|effect| effect.source_path.clone()),
+                archived_source_path: archived_source_path
+                    .as_ref()
+                    .map(|path| path.to_string_lossy().to_string()),
+                source_tool: preview
+                    .source_effect
+                    .as_ref()
+                    .map(|effect| effect.tool.clone()),
+            };
+            let now = chrono::Utc::now().timestamp_millis();
+            store
+                .create_organization_operation(&OrganizationOperationRecord {
+                    operation_id: operation_id.clone(),
+                    case_key: request.case.case_id.clone(),
+                    case_revision: request.evidence_fingerprint.clone(),
+                    kind: "archive_redundant".to_string(),
+                    status: "planned".to_string(),
+                    keep_skill_id: keep.id.clone(),
+                    archive_skill_id: archive.id.clone(),
+                    payload_json: serde_json::to_string(&payload).map_err(AppError::db)?,
+                    error: None,
+                    created_at: now,
+                    updated_at: now,
+                })
+                .map_err(AppError::db)?;
+
+            let apply_result = (|| -> Result<(), AppError> {
+                store
+                    .update_organization_operation(&operation_id, "staged", None)
+                    .map_err(AppError::db)?;
+                if let (Some(effect), Some(source_archive)) =
+                    (preview.source_effect.as_ref(), archived_source_path.as_ref())
+                {
+                    if let Some(parent) = source_archive.parent() {
+                        std::fs::create_dir_all(parent).map_err(AppError::db)?;
+                    }
+                    std::fs::rename(&effect.source_path, source_archive).map_err(AppError::db)?;
+                    sync_engine::sync_skill(
+                        Path::new(&keep.central_path),
+                        Path::new(&effect.source_path),
+                        sync_engine::SyncMode::Symlink,
+                    )
+                    .map_err(AppError::db)?;
+                }
+                for target in &original_targets {
+                    let effect = preview
+                        .target_effects
+                        .iter()
+                        .find(|effect| {
+                            effect.tool == target.tool && effect.target_path == target.target_path
+                        })
+                        .ok_or_else(|| {
+                            AppError::invalid_input("Organization target preview changed")
+                        })?;
+                    let target_path = Path::new(&target.target_path);
+                    if effect.action == "rewire_to_keep" {
+                        let mode = if target.mode == "copy" {
+                            sync_engine::SyncMode::Copy
+                        } else {
+                            sync_engine::SyncMode::Symlink
+                        };
+                        sync_engine::sync_skill(Path::new(&keep.central_path), target_path, mode)
+                            .map_err(AppError::db)?;
+                    } else {
+                        sync_engine::remove_target(target_path).map_err(AppError::db)?;
+                    }
+                }
+                if let Some(parent) = archive_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(AppError::db)?;
+                }
+                std::fs::rename(&central, &archive_path).map_err(AppError::db)?;
+
+                let mut transferred_targets = Vec::new();
+                let mut removed_tools = Vec::new();
+                for target in &original_targets {
+                    let effect = preview
+                        .target_effects
+                        .iter()
+                        .find(|effect| {
+                            effect.tool == target.tool && effect.target_path == target.target_path
+                        })
+                        .ok_or_else(|| {
+                            AppError::invalid_input("Organization target preview changed")
+                        })?;
+                    if preview
+                        .source_effect
+                        .as_ref()
+                        .is_some_and(|source| source.tool == target.tool)
+                    {
+                        let mut transferred = target.clone();
+                        transferred.skill_id = keep.id.clone();
+                        transferred.target_path = preview
+                            .source_effect
+                            .as_ref()
+                            .expect("source effect checked")
+                            .source_path
+                            .clone();
+                        transferred.mode = "symlink".to_string();
+                        transferred.source_hash = keep.content_hash.clone();
+                        transferred.synced_at = Some(chrono::Utc::now().timestamp_millis());
+                        transferred_targets.push(transferred);
+                    } else if effect.action == "rewire_to_keep" {
+                        let mut transferred = target.clone();
+                        transferred.skill_id = keep.id.clone();
+                        transferred.source_hash = keep.content_hash.clone();
+                        transferred.synced_at = Some(chrono::Utc::now().timestamp_millis());
+                        transferred_targets.push(transferred);
+                    } else {
+                        removed_tools.push(target.tool.clone());
+                    }
+                }
+                store
+                    .mark_skill_archived(
+                        &archive.id,
+                        &archive_path.to_string_lossy(),
+                        &transferred_targets,
+                        &removed_tools,
+                    )
+                    .map_err(AppError::db)?;
+                store
+                    .update_organization_operation(&operation_id, "complete", None)
+                    .map_err(AppError::db)?;
+                if let Err(error) = sync_metadata::write_all_from_db_unlocked(&store) {
+                    log::warn!("organization archive metadata refresh failed: {error:#}");
+                }
+                Ok(())
+            })();
+
+            if let Err(error) = apply_result {
+                if archive_path.exists() && !central.exists() {
+                    let _ = std::fs::rename(&archive_path, &central);
+                }
+                if let (Some(source), Some(source_archive)) = (
+                    payload.original_source_path.as_deref(),
+                    payload.archived_source_path.as_deref(),
+                ) {
+                    if std::fs::symlink_metadata(source).is_ok() {
+                        let _ = sync_engine::remove_target(Path::new(source));
+                    }
+                    if Path::new(source_archive).exists() && !Path::new(source).exists() {
+                        let _ = std::fs::rename(source_archive, source);
+                    }
+                }
+                for target in &original_targets {
+                    let mode = if target.mode == "copy" {
+                        sync_engine::SyncMode::Copy
+                    } else {
+                        sync_engine::SyncMode::Symlink
+                    };
+                    let _ = sync_engine::sync_skill(&central, Path::new(&target.target_path), mode);
+                }
+                if store
+                    .get_skill_by_id(&archive.id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|skill| skill.status == "archived")
+                {
+                    let _ = store.restore_archived_skill(
+                        &archive.id,
+                        &archive.central_path,
+                        archive.enabled,
+                        &archive.status,
+                        &original_targets,
+                    );
+                }
+                let message = error.to_string();
+                let _ = store.update_organization_operation(
+                    &operation_id,
+                    "needs_recovery",
+                    Some(&message),
+                );
+                return Err(error);
+            }
+
+            Ok(OrganizationOperationResult {
+                operation_id,
+                status: "complete".to_string(),
+            })
+        },
+    )
+    .await?
+}
+
+#[tauri::command]
+pub async fn undo_organization_archive(
+    operation_id: String,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<OrganizationOperationResult, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(
+        move || -> Result<OrganizationOperationResult, AppError> {
+            let _lock =
+                RepoLock::acquire_foreground("undo organization archive").map_err(AppError::db)?;
+            let operation = store
+                .get_organization_operation(&operation_id)
+                .map_err(AppError::db)?
+                .ok_or_else(|| AppError::not_found("Organization operation not found"))?;
+            if operation.kind != "archive_redundant" || operation.status != "complete" {
+                return Err(AppError::invalid_input("Operation cannot be undone"));
+            }
+            let payload: OrganizationArchivePayload =
+                serde_json::from_str(&operation.payload_json).map_err(AppError::db)?;
+            let archived = store
+                .get_skill_by_id(&operation.archive_skill_id)
+                .map_err(AppError::db)?
+                .ok_or_else(|| AppError::not_found("Archived skill not found"))?;
+            if archived.status != "archived" || archived.central_path != payload.archive_path {
+                return Err(AppError::invalid_input(
+                    "Archived skill changed after the operation; refusing to overwrite",
+                ));
+            }
+            let original_central = PathBuf::from(&payload.original_central_path);
+            let archive_path = PathBuf::from(&payload.archive_path);
+            if original_central.exists() || !archive_path.exists() {
+                return Err(AppError::invalid_input(
+                    "Archive paths changed; refusing to overwrite",
+                ));
+            }
+            let keep = store
+                .get_skill_by_id(&operation.keep_skill_id)
+                .map_err(AppError::db)?
+                .ok_or_else(|| AppError::not_found("Keep skill not found"))?;
+            if let (Some(source), Some(source_archive)) = (
+                payload.original_source_path.as_deref(),
+                payload.archived_source_path.as_deref(),
+            ) {
+                if !Path::new(source_archive).exists()
+                    || !sync_engine::is_target_current(
+                        Path::new(&keep.central_path),
+                        Path::new(source),
+                        sync_engine::SyncMode::Symlink,
+                        None,
+                        None,
+                    )
+                {
+                    return Err(AppError::invalid_input(
+                        "The original Agent source changed after archive; refusing to overwrite",
+                    ));
+                }
+            }
+            for target in &payload.original_targets {
+                let target_path = Path::new(&target.target_path);
+                if target_path.exists() || std::fs::symlink_metadata(target_path).is_ok() {
+                    let mode = if target.mode == "copy" {
+                        sync_engine::SyncMode::Copy
+                    } else {
+                        sync_engine::SyncMode::Symlink
+                    };
+                    let projection_is_unchanged = match mode {
+                        sync_engine::SyncMode::Symlink => sync_engine::is_target_current(
+                            Path::new(&keep.central_path),
+                            target_path,
+                            mode,
+                            None,
+                            None,
+                        ),
+                        sync_engine::SyncMode::Copy => {
+                            crate::core::content_hash::hash_directory(target_path).ok()
+                                == keep.content_hash
+                        }
+                    };
+                    if !projection_is_unchanged {
+                        return Err(AppError::invalid_input(format!(
+                            "Projection changed after archive: {}",
+                            target.target_path
+                        )));
+                    }
+                }
+            }
+            if let (Some(source), Some(source_archive)) = (
+                payload.original_source_path.as_deref(),
+                payload.archived_source_path.as_deref(),
+            ) {
+                sync_engine::remove_target(Path::new(source)).map_err(AppError::db)?;
+                std::fs::rename(source_archive, source).map_err(AppError::db)?;
+            }
+            std::fs::rename(&archive_path, &original_central).map_err(AppError::db)?;
+            for target in &payload.original_targets {
+                let mode = if target.mode == "copy" {
+                    sync_engine::SyncMode::Copy
+                } else {
+                    sync_engine::SyncMode::Symlink
+                };
+                sync_engine::sync_skill(&original_central, Path::new(&target.target_path), mode)
+                    .map_err(AppError::db)?;
+            }
+            store
+                .restore_archived_skill(
+                    &operation.archive_skill_id,
+                    &payload.original_central_path,
+                    payload.original_enabled,
+                    &payload.original_status,
+                    &payload.original_targets,
+                )
+                .map_err(AppError::db)?;
+            store
+                .update_organization_operation(&operation_id, "undone", None)
+                .map_err(AppError::db)?;
+            if let Err(error) = sync_metadata::write_all_from_db_unlocked(&store) {
+                log::warn!("organization undo metadata refresh failed: {error:#}");
+            }
+            Ok(OrganizationOperationResult {
+                operation_id,
+                status: "undone".to_string(),
+            })
+        },
+    )
+    .await?
+}
+
 fn prepare_organization_agent_prompt(
     tasks: &[OrganizationAgentCaseTask],
     store: &SkillStore,
-) -> Result<(String, Vec<(String, String)>), AppError> {
+) -> Result<(String, Vec<(String, String, Vec<String>)>), AppError> {
     if tasks.is_empty() || tasks.len() > 10 {
         return Err(AppError::invalid_input(
             "Organization agent tasks must contain 1 to 10 cases",
@@ -903,7 +1475,11 @@ fn prepare_organization_agent_prompt(
                 "This organization case does not need semantic Agent judgment",
             ));
         }
-        expected.push((task.case_id.clone(), task.case_revision.clone()));
+        expected.push((
+            task.case_id.clone(),
+            task.case_revision.clone(),
+            task.member_ids.clone(),
+        ));
 
         let evidence_json = serde_json::to_string_pretty(case_evidence)
             .map_err(|error| AppError::internal(error.to_string()))?;
@@ -969,6 +1545,9 @@ Safety boundary:
 - Same name is not proof of duplication. Content similarity is not proof of ownership or lineage.
 - Strong evidence: immutable revision or commit ancestry, explicit replacement, strict artifact digest. Medium: shared base or structured adapter-only difference. Weak: mtime, import time, name, prose similarity.
 - Without strong lineage, never return confirmed_newer_revision. A weak-only conclusion has confidence at most 0.70.
+- Your conclusion must end in exactly one executable recommendation: archive_one, keep_both, or needs_more_evidence.
+- Use archive_one only when one supplied member is a sufficiently complete replacement and archiving the other will not discard an intentional platform adapter, customization, or distinct behavior. Select the exact Skill ID to keep.
+- Use keep_both when both members preserve distinct useful behavior. Use needs_more_evidence when the supplied snapshot cannot support either action safely.
 
 Use Card Master's six gates: format health, artifact integrity, provenance lineage, semantic intent, behavior overlap, safe action. The deterministic gates are already supplied as evidence. Judge only unresolved semantic or behavioral boundaries.
 
@@ -989,7 +1568,10 @@ Return JSON only. No Markdown fence and no commentary. Use exactly this schema:
       "counter_evidence": [{{"strength":"strong | medium | weak","claim":"fact against the conclusion"}}],
       "unresolved_questions": ["question that still blocks certainty"],
       "behavior_eval_required": false,
-      "suggested_actions": ["prefer_newer_archive_old | keep_variants_linked | keep_both_grouped | keep_both_mark_fork | consolidate_after_lineage_check | run_behavior_eval | manual_review"],
+      "suggested_actions": ["prefer_newer_archive_old | prefer_more_complete_archive_redundant | keep_variants_linked | keep_both_grouped | keep_both_mark_fork | consolidate_after_lineage_check | run_behavior_eval | manual_review"],
+      "recommended_action": "archive_one | keep_both | needs_more_evidence",
+      "recommended_keep_skill_id": "exact supplied Skill ID when recommended_action is archive_one, otherwise null",
+      "recommendation_reason": "one direct sentence explaining why this action follows from the comparison",
       "confidence": 0.0
     }}
   ]
@@ -1184,6 +1766,148 @@ mod organization_health_tests {
         )
         .is_err());
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn archive_preview_revalidates_case_and_owned_projection() {
+        let tmp = tempdir().unwrap();
+        let keep_dir = tmp.path().join("skills/keep");
+        let archive_dir = tmp.path().join("skills/archive");
+        let target_dir = tmp.path().join("agent/archive");
+        std::fs::create_dir_all(&keep_dir).unwrap();
+        std::fs::create_dir_all(&archive_dir).unwrap();
+        std::fs::create_dir_all(target_dir.parent().unwrap()).unwrap();
+        std::fs::write(
+            keep_dir.join("SKILL.md"),
+            "---\nname: compare\ndescription: richer\n---\n# Keep\n",
+        )
+        .unwrap();
+        std::fs::write(
+            archive_dir.join("SKILL.md"),
+            "---\nname: compare\ndescription: older\n---\n# Archive\n",
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(&archive_dir, &target_dir).unwrap();
+
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut keep = skill(&keep_dir);
+        keep.id = "keep".to_string();
+        keep.name = "compare".to_string();
+        keep.content_hash = Some(crate::core::content_hash::hash_directory(&keep_dir).unwrap());
+        let mut archive = skill(&archive_dir);
+        archive.id = "archive".to_string();
+        archive.name = "compare".to_string();
+        archive.content_hash =
+            Some(crate::core::content_hash::hash_directory(&archive_dir).unwrap());
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        let mut projection = target(&target_dir);
+        projection.id = "archive-target".to_string();
+        projection.skill_id = "archive".to_string();
+        store.insert_target(&projection).unwrap();
+
+        let evidence = inspect_organization_cases_sync(
+            vec![OrganizationCaseRequest {
+                case_id: "name:compare".to_string(),
+                issue_kind: "name_collision".to_string(),
+                member_ids: vec!["keep".to_string(), "archive".to_string()],
+                verify_strict_artifact: true,
+            }],
+            &store,
+        )
+        .unwrap();
+        let request = OrganizationArchiveRequest {
+            case: OrganizationCaseRequest {
+                case_id: "name:compare".to_string(),
+                issue_kind: "name_collision".to_string(),
+                member_ids: vec!["keep".to_string(), "archive".to_string()],
+                verify_strict_artifact: true,
+            },
+            evidence_fingerprint: evidence[0].case_revision.clone(),
+            keep_skill_id: "keep".to_string(),
+            archive_skill_id: "archive".to_string(),
+        };
+
+        let preview = organization_archive_preview_sync(&request, &store).unwrap();
+        assert_eq!(preview.target_effects.len(), 1);
+        assert_eq!(preview.target_effects[0].action, "rewire_to_keep");
+
+        std::fs::remove_file(&target_dir).unwrap();
+        std::os::unix::fs::symlink(&keep_dir, &target_dir).unwrap();
+        assert!(organization_archive_preview_sync(&request, &store).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn archive_preview_replaces_unchanged_agent_source_and_removes_extra_projection() {
+        let tmp = tempdir().unwrap();
+        let keep_dir = tmp.path().join("skills/keep");
+        let archive_dir = tmp.path().join("skills/archive");
+        let agent_root = tmp.path().join("agent");
+        let source_dir = agent_root.join("find-skills");
+        let target_dir = agent_root.join("find-skills-2");
+        for path in [&keep_dir, &archive_dir, &source_dir] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        std::fs::write(
+            keep_dir.join("SKILL.md"),
+            "---\nname: find-skills\ndescription: richer\n---\n# Keep\n",
+        )
+        .unwrap();
+        let archived_content =
+            "---\nname: find-skills\ndescription: older\n---\n# Archive\n";
+        std::fs::write(archive_dir.join("SKILL.md"), archived_content).unwrap();
+        std::fs::write(source_dir.join("SKILL.md"), archived_content).unwrap();
+        std::os::unix::fs::symlink(&archive_dir, &target_dir).unwrap();
+
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut keep = skill(&keep_dir);
+        keep.id = "keep".to_string();
+        keep.name = "find-skills".to_string();
+        keep.content_hash = Some(crate::core::content_hash::hash_directory(&keep_dir).unwrap());
+        let mut archive = skill(&archive_dir);
+        archive.id = "archive".to_string();
+        archive.name = "find-skills".to_string();
+        archive.source_ref = Some(source_dir.to_string_lossy().to_string());
+        archive.content_hash =
+            Some(crate::core::content_hash::hash_directory(&archive_dir).unwrap());
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        let mut projection = target(&target_dir);
+        projection.id = "archive-target".to_string();
+        projection.skill_id = "archive".to_string();
+        store.insert_target(&projection).unwrap();
+
+        let case = OrganizationCaseRequest {
+            case_id: "name:find-skills".to_string(),
+            issue_kind: "name_collision".to_string(),
+            member_ids: vec!["keep".to_string(), "archive".to_string()],
+            verify_strict_artifact: true,
+        };
+        let evidence = inspect_organization_cases_sync(vec![OrganizationCaseRequest {
+            case_id: case.case_id.clone(),
+            issue_kind: case.issue_kind.clone(),
+            member_ids: case.member_ids.clone(),
+            verify_strict_artifact: true,
+        }], &store)
+        .unwrap();
+        let preview = organization_archive_preview_sync(
+            &OrganizationArchiveRequest {
+                case,
+                evidence_fingerprint: evidence[0].case_revision.clone(),
+                keep_skill_id: "keep".to_string(),
+                archive_skill_id: "archive".to_string(),
+            },
+            &store,
+        )
+        .unwrap();
+
+        assert_eq!(preview.target_effects[0].action, "remove_redundant");
+        let source_effect = preview.source_effect.unwrap();
+        assert_eq!(source_effect.tool, "codex");
+        assert_eq!(source_effect.source_path, source_dir.to_string_lossy());
+        assert!(!preview.source_preserved);
+    }
 }
 
 #[tauri::command]
@@ -1275,7 +1999,10 @@ pub async fn suggest_deck_from_library(
     let store = store.inner().clone();
     let (inventory, allowed_ids) = tauri::async_runtime::spawn_blocking(move || {
         let skills = store.get_all_skills().map_err(AppError::db)?;
-        let allowed_ids = skills.iter().map(|skill| skill.id.clone()).collect::<HashSet<_>>();
+        let allowed_ids = skills
+            .iter()
+            .map(|skill| skill.id.clone())
+            .collect::<HashSet<_>>();
         let inventory = skills
             .into_iter()
             .map(|skill| {
@@ -1296,8 +2023,8 @@ pub async fn suggest_deck_from_library(
     })
     .await??;
 
-    let inventory_json = serde_json::to_string(&inventory)
-        .map_err(|error| AppError::internal(error.to_string()))?;
+    let inventory_json =
+        serde_json::to_string(&inventory).map_err(|error| AppError::internal(error.to_string()))?;
     let prompt = format!(
         r#"You are Card Master's deck curator. Build a small, usable Skill deck for the user's stated job.
 
@@ -1321,7 +2048,8 @@ Output exactly:
 {{"schema_version":1,"method_version":"card-master-deck-builder-v1","deck":{{"title":"...","summary":"...","cards":[{{"skill_id":"existing-id","stage":"...","role":"...","reason":"..."}}],"gaps":["..."]}}}}"#
     );
     let temp = tempfile::tempdir().map_err(AppError::io)?;
-    let raw = crate::core::organization_agent::execute(&request.agent_key, &prompt, temp.path()).await?;
+    let raw =
+        crate::core::organization_agent::execute(&request.agent_key, &prompt, temp.path()).await?;
     crate::core::organization_agent::parse_deck_suggestion(&raw, &allowed_ids)
 }
 

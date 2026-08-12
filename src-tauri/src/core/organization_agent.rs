@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use super::error::AppError;
 
-pub const METHOD_VERSION: &str = "card-master-six-gates-v1";
+pub const METHOD_VERSION: &str = "card-master-six-gates-v2";
 pub const OUTPUT_SCHEMA_VERSION: u32 = 1;
 pub const DECK_METHOD_VERSION: &str = "card-master-deck-builder-v1";
 
@@ -37,6 +37,9 @@ pub struct OrganizationAgentAssessment {
     pub unresolved_questions: Vec<String>,
     pub behavior_eval_required: bool,
     pub suggested_actions: Vec<String>,
+    pub recommended_action: String,
+    pub recommended_keep_skill_id: Option<String>,
+    pub recommendation_reason: String,
     pub confidence: f64,
 }
 
@@ -209,7 +212,7 @@ fn json_body(raw: &str) -> &str {
 
 pub fn parse_assessments(
     raw: &str,
-    expected: &[(String, String)],
+    expected: &[(String, String, Vec<String>)],
 ) -> Result<Vec<OrganizationAgentAssessment>, AppError> {
     let envelope: AgentEnvelope = serde_json::from_str(json_body(raw)).map_err(|error| {
         AppError::invalid_input(format!("Agent returned invalid JSON: {error}"))
@@ -238,6 +241,7 @@ pub fn parse_assessments(
     ];
     let allowed_actions = [
         "prefer_newer_archive_old",
+        "prefer_more_complete_archive_redundant",
         "keep_variants_linked",
         "keep_both_grouped",
         "keep_both_mark_fork",
@@ -247,7 +251,10 @@ pub fn parse_assessments(
     ];
     let mut seen = std::collections::HashSet::new();
     for assessment in &envelope.assessments {
-        let Some((_, revision)) = expected.iter().find(|(id, _)| id == &assessment.case_id) else {
+        let Some((_, revision, member_ids)) = expected
+            .iter()
+            .find(|(id, _, _)| id == &assessment.case_id)
+        else {
             return Err(AppError::invalid_input(
                 "Agent returned an unknown organization case",
             ));
@@ -265,6 +272,36 @@ pub fn parse_assessments(
                 .any(|action| !allowed_actions.contains(&action.as_str()))
             || !(0.0..=1.0).contains(&assessment.confidence)
             || assessment.difference_summary.trim().is_empty()
+            || !matches!(
+                assessment.recommended_action.as_str(),
+                "archive_one" | "keep_both" | "needs_more_evidence"
+            )
+            || assessment.recommendation_reason.trim().is_empty()
+            || match assessment.recommended_action.as_str() {
+                "archive_one" => assessment
+                    .recommended_keep_skill_id
+                    .as_ref()
+                    .is_none_or(|skill_id| !member_ids.contains(skill_id))
+                    || !assessment.suggested_actions.iter().any(|action| {
+                        matches!(
+                            action.as_str(),
+                            "prefer_newer_archive_old"
+                                | "prefer_more_complete_archive_redundant"
+                        )
+                    }),
+                "keep_both" => {
+                    assessment.recommended_keep_skill_id.is_some()
+                        || !assessment.suggested_actions.iter().any(|action| {
+                            matches!(
+                                action.as_str(),
+                                "keep_variants_linked"
+                                    | "keep_both_grouped"
+                                    | "keep_both_mark_fork"
+                            )
+                        })
+                }
+                _ => assessment.recommended_keep_skill_id.is_some(),
+            }
             || assessment
                 .evidence
                 .iter()
@@ -332,16 +369,47 @@ mod tests {
     #[test]
     fn parses_a_complete_fenced_assessment() {
         let raw = r#"```json
-{"schema_version":1,"method_version":"card-master-six-gates-v1","assessments":[{"case_id":"c1","case_revision":"r1","relation_hypothesis":"platform_variant","difference_summary":"Host adapter differs","evidence":[{"strength":"medium","claim":"Same workflow"}],"counter_evidence":[],"unresolved_questions":[],"behavior_eval_required":false,"suggested_actions":["keep_variants_linked"],"confidence":0.8}]}
+{"schema_version":1,"method_version":"card-master-six-gates-v2","assessments":[{"case_id":"c1","case_revision":"r1","relation_hypothesis":"platform_variant","difference_summary":"Host adapter differs","evidence":[{"strength":"medium","claim":"Same workflow"}],"counter_evidence":[],"unresolved_questions":[],"behavior_eval_required":false,"suggested_actions":["keep_variants_linked"],"recommended_action":"keep_both","recommended_keep_skill_id":null,"recommendation_reason":"Each variant targets a different host.","confidence":0.8}]}
 ```"#;
-        let parsed = parse_assessments(raw, &[("c1".to_string(), "r1".to_string())]).unwrap();
+        let parsed = parse_assessments(
+            raw,
+            &[(
+                "c1".to_string(),
+                "r1".to_string(),
+                vec!["s1".to_string(), "s2".to_string()],
+            )],
+        )
+        .unwrap();
         assert_eq!(parsed[0].case_id, "c1");
     }
 
     #[test]
     fn rejects_stale_or_unknown_taxonomy() {
-        let raw = r#"{"schema_version":1,"method_version":"card-master-six-gates-v1","assessments":[{"case_id":"c1","case_revision":"old","relation_hypothesis":"duplicate","difference_summary":"x","evidence":[],"behavior_eval_required":false,"suggested_actions":["delete"],"confidence":1.0}]}"#;
-        assert!(parse_assessments(raw, &[("c1".to_string(), "r1".to_string())]).is_err());
+        let raw = r#"{"schema_version":1,"method_version":"card-master-six-gates-v2","assessments":[{"case_id":"c1","case_revision":"old","relation_hypothesis":"duplicate","difference_summary":"x","evidence":[],"behavior_eval_required":false,"suggested_actions":["delete"],"recommended_action":"archive_one","recommended_keep_skill_id":"s1","recommendation_reason":"x","confidence":1.0}]}"#;
+        assert!(parse_assessments(
+            raw,
+            &[(
+                "c1".to_string(),
+                "r1".to_string(),
+                vec!["s1".to_string(), "s2".to_string()],
+            )],
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn parses_executable_archive_recommendation_for_supplied_member() {
+        let raw = r#"{"schema_version":1,"method_version":"card-master-six-gates-v2","assessments":[{"case_id":"c1","case_revision":"r1","relation_hypothesis":"behavior_overlap_candidate","difference_summary":"s2 is a functional superset","evidence":[{"strength":"medium","claim":"s2 contains every s1 workflow plus quality screening"}],"counter_evidence":[],"unresolved_questions":[],"behavior_eval_required":false,"suggested_actions":["prefer_more_complete_archive_redundant"],"recommended_action":"archive_one","recommended_keep_skill_id":"s2","recommendation_reason":"Keep s2 because it preserves the shared workflow and the additional checks.","confidence":0.88}]}"#;
+        let parsed = parse_assessments(
+            raw,
+            &[(
+                "c1".to_string(),
+                "r1".to_string(),
+                vec!["s1".to_string(), "s2".to_string()],
+            )],
+        )
+        .unwrap();
+        assert_eq!(parsed[0].recommended_keep_skill_id.as_deref(), Some("s2"));
     }
 
     #[test]

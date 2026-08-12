@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import type {
   ManagedSkill,
   OrganizationAgentAssessment,
+  OrganizationArchivePreview,
   OrganizationDisposition,
   ToolInfo,
 } from "../lib/tauri";
@@ -48,6 +49,8 @@ interface IssuesProps extends SharedProps {
   onRefresh: () => void;
   onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
   onUndoDecision: (caseKey: string) => void;
+  onPreviewArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<OrganizationArchivePreview>;
+  onApplyArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<void>;
 }
 
 export type OrganizationExecutionMode = "codex" | "claude_code" | "hermes" | "copy_prompt";
@@ -217,6 +220,8 @@ export function SkillIssuesView({
   onRefresh,
   onDecide,
   onUndoDecision,
+  onPreviewArchive,
+  onApplyArchive,
   search,
   displayNames,
   tools,
@@ -227,6 +232,10 @@ export function SkillIssuesView({
   const [selectedCategory, setSelectedCategory] = useState<IssueCategory | null>(null);
   const [selectedHealthCode, setSelectedHealthCode] = useState<string | null>(null);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [keepSkillId, setKeepSkillId] = useState<string | null>(null);
+  const [archivePreview, setArchivePreview] = useState<OrganizationArchivePreview | null>(null);
+  const [previewingArchive, setPreviewingArchive] = useState(false);
+  const [applyingArchive, setApplyingArchive] = useState(false);
   const executionMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!executionMenuOpen) return;
@@ -279,6 +288,10 @@ export function SkillIssuesView({
     ? categoryIssues.filter((issue) => issue.decisionTier === "needs_semantic")
     : [];
   const selectedExecution = executionOptions.find((option) => option.id === executionMode) ?? executionOptions[0];
+  const activeAgentAssessment = activeIssue ? agentAssessments.get(activeIssue.id) : undefined;
+  const recommendedKeepSkillId = activeAgentAssessment?.assessment.recommended_action === "archive_one"
+    ? activeAgentAssessment.assessment.recommended_keep_skill_id
+    : null;
 
   const openCategory = (category: IssueCategory) => {
     const first = unresolvedIssues.find((issue) => issueCategory(issue) === category);
@@ -296,6 +309,41 @@ export function SkillIssuesView({
     setSelectedCategory(null);
     setSelectedHealthCode(null);
     setSelectedIssueId(null);
+  };
+
+  useEffect(() => {
+    const recommendedId = activeIssue?.skills.some((skill) => skill.id === recommendedKeepSkillId)
+      ? recommendedKeepSkillId
+      : null;
+    setKeepSkillId(recommendedId ?? activeIssue?.skills[0]?.id ?? null);
+    setArchivePreview(null);
+  }, [activeIssue?.id, activeIssue?.skills, recommendedKeepSkillId]);
+
+  const previewArchivePlan = async (issue: SkillIssue) => {
+    const keepId = keepSkillId ?? issue.skills[0]?.id;
+    const archiveId = issue.skills.find((skill) => skill.id !== keepId)?.id;
+    if (!keepId || !archiveId) return;
+    setPreviewingArchive(true);
+    try {
+      setArchivePreview(await onPreviewArchive(issue, keepId, archiveId));
+    } catch {
+      // The parent owns the user-facing error toast.
+    } finally {
+      setPreviewingArchive(false);
+    }
+  };
+
+  const applyArchivePlan = async (issue: SkillIssue) => {
+    if (!archivePreview) return;
+    setApplyingArchive(true);
+    try {
+      await onApplyArchive(issue, archivePreview.keep_skill_id, archivePreview.archive_skill_id);
+      setArchivePreview(null);
+    } catch {
+      // The parent owns the user-facing error toast.
+    } finally {
+      setApplyingArchive(false);
+    }
   };
 
   return (
@@ -534,6 +582,13 @@ export function SkillIssuesView({
           {visibleIssues.map((issue) => {
             const copy = issueCopy(issue.kind, t);
             const agentAssessment = agentAssessments.get(issue.id);
+            const agentRecommendation = agentAssessment?.assessment.recommended_action;
+            const agentKeepSkill = issue.skills.find(
+              (skill) => skill.id === agentAssessment?.assessment.recommended_keep_skill_id,
+            );
+            const agentArchiveSkill = agentKeepSkill
+              ? issue.skills.find((skill) => skill.id !== agentKeepSkill.id)
+              : undefined;
             return (
               <article key={issue.id} className="app-panel overflow-hidden shadow-card">
                 <div className="flex items-start gap-4 p-4">
@@ -596,8 +651,11 @@ export function SkillIssuesView({
                           <div className="flex min-w-0 items-start gap-2">
                             <Bot className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />
                             <div>
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-accent-light">
+                                {t("mySkills.organization.agentAdviceTitle", { agent: agentAssessment.agentName })}
+                              </div>
                               <div className="text-[11px] font-semibold text-secondary">
-                                {agentAssessment.agentName} · {t(`mySkills.organization.agentRelations.${agentAssessment.assessment.relation_hypothesis}`)}
+                                {t(`mySkills.organization.agentRelations.${agentAssessment.assessment.relation_hypothesis}`)}
                               </div>
                               <p className="mt-1 text-[12px] leading-5 text-secondary">
                                 {agentAssessment.assessment.difference_summary}
@@ -645,20 +703,161 @@ export function SkillIssuesView({
                     <div className="mt-1 text-[12px] text-muted">{copy.impact}</div>
                   </div>
                 </div>
+                {issue.decisionTier === "needs_semantic" && agentAssessment && !agentAssessment.stale && (
+                  <section className="border-t border-border-faint bg-surface px-4 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-accent-light">
+                          {t("mySkills.organization.actionPlan.title")}
+                        </div>
+                        <h4 className="mt-1 text-[13px] font-semibold text-primary">
+                          {agentRecommendation === "archive_one" && agentKeepSkill && agentArchiveSkill
+                            ? t("mySkills.organization.actionPlan.archiveConclusion", {
+                                keep: displayNames.get(agentKeepSkill.id) || agentKeepSkill.name,
+                                archive: displayNames.get(agentArchiveSkill.id) || agentArchiveSkill.name,
+                              })
+                            : agentRecommendation === "keep_both"
+                              ? t("mySkills.organization.actionPlan.keepBothConclusion")
+                              : t("mySkills.organization.actionPlan.moreEvidenceConclusion")}
+                        </h4>
+                        <p className="mt-1 text-[11px] leading-4 text-muted">
+                          {agentAssessment.assessment.recommendation_reason
+                            || t("mySkills.organization.actionPlan.legacyConclusion")}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                        {t("mySkills.organization.actionPlan.notApplied")}
+                      </span>
+                    </div>
+                    {agentRecommendation === "archive_one"
+                    && agentKeepSkill
+                    && agentArchiveSkill
+                    && issue.skills.length === 2 ? (
+                      <>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {issue.skills.map((skill) => {
+                            const selected = keepSkillId === skill.id;
+                            return (
+                              <button
+                                key={skill.id}
+                                type="button"
+                                onClick={() => {
+                                  setKeepSkillId(skill.id);
+                                  setArchivePreview(null);
+                                }}
+                                className={cn(
+                                  "rounded-lg border px-3 py-3 text-left transition-colors",
+                                  selected
+                                    ? "border-accent/50 bg-accent-bg"
+                                    : "border-border-faint bg-bg-secondary/50 hover:border-border-subtle",
+                                )}
+                              >
+                                <span className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-[12px] font-semibold text-secondary">
+                                    {displayNames.get(skill.id) || skill.name}
+                                  </span>
+                                  <span className={cn(
+                                    "rounded-full px-2 py-0.5 text-[9px] font-medium",
+                                    selected ? "bg-accent text-white" : "bg-surface-hover text-muted",
+                                  )}>
+                                    {selected
+                                      ? t("mySkills.organization.actionPlan.keepThis")
+                                      : t("mySkills.organization.actionPlan.archiveThis")}
+                                  </span>
+                                </span>
+                                <span className="mt-1 block truncate text-[10px] text-muted">{sourceLabel(skill)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {archivePreview && (
+                          <div className="mt-3 rounded-lg border border-accent/25 bg-accent-bg p-3">
+                            <div className="text-[11px] font-semibold text-secondary">
+                              {t("mySkills.organization.actionPlan.previewTitle")}
+                            </div>
+                            <ul className="mt-2 space-y-1 text-[11px] leading-4 text-muted">
+                              <li>· {t("mySkills.organization.actionPlan.keepNamed", { name: archivePreview.keep_name })}</li>
+                              <li>· {t("mySkills.organization.actionPlan.archiveNamed", { name: archivePreview.archive_name })}</li>
+                              {archivePreview.source_effect && (
+                                <li>· {t("mySkills.organization.actionPlan.sourceRewired", {
+                                  agent: archivePreview.source_effect.tool,
+                                  path: archivePreview.source_effect.source_path,
+                                })}</li>
+                              )}
+                              {archivePreview.target_effects.map((effect) => (
+                                <li key={`${effect.tool}:${effect.target_path}`}>
+                                  · {effect.action === "rewire_to_keep"
+                                    ? t("mySkills.organization.actionPlan.rewireAgent", { agent: effect.tool })
+                                    : t("mySkills.organization.actionPlan.removeRedundant", { agent: effect.tool })}
+                                </li>
+                              ))}
+                              {archivePreview.source_preserved && (
+                                <li>· {t("mySkills.organization.actionPlan.sourcePreserved")}</li>
+                              )}
+                              <li>· {t("mySkills.organization.actionPlan.undoable")}</li>
+                            </ul>
+                          </div>
+                        )}
+                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onDecide(issue, "related")}
+                            className="app-button-secondary"
+                          >
+                            {t("mySkills.organization.actionPlan.overrideKeepBoth")}
+                          </button>
+                          {!archivePreview ? (
+                            <button
+                              type="button"
+                              onClick={() => previewArchivePlan(issue)}
+                              disabled={previewingArchive}
+                              className="app-button-primary"
+                            >
+                              {previewingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                              {t("mySkills.organization.actionPlan.previewRecommendation")}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => applyArchivePlan(issue)}
+                              disabled={applyingArchive}
+                              className="app-button-primary"
+                            >
+                              {applyingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                              {t("mySkills.organization.actionPlan.applyNamed", {
+                                keep: archivePreview.keep_name,
+                                archive: archivePreview.archive_name,
+                              })}
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : agentRecommendation === "keep_both" ? (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => onDecide(issue, "related")}
+                          className="app-button-primary"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {t("mySkills.organization.actionPlan.applyKeepBoth")}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                        {t("mySkills.organization.actionPlan.noSafeAction")}
+                      </p>
+                    )}
+                  </section>
+                )}
                 <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
                   {issue.decisionTier === "needs_semantic" && (
-                    <>
-                      <button type="button" onClick={() => onDecide(issue, "intentional_distinct")} className="app-button-secondary">
-                        {t("mySkills.organization.keepDistinct")}
-                      </button>
-                      <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-secondary">
-                        {t("mySkills.organization.confirmRelated")}
-                      </button>
-                      <button type="button" onClick={() => onHandOff(issue)} className="app-button-primary">
-                        <Bot className="h-3.5 w-3.5" />
-                        {t("mySkills.organization.compareItems")}
-                      </button>
-                    </>
+                    <button type="button" onClick={() => onHandOff(issue)} className={agentAssessment ? "app-button-secondary" : "app-button-primary"}>
+                      <Bot className="h-3.5 w-3.5" />
+                      {agentAssessment
+                        ? t("mySkills.organization.compareAgain")
+                        : t("mySkills.organization.compareItems")}
+                    </button>
                   )}
                   {issue.decisionTier === "rule_diagnosed" && issue.caseRevision && (
                     <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-primary">
