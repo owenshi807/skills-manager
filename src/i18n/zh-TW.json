@@ -19,15 +19,55 @@
   "decks": {
     "eyebrow": "工作牌組 · 價值切片",
     "libraryTitle": "牌組",
-    "libraryDescription": "把技能庫裡的 Skill 組合成面向真實工作的策略。打開已有牌組，或者把目標告訴 AI，讓它從目前技能庫中自動組一副可審查的牌。",
-    "newDeck": "新建牌組",
+    "libraryDescription": "已掃描技能庫中的 {{count}} 個 Skill，並按工作目的整理成可編輯牌組。先看見已有能力；需要新方向時，再讓 AI 幫你組牌。",
+    "newDeck": "告訴 AI 組一副牌",
     "builtIn": "內建牌組",
     "aiBuilt": "AI 組牌",
     "deckMeta": "{{stages}} 個階段 · {{skills}} 個 Skill 位",
     "customMeta": "{{skills}} 個 Skill · {{gaps}} 個缺口",
+    "discoveredTitle": "從技能庫發現的能力",
+    "scannedLibrary": "已掃描 {{count}} 個 Skill",
+    "discovered": "技能庫發現",
+    "editable": "可編輯牌組",
+    "coverage": "覆蓋 {{covered}}/{{total}} 階段",
+    "skillCount": "{{count}} 張技能牌",
+    "gapCount": "{{count}} 個缺口",
+    "solves": "這組解決什麼",
+    "supervision": "監督機制",
+    "stopLine": "停止線",
+    "metrics": { "skills": "技能牌", "coverage": "階段覆蓋", "gaps": "缺口" },
+    "editDeck": "編輯牌組",
+    "finishEditing": "完成編輯",
+    "emptyStage": "這個階段還沒有合適的 Skill。可以進入編輯補牌。",
+    "noDescription": "這個 Skill 暫無清晰說明。",
+    "openSkill": "查看 Skill 詳情",
+    "reasons": { "matched": "技能名稱與說明符合「{{stage}}」", "added": "由你加入這個階段" },
+    "editor": { "title": "調整這副牌", "description": "添加或移除只改變牌組關係，不修改 Skill 本身。", "search": "搜尋技能庫，添加 Skill…", "reset": "恢復掃描結果" },
     "back": "返回牌組",
     "missingSkill": "Skill 已不在庫中",
     "gaps": "能力缺口",
+    "catalog": {
+      "business": {
+        "title": "商業與經營", "description": "從需求、市場和經營證據走向商業判斷。", "outcome": "識別真實商業機會，用市場、客戶與財務證據形成可執行判斷。", "supervision": "區分事實、假設與願望；讓反方審查收入邏輯、成本和不可逆風險。", "stopRule": "已有明確客戶、可驗證需求和最小商業實驗時，停止繼續寫宏大策略。",
+        "stages": { "opportunity": { "title": "發現機會", "question": "誰的問題值得解決？", "purpose": "識別需求、客戶和市場變化。" }, "evidence": { "title": "建立證據", "question": "商業判斷有數據支撐嗎？", "purpose": "驗證競爭、交易和財務條件。" }, "decision": { "title": "形成決策", "question": "下一步行動和代價清楚嗎？", "purpose": "收斂戰略選擇並挑戰關鍵假設。" } }
+      },
+      "research": {
+        "title": "調研與資訊獲取", "description": "提出問題、尋找證據、比較並形成可信結論。", "outcome": "把模糊問題轉成可調查問題，建立來源鏈，產出能被質疑和複查的結論。", "supervision": "檢查來源獨立性、時效性和反證；不讓單一搜尋結果冒充結論。", "stopRule": "新增來源不再改變核心判斷，且主要反例已處理時停止搜尋。",
+        "stages": { "question": { "title": "定義問題", "question": "真正需要回答什麼？", "purpose": "明確範圍、判斷標準和未知項。" }, "collect": { "title": "收集證據", "question": "證據來自哪裡、可信度如何？", "purpose": "搜尋不同來源並保存可追溯證據。" }, "synthesize": { "title": "綜合判斷", "question": "結論能經得住反證嗎？", "purpose": "比較、壓縮並輸出有邊界的結論。" } }
+      },
+      "redTeam": {
+        "title": "紅隊與風險審查", "description": "主動攻擊方案，發現盲點、安全問題和失敗路徑。", "outcome": "在交付前讓方案遭遇最強反例，找出隱藏風險和未驗證假設。", "supervision": "紅隊只暴露證據充分的風險；不能用無止境挑錯阻塞交付。", "stopRule": "高風險失敗已有緩解或被接受，剩餘問題不改變決策時停止審查。",
+        "stages": { "challenge": { "title": "挑戰假設", "question": "最可能錯在哪裡？", "purpose": "用反例攻擊目標、邏輯和依賴。" }, "inspect": { "title": "檢查風險", "question": "失敗會怎樣發生？", "purpose": "檢查安全、品質和系統邊界。" }, "verify": { "title": "驗證修復", "question": "風險真的被關閉了嗎？", "purpose": "複測關鍵路徑並記錄剩餘風險。" } }
+      },
+      "productDesign": {
+        "title": "Product Design", "description": "從使用者問題走向清晰、可用、可驗證的產品體驗。", "outcome": "定義產品是什麼，把需求轉成資訊架構和互動，再用真實介面驗證價值。", "supervision": "每個介面元素必須服務使用者任務；審查概念重疊、資訊層級和不必要功能。", "stopRule": "使用者能理解頁面、完成核心任務並暴露下一條真實問題時，先停止擴功能。",
+        "stages": { "define": { "title": "定義問題", "question": "產品在使用者心裡是什麼？", "purpose": "釐清使用者、場景、需求和產品本質。" }, "explore": { "title": "探索結構", "question": "資訊和動作如何組織？", "purpose": "比較方向，形成資訊架構和互動骨架。" }, "make": { "title": "做出介面", "question": "使用者能直接使用嗎？", "purpose": "把確認的結構變成可操作原型。" }, "review": { "title": "驗證體驗", "question": "使用者看懂並完成任務了嗎？", "purpose": "檢查密度、層級、文案和互動摩擦。" } }
+      },
+      "vibeCoding": {
+        "title": "Vibe Coding", "description": "理解程式碼、收斂方案、小步實現並監督過度工程化。", "outcome": "幫助人與 Agent 共同完成程式碼任務：先查清問題，再做最小實現，持續檢查過度工程化。", "supervision": "每階段回答 IPO：輸入是否充分、過程是否最小、輸出是否可驗證；用獨立評審尋找反例。", "stopRule": "已解決當前問題、驗證通過且沒有新使用者價值證據時，停止增加抽象和自動化。",
+        "stages": { "understand": { "title": "理解問題", "question": "問題和根因清楚了嗎？", "purpose": "查程式碼、復現問題，分清症狀與根因。" }, "frame": { "title": "收斂方案", "question": "最小解與邊界清楚了嗎？", "purpose": "定義範圍、資料流和驗證方式。" }, "build": { "title": "小步實現", "question": "每一步都能驗證嗎？", "purpose": "以最小改動完成當前任務。" }, "verify": { "title": "審查交付", "question": "價值成立，風險關閉了嗎？", "purpose": "評審、測試並形成可交付結果。" } }
+      }
+    },
     "vibeCoding": {
       "title": "Vibe Coding",
       "description": "按工作階段組織 Skill 與監督機制。它指導這次任務怎麼推進，不改變 Agent 投放，也不會常駐 Prompt。"

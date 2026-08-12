@@ -19,15 +19,97 @@
   "decks": {
     "eyebrow": "Work deck · Value slice",
     "libraryTitle": "Decks",
-    "libraryDescription": "Turn managed Skills into strategies for real work. Open an existing deck, or describe a goal and let a local Agent draft one from this library.",
-    "newDeck": "New Deck",
+    "libraryDescription": "Scanned {{count}} managed Skills and organized them into editable work decks. See what you already have, then ask AI for a new direction when needed.",
+    "newDeck": "Ask AI to build a deck",
     "builtIn": "Built-in",
     "aiBuilt": "AI-curated",
     "deckMeta": "{{stages}} stages · {{skills}} Skill slots",
     "customMeta": "{{skills}} Skills · {{gaps}} gaps",
+    "discoveredTitle": "Capabilities found in your library",
+    "scannedLibrary": "Scanned {{count}} Skills",
+    "discovered": "Library discovery",
+    "editable": "Editable deck",
+    "coverage": "{{covered}}/{{total}} stages covered",
+    "skillCount": "{{count}} Skill cards",
+    "gapCount": "{{count}} gaps",
+    "solves": "What this deck solves",
+    "supervision": "Supervision",
+    "stopLine": "Stop line",
+    "metrics": { "skills": "Skill cards", "coverage": "Stage coverage", "gaps": "Gaps" },
+    "editDeck": "Edit deck",
+    "finishEditing": "Finish editing",
+    "emptyStage": "No suitable Skill yet. Edit this deck to add one.",
+    "noDescription": "No clear description for this Skill.",
+    "openSkill": "Open Skill details",
+    "reasons": { "matched": "Name and description match “{{stage}}”", "added": "Added by you to this stage" },
+    "editor": {
+      "title": "Adjust this deck",
+      "description": "Adding or removing changes only the deck relationship, never the Skill itself.",
+      "search": "Search the library to add a Skill…",
+      "reset": "Reset discovery"
+    },
     "back": "Back to decks",
     "missingSkill": "Skill no longer in library",
     "gaps": "Capability gaps",
+    "catalog": {
+      "business": {
+        "title": "Business & Operations", "description": "Move from demand and market evidence to business judgment.",
+        "outcome": "Identify real opportunities and form actionable judgments from customer, market, and financial evidence.",
+        "supervision": "Separate facts, assumptions, and wishes. Challenge revenue logic, costs, and irreversible risks.",
+        "stopRule": "Stop writing strategy once the customer, testable demand, and smallest business experiment are clear.",
+        "stages": {
+          "opportunity": { "title": "Find opportunity", "question": "Whose problem is worth solving?", "purpose": "Identify demand, customers, and market change." },
+          "evidence": { "title": "Build evidence", "question": "Does the judgment have evidence?", "purpose": "Verify competition, deals, and financial conditions." },
+          "decision": { "title": "Make decision", "question": "Are the next action and cost clear?", "purpose": "Converge on a choice and challenge key assumptions." }
+        }
+      },
+      "research": {
+        "title": "Research & Intelligence", "description": "Frame questions, find evidence, compare, and form credible conclusions.",
+        "outcome": "Turn ambiguity into researchable questions, preserve source chains, and produce conclusions others can challenge.",
+        "supervision": "Check independence, recency, and counter-evidence. One search result is not a conclusion.",
+        "stopRule": "Stop when new sources no longer change the core judgment and major counterexamples are handled.",
+        "stages": {
+          "question": { "title": "Frame question", "question": "What must be answered?", "purpose": "Define scope, criteria, and unknowns." },
+          "collect": { "title": "Collect evidence", "question": "Where is the evidence from?", "purpose": "Search diverse sources and keep traceable evidence." },
+          "synthesize": { "title": "Synthesize", "question": "Can the conclusion survive challenge?", "purpose": "Compare, distill, and state bounded conclusions." }
+        }
+      },
+      "redTeam": {
+        "title": "Red Team & Risk", "description": "Attack plans to uncover blind spots, security risks, and failure paths.",
+        "outcome": "Expose hidden risks and untested assumptions with the strongest counterexamples before delivery.",
+        "supervision": "Raise evidence-backed risks; do not let endless critique block delivery.",
+        "stopRule": "Stop when high-risk failures are mitigated or accepted and remaining issues do not change the decision.",
+        "stages": {
+          "challenge": { "title": "Challenge assumptions", "question": "Where is this most likely wrong?", "purpose": "Attack goals, logic, and dependencies." },
+          "inspect": { "title": "Inspect risks", "question": "How could failure happen?", "purpose": "Inspect security, quality, and system boundaries." },
+          "verify": { "title": "Verify fixes", "question": "Is the risk truly closed?", "purpose": "Retest critical paths and record residual risk." }
+        }
+      },
+      "productDesign": {
+        "title": "Product Design", "description": "Move from user problem to a clear, usable, testable product experience.",
+        "outcome": "Define what the product is, turn needs into information architecture and interaction, then test value through a real interface.",
+        "supervision": "Every interface element must serve a user task. Review overlapping concepts, hierarchy, and unnecessary features.",
+        "stopRule": "Stop adding features once users understand the page, complete the core task, and expose the next real problem.",
+        "stages": {
+          "define": { "title": "Define problem", "question": "What is this product to the user?", "purpose": "Clarify users, context, needs, and product essence." },
+          "explore": { "title": "Explore structure", "question": "How should information and actions fit?", "purpose": "Compare directions and form an interaction skeleton." },
+          "make": { "title": "Make interface", "question": "Can users operate it directly?", "purpose": "Turn the structure into a working prototype." },
+          "review": { "title": "Validate experience", "question": "Can users understand and finish?", "purpose": "Check density, hierarchy, copy, and friction." }
+        }
+      },
+      "vibeCoding": {
+        "title": "Vibe Coding", "description": "Understand code, converge, build small, and supervise overengineering.",
+        "outcome": "Help people and Agents solve code tasks together: investigate first, make the smallest change, and continuously check overengineering.",
+        "supervision": "At every stage check IPO: sufficient input, minimal process, verifiable output. Use independent review for counterexamples.",
+        "stopRule": "Stop adding abstractions and automation when the current problem is solved, verified, and no new user-value evidence exists.",
+        "stages": {
+          "understand": { "title": "Understand", "question": "Are problem and root cause clear?", "purpose": "Read code, reproduce, and separate symptoms from root cause." },
+          "frame": { "title": "Frame", "question": "Are the smallest solution and boundary clear?", "purpose": "Define scope, data flow, and verification." },
+          "build": { "title": "Build small", "question": "Can every step be verified?", "purpose": "Complete the task with the smallest change." },
+          "verify": { "title": "Review & ship", "question": "Did value hold and risks close?", "purpose": "Review, test, and produce a deliverable." }
+        }
+      }
+    },
     "vibeCoding": {
       "title": "Vibe Coding",
       "description": "Organizes skills and checkpoints by work stage. It guides this task without changing agent deployments or staying in every prompt."

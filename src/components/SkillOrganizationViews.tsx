@@ -3,10 +3,8 @@ import {
   Bot,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   CircleAlert,
   GitCompareArrows,
-  Layers3,
   Link2,
   Loader2,
   RefreshCw,
@@ -31,14 +29,6 @@ interface SharedProps {
   onOpenSkill: (skillId: string) => void;
 }
 
-interface OrganizeProps extends SharedProps {
-  relationshipGroups: SkillRelationGroup[];
-  issues: SkillIssue[];
-  resolvedIds: Set<string>;
-  onShowIssues: () => void;
-  onUndoDecision: (caseKey: string) => void;
-}
-
 interface IssuesProps extends SharedProps {
   issues: SkillIssue[];
   resolvedIds: Set<string>;
@@ -53,6 +43,7 @@ interface IssuesProps extends SharedProps {
   refreshing: boolean;
   onRefresh: () => void;
   onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
+  onUndoDecision: (caseKey: string) => void;
 }
 
 export type OrganizationExecutionMode = "codex" | "claude_code" | "hermes" | "copy_prompt";
@@ -153,94 +144,6 @@ function relationCopy(kind: SkillRelationGroup["kind"], t: ReturnType<typeof use
   };
 }
 
-export function SkillOrganizeView({
-  skills,
-  relationshipGroups,
-  issues,
-  resolvedIds,
-  search,
-  onShowIssues,
-  onUndoDecision,
-}: OrganizeProps) {
-  const { t } = useTranslation();
-  const confirmedRelationshipGroups = relationshipGroups.filter((group) => resolvedIds.has(group.id));
-  const pendingIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
-  const exactCandidates = pendingIssues.filter((issue) => issue.kind === "exact_duplicate" || issue.kind === "content_alias");
-  const nameCollisions = pendingIssues.filter((issue) => issue.kind === "name_collision");
-  const formatIssues = pendingIssues.filter((issue) => issue.kind === "format_health");
-  const sourceIssues = pendingIssues.filter((issue) => ["source_missing", "sync_conflict", "read_error"].includes(issue.kind));
-  const affectedSkillIds = new Set(pendingIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)));
-  const healthySkills = Math.max(0, skills.length - affectedSkillIds.size);
-  const checks = [
-    { id: "exact", icon: GitCompareArrows, count: exactCandidates.length, tone: "text-amber-500" },
-    { id: "sameName", icon: Layers3, count: nameCollisions.length, tone: "text-amber-500" },
-    { id: "format", icon: CircleAlert, count: formatIssues.length, tone: "text-rose-500" },
-    { id: "source", icon: Link2, count: sourceIssues.length, tone: "text-rose-500" },
-  ];
-
-  return (
-    <div className="space-y-3 pb-8">
-      <div className="flex items-center justify-between rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
-        <div>
-          <h2 className="text-[13px] font-semibold text-primary">{t("mySkills.organization.healthTitle")}</h2>
-          <p className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.healthIntro")}</p>
-        </div>
-        <div className="text-right"><div className="text-[18px] font-semibold text-primary">{healthySkills}/{skills.length}</div><div className="text-[10px] text-faint">{t("mySkills.organization.healthySkills")}</div></div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {checks.map((check) => {
-          const Icon = check.icon;
-          return <button key={check.id} type="button" onClick={onShowIssues} className="app-panel min-h-[104px] p-3 text-left transition-colors hover:bg-surface-hover"><div className="flex items-center justify-between"><Icon className={cn("h-4 w-4", check.tone)} /><ChevronRight className="h-3.5 w-3.5 text-faint" /></div><div className="mt-3 text-[18px] font-semibold text-primary">{check.count}</div><div className="text-[11px] font-medium text-secondary">{t(`mySkills.organization.healthChecks.${check.id}.title`)}</div><div className="mt-0.5 text-[10px] text-faint">{t(`mySkills.organization.healthChecks.${check.id}.hint`)}</div></button>;
-        })}
-      </div>
-
-      {confirmedRelationshipGroups.length > 0 && (
-        <section className="space-y-3 pt-2">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-[14px] font-semibold text-primary">
-                {t("mySkills.organization.confirmedRelations", { count: confirmedRelationshipGroups.length })}
-              </h2>
-              <p className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.confirmedRelationsHint")}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-            {confirmedRelationshipGroups
-              .filter((group) => matchesSearch(group.skills, group.label, search))
-              .map((group) => (
-                <article key={group.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-[13px] font-semibold text-primary">{group.label}</h3>
-                        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
-                          {t("mySkills.organization.skillCount", { count: group.skills.length })}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-muted">
-                        {group.kind === "name_collision"
-                          ? t("mySkills.organization.confirmedKeepGrouped")
-                          : t("mySkills.organization.confirmedRelation")}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onUndoDecision(group.id)}
-                      className="app-button-secondary shrink-0"
-                    >
-                      {t("mySkills.organization.undoDecision")}
-                    </button>
-                  </div>
-                </article>
-              ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
-
 function issueCopy(kind: SkillIssue["kind"], t: ReturnType<typeof useTranslation>["t"]) {
   if (kind === "format_health") return {
     title: t("mySkills.organization.issues.formatHealth.title"),
@@ -296,6 +199,7 @@ export function SkillIssuesView({
   refreshing,
   onRefresh,
   onDecide,
+  onUndoDecision,
   search,
   displayNames,
   tools,
@@ -313,6 +217,7 @@ export function SkillIssuesView({
     return () => window.removeEventListener("mousedown", close);
   }, [executionMenuOpen]);
   const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
+  const resolvedIssues = issues.filter((issue) => resolvedIds.has(issue.id));
   const visibleIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
     return matchesSearch(issue.skills, copy.title, search);
@@ -601,6 +506,32 @@ export function SkillIssuesView({
             );
           })}
         </div>
+      )}
+
+      {resolvedIssues.length > 0 && (
+        <section className="space-y-2 pt-2">
+          <div>
+            <h2 className="text-[13px] font-semibold text-primary">
+              {t("mySkills.organization.confirmedRelations", { count: resolvedIssues.length })}
+            </h2>
+            <p className="mt-0.5 text-[10.5px] text-muted">{t("mySkills.organization.confirmedRelationsHint")}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+            {resolvedIssues.map((issue) => (
+              <article key={issue.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2.5">
+                <div className="min-w-0">
+                  <h3 className="truncate text-[12px] font-semibold text-primary">{issueCopy(issue.kind, t).title}</h3>
+                  <p className="mt-0.5 truncate text-[10.5px] text-muted">
+                    {issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ")}
+                  </p>
+                </div>
+                <button type="button" onClick={() => onUndoDecision(issue.id)} className="app-button-secondary shrink-0">
+                  {t("mySkills.organization.undoDecision")}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

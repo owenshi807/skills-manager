@@ -42,7 +42,7 @@ import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import { BatchTagDialog } from "../components/BatchTagDialog";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { CardActionMenu } from "../components/CardActionMenu";
-import { SkillIssuesView, SkillOrganizeView } from "../components/SkillOrganizationViews";
+import { SkillIssuesView } from "../components/SkillOrganizationViews";
 import type {
   OrganizationExecutionMode,
   OrganizationExecutionOption,
@@ -170,7 +170,7 @@ export function MySkills() {
   } = useApp();
   const viewedPreset = CARD_MASTER_PRODUCT_SURFACE.presets ? upstreamViewedPreset : null;
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [libraryView, setLibraryView] = useState<"all" | "organize" | "issues">("all");
+  const [libraryView, setLibraryView] = useState<"all" | "issues">("all");
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
@@ -1433,7 +1433,6 @@ export function MySkills() {
       <div className="flex items-center gap-1 border-b border-border-subtle">
         {([
           { id: "all", icon: LayoutGrid, count: skills.length },
-          { id: "organize", icon: Layers, count: null },
           { id: "issues", icon: CircleAlert, count: unresolvedOrganizationCount },
         ] as const).map((item) => {
           const Icon = item.icon;
@@ -1623,20 +1622,7 @@ export function MySkills() {
         />
       )}
 
-      {libraryView === "organize" ? (
-        <SkillOrganizeView
-          skills={skills}
-          relationshipGroups={relationGroups}
-          issues={organizationIssues}
-          resolvedIds={resolvedOrganizationIds}
-          search={search}
-          displayNames={skillDisplayNames}
-          tools={tools}
-          onOpenSkill={openSkillDetailById}
-          onShowIssues={() => setLibraryView("issues")}
-          onUndoDecision={undoOrganizationDecision}
-        />
-      ) : libraryView === "issues" ? (
+      {libraryView === "issues" ? (
         <SkillIssuesView
           skills={skills}
           issues={organizationIssues}
@@ -1655,6 +1641,7 @@ export function MySkills() {
           refreshing={refreshingOrganization}
           onRefresh={refreshOrganizationFacts}
           onDecide={decideOrganizationIssue}
+          onUndoDecision={undoOrganizationDecision}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}

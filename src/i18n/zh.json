@@ -19,15 +19,105 @@
   "decks": {
     "eyebrow": "工作牌组 · 价值切片",
     "libraryTitle": "牌组",
-    "libraryDescription": "把技能库里的 Skill 组合成面向真实工作的策略。打开已有牌组，或者把目标告诉 AI，让它从当前技能库中自动组一副可审查的牌。",
-    "newDeck": "新建牌组",
+    "libraryDescription": "已扫描技能库中的 {{count}} 个 Skill，并按工作目的整理成可编辑牌组。先看见已有能力；需要新方向时，再让 AI 帮你组牌。",
+    "newDeck": "告诉 AI 组一副牌",
     "builtIn": "内置牌组",
     "aiBuilt": "AI 组牌",
     "deckMeta": "{{stages}} 个阶段 · {{skills}} 个 Skill 位",
     "customMeta": "{{skills}} 个 Skill · {{gaps}} 个缺口",
+    "discoveredTitle": "从技能库发现的能力",
+    "scannedLibrary": "已扫描 {{count}} 个 Skill",
+    "discovered": "技能库发现",
+    "editable": "可编辑牌组",
+    "coverage": "覆盖 {{covered}}/{{total}} 阶段",
+    "skillCount": "{{count}} 张技能牌",
+    "gapCount": "{{count}} 个缺口",
+    "solves": "这组解决什么",
+    "supervision": "监督机制",
+    "stopLine": "停止线",
+    "metrics": { "skills": "技能牌", "coverage": "阶段覆盖", "gaps": "缺口" },
+    "editDeck": "编辑牌组",
+    "finishEditing": "完成编辑",
+    "emptyStage": "这个阶段还没有合适的 Skill。可以进入编辑补牌。",
+    "noDescription": "这个 Skill 暂无清晰说明。",
+    "openSkill": "查看 Skill 详情",
+    "reasons": {
+      "matched": "技能名称与说明符合“{{stage}}”",
+      "added": "由你加入这个阶段"
+    },
+    "editor": {
+      "title": "调整这副牌",
+      "description": "添加或移除只改变牌组关系，不修改 Skill 本身。",
+      "search": "搜索技能库，添加 Skill…",
+      "reset": "恢复扫描结果"
+    },
     "back": "返回牌组",
     "missingSkill": "Skill 已不在库中",
     "gaps": "能力缺口",
+    "catalog": {
+      "business": {
+        "title": "商业与经营",
+        "description": "从需求、市场和经营证据走向商业判断。",
+        "outcome": "帮助用户识别真实商业机会，用市场、客户与财务证据形成可执行判断。",
+        "supervision": "区分事实、假设与愿望；让反方审查收入逻辑、成本和不可逆风险。",
+        "stopRule": "已有明确客户、可验证需求和最小商业实验时，停止继续写宏大策略。",
+        "stages": {
+          "opportunity": { "title": "发现机会", "question": "谁的问题值得解决？", "purpose": "识别需求、客户和市场变化。" },
+          "evidence": { "title": "建立证据", "question": "商业判断有数据支撑吗？", "purpose": "验证竞争、交易和财务条件。" },
+          "decision": { "title": "形成决策", "question": "下一步行动和代价清楚吗？", "purpose": "收敛战略选择并挑战关键假设。" }
+        }
+      },
+      "research": {
+        "title": "调研与信息获取",
+        "description": "提出问题、寻找证据、比较并形成可信结论。",
+        "outcome": "把模糊问题转成可调查的问题，建立来源链，最后产出能被质疑和复查的结论。",
+        "supervision": "检查来源独立性、时效性和反证；不让单一搜索结果冒充结论。",
+        "stopRule": "新增来源不再改变核心判断，且主要反例已处理时停止搜索。",
+        "stages": {
+          "question": { "title": "定义问题", "question": "真正需要回答什么？", "purpose": "明确范围、判断标准和未知项。" },
+          "collect": { "title": "收集证据", "question": "证据来自哪里、可信度如何？", "purpose": "搜索不同来源并保存可追溯证据。" },
+          "synthesize": { "title": "综合判断", "question": "结论能经得住反证吗？", "purpose": "比较、压缩并输出有边界的结论。" }
+        }
+      },
+      "redTeam": {
+        "title": "红队与风险审查",
+        "description": "主动攻击方案，发现盲点、安全问题和失败路径。",
+        "outcome": "在交付前让方案遭遇最强反例，找出隐藏风险和未经验证的关键假设。",
+        "supervision": "红队只能暴露证据充分的风险；不能用无止境挑错阻塞交付。",
+        "stopRule": "高风险失败已有缓解或被明确接受，剩余问题不改变决策时停止审查。",
+        "stages": {
+          "challenge": { "title": "挑战假设", "question": "最可能错在哪里？", "purpose": "用反例攻击目标、逻辑和依赖。" },
+          "inspect": { "title": "检查风险", "question": "失败会怎样发生？", "purpose": "检查安全、质量和系统边界。" },
+          "verify": { "title": "验证修复", "question": "风险真的被关闭了吗？", "purpose": "复测关键路径并记录剩余风险。" }
+        }
+      },
+      "productDesign": {
+        "title": "Product Design",
+        "description": "从用户问题走向清晰、可用、可验证的产品体验。",
+        "outcome": "帮助用户定义产品是什么，把需求转成信息架构和交互，再用真实界面验证理解与价值。",
+        "supervision": "每个界面元素必须服务用户任务；审查概念重叠、信息层级和不必要功能。",
+        "stopRule": "用户能理解页面、完成核心任务并暴露下一条真实问题时，先停止扩功能。",
+        "stages": {
+          "define": { "title": "定义问题", "question": "产品在用户心里是什么？", "purpose": "澄清用户、场景、需求和产品本质。" },
+          "explore": { "title": "探索结构", "question": "信息和动作如何组织？", "purpose": "比较方向，形成信息架构和交互骨架。" },
+          "make": { "title": "做出界面", "question": "用户能直接使用吗？", "purpose": "把确认的结构变成可操作原型。" },
+          "review": { "title": "验证体验", "question": "用户看懂并完成任务了吗？", "purpose": "检查密度、层级、文案和交互摩擦。" }
+        }
+      },
+      "vibeCoding": {
+        "title": "Vibe Coding",
+        "description": "理解代码、收敛方案、小步实现并监督过度工程化。",
+        "outcome": "帮助人与 Agent 共同完成代码任务：先查清问题，再做最小实现，并持续检查是否正在过度工程化。",
+        "supervision": "每阶段回答 IPO：输入是否充分、过程是否最小、输出是否可验证；用独立评审寻找反例。",
+        "stopRule": "已经解决当前问题、验证通过且没有新的用户价值证据时，停止增加抽象和自动化。",
+        "stages": {
+          "understand": { "title": "理解问题", "question": "问题和根因清楚了吗？", "purpose": "查代码、复现问题，分清症状与根因。" },
+          "frame": { "title": "收敛方案", "question": "最小解与边界清楚了吗？", "purpose": "定义范围、数据流和验证方式。" },
+          "build": { "title": "小步实现", "question": "每一步都能验证吗？", "purpose": "以最小改动完成当前任务。" },
+          "verify": { "title": "审查交付", "question": "价值成立，风险关闭了吗？", "purpose": "评审、测试并形成可交付结果。" }
+        }
+      }
+    },
     "vibeCoding": {
       "title": "Vibe Coding",
       "description": "按工作阶段组织 Skill 与监督机制。它指导这次任务怎么推进，不改变 Agent 投放，也不会常驻 Prompt。"
