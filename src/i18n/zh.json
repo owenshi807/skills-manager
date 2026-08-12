@@ -5,6 +5,7 @@
   "sidebar": {
     "dashboard": "Dashboard",
     "mySkills": "技能库",
+    "decks": "牌组",
     "globalWorkspace": "全局工作区",
     "lobsterAgents": "龙虾 Agent",
     "installSkills": "安装 Skills",
@@ -14,6 +15,47 @@
     "projects": "项目工作区",
     "addProject": "关联项目",
     "settings": "设置"
+  },
+  "decks": {
+    "eyebrow": "工作牌组 · 价值切片",
+    "webCoding": {
+      "title": "Web Coding",
+      "description": "按工作阶段组织 Skill 与监督机制。它指导这次任务怎么推进，不改变 Agent 投放，也不会常驻 Prompt。"
+    },
+    "types": { "skill": "Skill", "checkpoint": "监督" },
+    "status": {
+      "ready": "技能库中可用",
+      "missing": "未独立纳管",
+      "ambiguous": "{{count}} 个候选待整理",
+      "builtIn": "牌组内置检查点"
+    },
+    "stats": { "ready": "可直接使用", "gaps": "缺口 / 冲突", "library": "技能库总量" },
+    "copyPrompt": "复制给 Agent",
+    "promptCopied": "牌组指引已复制；粘贴给本次工作的 Agent 即可",
+    "stopRule": {
+      "title": "停止线：先交付最小可验证结果",
+      "description": "每加一层架构、抽象或自动化，都要说明它解决的当前失败；否则删除或后置。"
+    },
+    "boundaryNote": "当前是只读牌组 v0：使用真实技能库核对可用性，缺口直接暴露。未创建新 Skill、未自动投放、未执行工作流。",
+    "stages": {
+      "understand": { "title": "理解问题", "question": "问题和根因清楚了吗？" },
+      "frame": { "title": "收敛方案", "question": "最小解与边界清楚了吗？" },
+      "build": { "title": "小步实现", "question": "每步都能验证吗？" },
+      "supervise": { "title": "监督纠偏", "question": "是否正在过度工程化？" },
+      "verify": { "title": "验证交付", "question": "用户价值真的成立吗？" }
+    },
+    "cards": {
+      "brainstorming": { "title": "brainstorming", "purpose": "先展开目标、约束与备选路径，再收敛。" },
+      "investigate": { "title": "investigate", "purpose": "读代码、复现 Bug、找到根因；不猜修复。" },
+      "gstack": { "title": "gstack", "purpose": "根据任务路由计划、实现、评审与交付 Skill。" },
+      "planEngReview": { "title": "plan-eng-review", "purpose": "锁定架构、数据流、边界与测试，不扩无关范围。" },
+      "designHtml": { "title": "design-html", "purpose": "把已确认方案做成可用 Web 界面。" },
+      "tdd": { "title": "test-driven-development", "purpose": "用失败测试约束最小实现，防止盲目扩建。" },
+      "ipo": { "title": "IPO Scope Check", "purpose": "Input 是否充分；Process 是否最小；Output 是否可验；现在能否停止。" },
+      "adversarial": { "title": "adversarial-review", "purpose": "用反例、FMEA 与独立模型找隐藏失败路径。" },
+      "designReview": { "title": "design-review", "purpose": "检查信息层级、密度、可读性与交互摩擦。" },
+      "ship": { "title": "ship", "purpose": "验证、提交、评审并形成可交付结果。" }
+    }
   },
   "organize": {
     "eyebrow": "基础整理 · 第 1 步",

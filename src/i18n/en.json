@@ -5,6 +5,7 @@
   "sidebar": {
     "dashboard": "Dashboard",
     "mySkills": "Library",
+    "decks": "Decks",
     "globalWorkspace": "Global Workspace",
     "lobsterAgents": "Lobster Agents",
     "installSkills": "Install Skills",
@@ -14,6 +15,47 @@
     "projects": "Project Workspaces",
     "addProject": "Link Project",
     "settings": "Settings"
+  },
+  "decks": {
+    "eyebrow": "Work deck · Value slice",
+    "webCoding": {
+      "title": "Web Coding",
+      "description": "Organizes skills and checkpoints by work stage. It guides this task without changing agent deployments or staying in every prompt."
+    },
+    "types": { "skill": "Skill", "checkpoint": "Check" },
+    "status": {
+      "ready": "Ready in library",
+      "missing": "Not managed alone",
+      "ambiguous": "{{count}} candidates to organize",
+      "builtIn": "Deck checkpoint"
+    },
+    "stats": { "ready": "Ready to use", "gaps": "Gaps / conflicts", "library": "Library total" },
+    "copyPrompt": "Copy for Agent",
+    "promptCopied": "Deck guide copied. Paste it into the agent handling this task.",
+    "stopRule": {
+      "title": "Stop rule: ship the smallest verifiable result first",
+      "description": "Every new abstraction, architecture layer, or automation must name the current failure it fixes. Otherwise remove or defer it."
+    },
+    "boundaryNote": "Read-only deck v0: availability is checked against the real library and gaps stay visible. It creates no skills, deploys nothing, and runs no workflow.",
+    "stages": {
+      "understand": { "title": "Understand", "question": "Are the problem and root cause clear?" },
+      "frame": { "title": "Frame", "question": "Are the smallest solution and boundary clear?" },
+      "build": { "title": "Build small", "question": "Can every step be verified?" },
+      "supervise": { "title": "Supervise", "question": "Are we overengineering?" },
+      "verify": { "title": "Verify & ship", "question": "Did user value actually hold?" }
+    },
+    "cards": {
+      "brainstorming": { "title": "brainstorming", "purpose": "Expand goals, constraints, and paths before converging." },
+      "investigate": { "title": "investigate", "purpose": "Read code, reproduce bugs, find root cause; do not guess fixes." },
+      "gstack": { "title": "gstack", "purpose": "Route planning, implementation, review, and shipping skills by task." },
+      "planEngReview": { "title": "plan-eng-review", "purpose": "Lock architecture, data flow, boundaries, and tests without scope drift." },
+      "designHtml": { "title": "design-html", "purpose": "Turn an approved direction into a usable web interface." },
+      "tdd": { "title": "test-driven-development", "purpose": "Use failing tests to constrain the smallest implementation." },
+      "ipo": { "title": "IPO Scope Check", "purpose": "Is Input sufficient, Process minimal, Output verifiable, and can we stop now?" },
+      "adversarial": { "title": "adversarial-review", "purpose": "Use counterexamples, FMEA, and an independent model to find hidden failures." },
+      "designReview": { "title": "design-review", "purpose": "Check hierarchy, density, readability, and interaction friction." },
+      "ship": { "title": "ship", "purpose": "Verify, commit, review, and produce a deliverable result." }
+    }
   },
   "organize": {
     "eyebrow": "Foundation · Step 1",
