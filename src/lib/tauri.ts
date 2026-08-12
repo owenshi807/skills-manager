@@ -103,6 +103,20 @@ export interface OrganizationAgentTaskResult {
   assessments: OrganizationAgentAssessment[];
 }
 
+export interface DeckSuggestionCard {
+  skill_id: string;
+  stage: string;
+  role: string;
+  reason: string;
+}
+
+export interface DeckSuggestion {
+  title: string;
+  summary: string;
+  cards: DeckSuggestionCard[];
+  gaps: string[];
+}
+
 export interface OrganizationAgentAssessmentRecord {
   case_key: string;
   case_revision: string;
@@ -562,6 +576,11 @@ export const getSettings = (key: string) =>
 
 export const setSettings = (key: string, value: string) =>
   invoke<void>("set_settings", { key, value });
+
+export const suggestDeckFromLibrary = (goal: string, agentKey: string) =>
+  invoke<DeckSuggestion>("suggest_deck_from_library", {
+    request: { goal, agent_key: agentKey },
+  });
 
 export const getCentralRepoPath = () =>
   invoke<string>("get_central_repo_path");

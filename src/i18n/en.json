@@ -18,9 +18,28 @@
   },
   "decks": {
     "eyebrow": "Work deck · Value slice",
-    "webCoding": {
-      "title": "Web Coding",
+    "libraryTitle": "Decks",
+    "libraryDescription": "Turn managed Skills into strategies for real work. Open an existing deck, or describe a goal and let a local Agent draft one from this library.",
+    "newDeck": "New Deck",
+    "builtIn": "Built-in",
+    "aiBuilt": "AI-curated",
+    "deckMeta": "{{stages}} stages · {{skills}} Skill slots",
+    "customMeta": "{{skills}} Skills · {{gaps}} gaps",
+    "back": "Back to decks",
+    "missingSkill": "Skill no longer in library",
+    "gaps": "Capability gaps",
+    "vibeCoding": {
+      "title": "Vibe Coding",
       "description": "Organizes skills and checkpoints by work stage. It guides this task without changing agent deployments or staying in every prompt."
+    },
+    "creator": {
+      "title": "Tell AI what you want to accomplish",
+      "description": "Card Master sends only names and summaries from this library to your chosen local Agent. Results must reference real Skill IDs and never deploy automatically.",
+      "placeholder": "For example: research a new product market with search, interview analysis, competitor comparison, evidence verification, and a final challenge pass.",
+      "generate": "Build from library",
+      "generating": "Analyzing the Skill library…",
+      "created": "Deck created with {{count}} Skills",
+      "failed": "AI deck creation failed"
     },
     "types": { "skill": "Skill", "checkpoint": "Check" },
     "status": {
@@ -332,6 +351,15 @@
       "placed": "Deployed"
     },
     "organization": {
+      "healthTitle": "Library health",
+      "healthIntro": "Foundation governance only: duplicates, format, provenance, and projection integrity. Work strategy belongs in the separate Decks area.",
+      "healthySkills": "not in pending events",
+      "healthChecks": {
+        "exact": { "title": "Duplicate-content candidates", "hint": "Equal content still needs source proof" },
+        "sameName": { "title": "Same name, different content", "hint": "Separate revisions, variants, and purposes" },
+        "format": { "title": "Format health", "hint": "Validate SKILL.md structure and required fields" },
+        "source": { "title": "Source and projection", "hint": "Find missing, conflicted, or unreadable state" }
+      },
       "tabs": {
         "all": "All",
         "organize": "Organize",

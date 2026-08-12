@@ -22,10 +22,10 @@ export interface DeckDefinition {
   stages: DeckStageDefinition[];
 }
 
-export const WEB_CODING_DECK: DeckDefinition = {
-  id: "web-coding-v0",
-  titleKey: "decks.webCoding.title",
-  descriptionKey: "decks.webCoding.description",
+export const VIBE_CODING_DECK: DeckDefinition = {
+  id: "vibe-coding-v0",
+  titleKey: "decks.vibeCoding.title",
+  descriptionKey: "decks.vibeCoding.description",
   stages: [
     {
       id: "understand",

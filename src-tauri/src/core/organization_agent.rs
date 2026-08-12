@@ -7,6 +7,7 @@ use super::error::AppError;
 
 pub const METHOD_VERSION: &str = "card-master-six-gates-v1";
 pub const OUTPUT_SCHEMA_VERSION: u32 = 1;
+pub const DECK_METHOD_VERSION: &str = "card-master-deck-builder-v1";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AgentCapability {
@@ -44,6 +45,30 @@ struct AgentEnvelope {
     schema_version: u32,
     method_version: String,
     assessments: Vec<OrganizationAgentAssessment>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeckSuggestionCard {
+    pub skill_id: String,
+    pub stage: String,
+    pub role: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeckSuggestion {
+    pub title: String,
+    pub summary: String,
+    pub cards: Vec<DeckSuggestionCard>,
+    #[serde(default)]
+    pub gaps: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeckSuggestionEnvelope {
+    schema_version: u32,
+    method_version: String,
+    deck: DeckSuggestion,
 }
 
 fn agent_definition(key: &str) -> Option<(&'static str, &'static str)> {
@@ -257,6 +282,49 @@ pub fn parse_assessments(
     Ok(envelope.assessments)
 }
 
+pub fn parse_deck_suggestion(
+    raw: &str,
+    allowed_skill_ids: &std::collections::HashSet<String>,
+) -> Result<DeckSuggestion, AppError> {
+    let envelope: DeckSuggestionEnvelope = serde_json::from_str(json_body(raw))
+        .map_err(|error| AppError::invalid_input(format!("Agent returned invalid deck JSON: {error}")))?;
+    if envelope.schema_version != OUTPUT_SCHEMA_VERSION
+        || envelope.method_version != DECK_METHOD_VERSION
+    {
+        return Err(AppError::invalid_input(
+            "Agent returned an unsupported deck schema",
+        ));
+    }
+    let deck = envelope.deck;
+    if deck.title.trim().is_empty()
+        || deck.title.chars().count() > 80
+        || deck.summary.trim().is_empty()
+        || deck.summary.chars().count() > 400
+        || deck.cards.is_empty()
+        || deck.cards.len() > 20
+        || deck.gaps.len() > 12
+    {
+        return Err(AppError::invalid_input("Agent returned an invalid deck"));
+    }
+    let mut seen = std::collections::HashSet::new();
+    for card in &deck.cards {
+        if !allowed_skill_ids.contains(&card.skill_id)
+            || !seen.insert(card.skill_id.as_str())
+            || card.stage.trim().is_empty()
+            || card.stage.chars().count() > 60
+            || card.role.trim().is_empty()
+            || card.role.chars().count() > 100
+            || card.reason.trim().is_empty()
+            || card.reason.chars().count() > 300
+        {
+            return Err(AppError::invalid_input(
+                "Agent selected an unknown, duplicate, or invalid Skill",
+            ));
+        }
+    }
+    Ok(deck)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,5 +342,19 @@ mod tests {
     fn rejects_stale_or_unknown_taxonomy() {
         let raw = r#"{"schema_version":1,"method_version":"card-master-six-gates-v1","assessments":[{"case_id":"c1","case_revision":"old","relation_hypothesis":"duplicate","difference_summary":"x","evidence":[],"behavior_eval_required":false,"suggested_actions":["delete"],"confidence":1.0}]}"#;
         assert!(parse_assessments(raw, &[("c1".to_string(), "r1".to_string())]).is_err());
+    }
+
+    #[test]
+    fn parses_deck_only_from_allowed_library_skills() {
+        let raw = r#"{"schema_version":1,"method_version":"card-master-deck-builder-v1","deck":{"title":"Research","summary":"Find and verify facts","cards":[{"skill_id":"s1","stage":"Investigate","role":"Find evidence","reason":"Matches the requested research workflow"}],"gaps":[]}}"#;
+        let allowed = std::collections::HashSet::from(["s1".to_string()]);
+        let deck = parse_deck_suggestion(raw, &allowed).unwrap();
+        assert_eq!(deck.cards[0].skill_id, "s1");
+    }
+
+    #[test]
+    fn rejects_deck_with_invented_skill() {
+        let raw = r#"{"schema_version":1,"method_version":"card-master-deck-builder-v1","deck":{"title":"Research","summary":"Find facts","cards":[{"skill_id":"invented","stage":"Research","role":"Search","reason":"Looks useful"}],"gaps":[]}}"#;
+        assert!(parse_deck_suggestion(raw, &std::collections::HashSet::new()).is_err());
     }
 }

@@ -18,9 +18,28 @@
   },
   "decks": {
     "eyebrow": "工作牌組 · 價值切片",
-    "webCoding": {
-      "title": "Web Coding",
+    "libraryTitle": "牌組",
+    "libraryDescription": "把技能庫裡的 Skill 組合成面向真實工作的策略。打開已有牌組，或者把目標告訴 AI，讓它從目前技能庫中自動組一副可審查的牌。",
+    "newDeck": "新建牌組",
+    "builtIn": "內建牌組",
+    "aiBuilt": "AI 組牌",
+    "deckMeta": "{{stages}} 個階段 · {{skills}} 個 Skill 位",
+    "customMeta": "{{skills}} 個 Skill · {{gaps}} 個缺口",
+    "back": "返回牌組",
+    "missingSkill": "Skill 已不在庫中",
+    "gaps": "能力缺口",
+    "vibeCoding": {
+      "title": "Vibe Coding",
       "description": "按工作階段組織 Skill 與監督機制。它指導這次任務怎麼推進，不改變 Agent 投放，也不會常駐 Prompt。"
+    },
+    "creator": {
+      "title": "告訴 AI 你想完成什麼",
+      "description": "Card Master 只把目前技能庫的名稱與簡介交給你選擇的本機 Agent。結果必須引用真實 Skill ID，不能發明能力，也不會自動投放。",
+      "placeholder": "例如：我要做一次新產品的市場調研，需要搜尋、訪談分析、競品比較、證據核驗和最後的結論挑戰。",
+      "generate": "從技能庫組牌",
+      "generating": "正在分析技能庫…",
+      "created": "牌組已建立，自動放入 {{count}} 個 Skill",
+      "failed": "AI 組牌失敗"
     },
     "types": { "skill": "Skill", "checkpoint": "監督" },
     "status": {
@@ -332,6 +351,15 @@
       "placed": "已投放"
     },
     "organization": {
+      "healthTitle": "技能庫健康",
+      "healthIntro": "這裡只做基礎治理：查重、格式檢查、來源與投放完整性。能力組合與工作策略在獨立的「牌組」中完成。",
+      "healthySkills": "目前未命中待處理事件",
+      "healthChecks": {
+        "exact": { "title": "重複內容候選", "hint": "內容相同仍需確認來源" },
+        "sameName": { "title": "同名不同內容", "hint": "判斷版本、變體或不同用途" },
+        "format": { "title": "格式健康問題", "hint": "檢查 SKILL.md 結構與必填欄位" },
+        "source": { "title": "來源與投放異常", "hint": "檢查缺失、衝突與讀取失敗" }
+      },
       "tabs": {
         "all": "全部",
         "organize": "整理",

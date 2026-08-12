@@ -1,9 +1,9 @@
 import {
   ArrowRight,
   Bot,
-  Boxes,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
   GitCompareArrows,
   Layers3,
@@ -21,8 +21,6 @@ import type {
   ToolInfo,
 } from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
-import type { SkillCapabilityGroup } from "../lib/skillOrganization";
-import { countSkillsInCapabilityGroups } from "../lib/skillOrganization";
 import { cn } from "../utils";
 
 interface SharedProps {
@@ -34,8 +32,8 @@ interface SharedProps {
 }
 
 interface OrganizeProps extends SharedProps {
-  capabilityGroups: SkillCapabilityGroup[];
   relationshipGroups: SkillRelationGroup[];
+  issues: SkillIssue[];
   resolvedIds: Set<string>;
   onShowIssues: () => void;
   onUndoDecision: (caseKey: string) => void;
@@ -157,120 +155,45 @@ function relationCopy(kind: SkillRelationGroup["kind"], t: ReturnType<typeof use
 
 export function SkillOrganizeView({
   skills,
-  capabilityGroups,
   relationshipGroups,
+  issues,
   resolvedIds,
   search,
-  displayNames,
-  tools,
-  onOpenSkill,
   onShowIssues,
   onUndoDecision,
 }: OrganizeProps) {
   const { t } = useTranslation();
-  const groupedSkillCount = countSkillsInCapabilityGroups(capabilityGroups);
   const confirmedRelationshipGroups = relationshipGroups.filter((group) => resolvedIds.has(group.id));
-  const pendingRelationshipCount = relationshipGroups.length - confirmedRelationshipGroups.length;
-  const visibleGroups = capabilityGroups.filter((group) => matchesSearch(
-    group.skills,
-    t(`mySkills.organization.families.${group.labelKey}.label`),
-    search,
-  ));
+  const pendingIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
+  const exactCandidates = pendingIssues.filter((issue) => issue.kind === "exact_duplicate" || issue.kind === "content_alias");
+  const nameCollisions = pendingIssues.filter((issue) => issue.kind === "name_collision");
+  const formatIssues = pendingIssues.filter((issue) => issue.kind === "format_health");
+  const sourceIssues = pendingIssues.filter((issue) => ["source_missing", "sync_conflict", "read_error"].includes(issue.kind));
+  const affectedSkillIds = new Set(pendingIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)));
+  const healthySkills = Math.max(0, skills.length - affectedSkillIds.size);
+  const checks = [
+    { id: "exact", icon: GitCompareArrows, count: exactCandidates.length, tone: "text-amber-500" },
+    { id: "sameName", icon: Layers3, count: nameCollisions.length, tone: "text-amber-500" },
+    { id: "format", icon: CircleAlert, count: formatIssues.length, tone: "text-rose-500" },
+    { id: "source", icon: Link2, count: sourceIssues.length, tone: "text-rose-500" },
+  ];
 
   return (
-    <div className="space-y-4 pb-8">
-      <div className="grid grid-cols-3 gap-2">
-        <div className="app-panel px-4 py-3">
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-muted">
-            <Layers3 className="h-3.5 w-3.5" />
-            {t("mySkills.organization.summary.groups")}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{capabilityGroups.length}</div>
-          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.groupsHint")}</div>
+    <div className="space-y-3 pb-8">
+      <div className="flex items-center justify-between rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
+        <div>
+          <h2 className="text-[13px] font-semibold text-primary">{t("mySkills.organization.healthTitle")}</h2>
+          <p className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.healthIntro")}</p>
         </div>
-        <div className="app-panel px-4 py-3">
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-muted">
-            <Boxes className="h-3.5 w-3.5" />
-            {t("mySkills.organization.summary.grouped")}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{groupedSkillCount} / {skills.length}</div>
-          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.groupedHint")}</div>
-        </div>
-        <button type="button" onClick={onShowIssues} className="app-panel px-4 py-3 text-left transition-colors hover:bg-surface-hover">
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-muted">
-            <CircleAlert className="h-3.5 w-3.5" />
-            {t("mySkills.organization.summary.relationships")}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{pendingRelationshipCount}</div>
-          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.relationshipsHint")}</div>
-        </button>
+        <div className="text-right"><div className="text-[18px] font-semibold text-primary">{healthySkills}/{skills.length}</div><div className="text-[10px] text-faint">{t("mySkills.organization.healthySkills")}</div></div>
       </div>
 
-      <div className="rounded-xl border border-border-subtle bg-surface px-4 py-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-accent-bg p-2 text-accent-light"><Layers3 className="h-4 w-4" /></div>
-          <div>
-            <h2 className="text-[14px] font-semibold text-primary">{t("mySkills.organization.organizeTitle")}</h2>
-            <p className="mt-0.5 max-w-[760px] text-[12px] leading-5 text-muted">
-              {t("mySkills.organization.organizeIntro")}
-            </p>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {checks.map((check) => {
+          const Icon = check.icon;
+          return <button key={check.id} type="button" onClick={onShowIssues} className="app-panel min-h-[104px] p-3 text-left transition-colors hover:bg-surface-hover"><div className="flex items-center justify-between"><Icon className={cn("h-4 w-4", check.tone)} /><ChevronRight className="h-3.5 w-3.5 text-faint" /></div><div className="mt-3 text-[18px] font-semibold text-primary">{check.count}</div><div className="text-[11px] font-medium text-secondary">{t(`mySkills.organization.healthChecks.${check.id}.title`)}</div><div className="mt-0.5 text-[10px] text-faint">{t(`mySkills.organization.healthChecks.${check.id}.hint`)}</div></button>;
+        })}
       </div>
-
-      {visibleGroups.length === 0 ? (
-        <div className="app-panel py-16 text-center text-[13px] text-muted">{t("mySkills.organization.noGroups")}</div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {visibleGroups.map((group) => {
-            const label = t(`mySkills.organization.families.${group.labelKey}.label`);
-            const description = t(`mySkills.organization.families.${group.labelKey}.description`);
-            return (
-              <article key={group.id} className="app-panel flex flex-col p-4 shadow-card">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="truncate text-[15px] font-semibold text-primary">{label}</h3>
-                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-muted">
-                        {t("mySkills.organization.skillCount", { count: group.skills.length })}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[12px] leading-5 text-muted">{description}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-accent-bg px-2 py-1 text-[10px] font-semibold text-accent-light">
-                    {t(`mySkills.organization.groupBasis.${group.basisKey}`)}
-                  </span>
-                </div>
-
-                <div className="mt-3 space-y-1.5">
-                  {group.skills.slice(0, 6).map((skill) => (
-                    <MemberRow
-                      key={skill.id}
-                      skill={skill}
-                      displayName={displayNames.get(skill.id) || skill.name}
-                      tools={tools}
-                      onOpen={() => onOpenSkill(skill.id)}
-                    />
-                  ))}
-                  {group.skills.length > 6 && (
-                    <div className="px-3 py-1 text-[11px] text-faint">
-                      {t("mySkills.organization.moreMembers", { count: group.skills.length - 6 })}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 rounded-lg border border-border-faint bg-bg-secondary/50 px-3 py-2.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-                    {t("mySkills.organization.recommendation")}
-                  </div>
-                  <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">
-                    {t("mySkills.organization.familyRecommendation")}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
 
       {confirmedRelationshipGroups.length > 0 && (
         <section className="space-y-3 pt-2">

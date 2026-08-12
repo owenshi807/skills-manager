@@ -977,6 +977,7 @@ pub fn run() {
             commands::skills::prepare_organization_agent_prompt_cmd,
             commands::skills::run_organization_agent_task,
             commands::skills::get_organization_agent_assessments,
+            commands::skills::suggest_deck_from_library,
             commands::skills::get_skills_for_preset,
             commands::skills::get_skill_document,
             commands::skills::get_source_skill_document,

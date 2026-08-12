@@ -51,7 +51,6 @@ import type {
 import * as api from "../lib/tauri";
 import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER } from "../lib/skillTags";
 import {
-  buildSkillCapabilityGroups,
   buildSkillIssues,
   buildSkillRelationGroups,
 } from "../lib/skillOrganization";
@@ -343,7 +342,6 @@ export function MySkills() {
   );
 
   const relationGroups = useMemo(() => buildSkillRelationGroups(skills), [skills]);
-  const capabilityGroups = useMemo(() => buildSkillCapabilityGroups(skills), [skills]);
   const evidenceByCaseId = useMemo(
     () => new Map(organizationCaseEvidence.map((evidence) => [evidence.case_id, evidence])),
     [organizationCaseEvidence],
@@ -1435,7 +1433,7 @@ export function MySkills() {
       <div className="flex items-center gap-1 border-b border-border-subtle">
         {([
           { id: "all", icon: LayoutGrid, count: skills.length },
-          { id: "organize", icon: Layers, count: capabilityGroups.length },
+          { id: "organize", icon: Layers, count: null },
           { id: "issues", icon: CircleAlert, count: unresolvedOrganizationCount },
         ] as const).map((item) => {
           const Icon = item.icon;
@@ -1454,12 +1452,10 @@ export function MySkills() {
             >
               <Icon className="h-3.5 w-3.5" />
               {t(`mySkills.organization.tabs.${item.id}`)}
-              <span className={cn(
+              {item.count !== null && <span className={cn(
                 "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
                 libraryView === item.id ? "bg-accent-bg text-accent-light" : "bg-surface-hover text-faint",
-              )}>
-                {item.count}
-              </span>
+              )}>{item.count}</span>}
               {libraryView === item.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />}
             </button>
           );
@@ -1630,8 +1626,8 @@ export function MySkills() {
       {libraryView === "organize" ? (
         <SkillOrganizeView
           skills={skills}
-          capabilityGroups={capabilityGroups}
           relationshipGroups={relationGroups}
+          issues={organizationIssues}
           resolvedIds={resolvedOrganizationIds}
           search={search}
           displayNames={skillDisplayNames}
