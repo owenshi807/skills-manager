@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 import {
   ChevronRight,
+  CircleAlert,
   CircleHelp,
   Download,
   FileText,
@@ -33,6 +34,8 @@ import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER }
 import { AddSkillsSheet } from "../components/AddSkillsSheet";
 import type { WorkspaceConfig } from "./workspaceConfigs";
 import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
+import { WorkspaceDuplicatePanel } from "../components/WorkspaceDuplicatePanel";
+import { buildWorkspaceDuplicateGroups } from "../lib/workspaceDuplicates";
 
 function compactHomePath(path: string) {
   return path.replace(/^\/Users\/[^/]+/, "~");
@@ -57,6 +60,7 @@ function WorkspaceSkillCard({
   fileCount = 0,
   active = false,
   actions,
+  attention,
   actionsHover = false,
   onClick,
 }: {
@@ -68,6 +72,7 @@ function WorkspaceSkillCard({
   fileCount?: number;
   active?: boolean;
   actions?: ReactNode;
+  attention?: ReactNode;
   actionsHover?: boolean;
   onClick: () => void;
 }) {
@@ -93,6 +98,7 @@ function WorkspaceSkillCard({
         >
           {title}
         </h3>
+        {attention}
         <p className="min-w-0 flex-1 truncate text-[13px] text-muted">
           {description || "-"}
         </p>
@@ -160,6 +166,7 @@ function WorkspaceSkillCard({
         >
           {title}
         </h3>
+        {attention}
         {fileCount > 0 && (
           <span className="flex shrink-0 items-center gap-1 text-[12px] text-faint">
             <FileText className="h-3 w-3" />
@@ -251,6 +258,7 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
   const [pullConfirmSkill, setPullConfirmSkill] = useState<ProjectSkill | null>(null);
   const [deleteLocalConfirmSkill, setDeleteLocalConfirmSkill] = useState<ProjectSkill | null>(null);
   const [showFoundationGuide, setShowFoundationGuide] = useState(false);
+  const [selectedDuplicateGroupId, setSelectedDuplicateGroupId] = useState<string | null>(null);
   const localDetailRequestRef = useRef(0);
 
   // Cross-category redirect: a deep link like /global-workspace/openclaw should
@@ -488,6 +496,19 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
 
   const centerMatchedUnmanagedCount = centerMatchedLocalCount - managedLocalCount;
   const agentOnlyCount = localSkills.length - centerMatchedLocalCount;
+
+  const duplicateGroups = useMemo(
+    () => buildWorkspaceDuplicateGroups(localSkills),
+    [localSkills]
+  );
+
+  const duplicateGroupByPath = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const group of duplicateGroups) {
+      for (const member of group.members) result.set(member.relative_path, group.id);
+    }
+    return result;
+  }, [duplicateGroups]);
 
   const handleRemoveLocalManagedSkill = async (skill: ProjectSkill) => {
     if (!agentKey || !skill.center_skill_id || !managedLocalIds.has(skill.center_skill_id)) return;
@@ -1011,6 +1032,22 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
         )}
       </div>
 
+      {!localSkillsLoading && (
+        <WorkspaceDuplicatePanel
+          agentKey={currentTool.key}
+          agentName={currentTool.display_name}
+          groups={duplicateGroups}
+          managedSkills={managedSkills}
+          selectedGroupId={selectedDuplicateGroupId}
+          onSelectedGroupChange={setSelectedDuplicateGroupId}
+          refreshing={localSkillsLoading}
+          onRefresh={loadLocalSkills}
+          onApplied={async () => {
+            await Promise.all([refreshManagedSkills(), refreshTools(), loadLocalSkills()]);
+          }}
+        />
+      )}
+
       {localSkillsLoading ? (
         <div className="flex items-center gap-2 py-4 text-[13px] text-muted">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1046,6 +1083,7 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
           {visibleLocalSkills.map((skill) => {
             const statusMeta = getLocalStatusMeta(t, skill.sync_status);
             const isManaged = !!skill.center_skill_id && managedLocalIds.has(skill.center_skill_id);
+            const duplicateGroupId = duplicateGroupByPath.get(skill.relative_path);
 
             return (
               <WorkspaceSkillCard
@@ -1059,6 +1097,20 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
                 status={statusMeta}
                 fileCount={skill.files.length}
                 active={isManaged}
+                attention={duplicateGroupId ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedDuplicateGroupId(duplicateGroupId);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
+                    title={t("globalWorkspace.duplicates.openGroup")}
+                  >
+                    <CircleAlert className="h-3 w-3" />
+                    {t("globalWorkspace.duplicates.badge")}
+                  </button>
+                ) : undefined}
                 actions={renderLocalSkillActions(skill, viewMode)}
                 actionsHover={viewMode === "list"}
                 onClick={() => void openLocalDetail(skill)}

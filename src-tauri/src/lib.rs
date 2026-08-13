@@ -1082,6 +1082,9 @@ pub fn run() {
             commands::agent_workspace::import_global_local_skill_to_center,
             commands::agent_workspace::update_global_local_skill_from_center,
             commands::agent_workspace::delete_global_local_skill,
+            commands::agent_workspace::preview_agent_duplicate_alias,
+            commands::agent_workspace::apply_agent_duplicate_alias,
+            commands::agent_workspace::undo_agent_duplicate_alias,
             // Presets
             commands::presets::get_presets,
             commands::presets::get_active_preset,

@@ -340,6 +340,23 @@ export interface ProjectSkill {
   in_center: boolean;
   sync_status: "project_only" | "in_sync" | "project_newer" | "center_newer" | "diverged";
   center_skill_id: string | null;
+  content_hash: string | null;
+}
+
+export interface AgentDuplicateAliasPreview {
+  agent: string;
+  skill_id: string;
+  keep_relative_path: string;
+  redundant_relative_path: string;
+  redundant_path: string;
+  source_destination: string;
+  central_copy_preserved: boolean;
+  reversible: boolean;
+}
+
+export interface AgentDuplicateAliasResult {
+  operation_id: string;
+  status: string;
 }
 
 export interface ProjectSkillDocument {
@@ -1009,3 +1026,26 @@ export const updateGlobalLocalSkillFromCenter = (agent: string, skillRelativePat
 
 export const deleteGlobalLocalSkill = (agent: string, skillRelativePath: string) =>
   invoke<void>("delete_global_local_skill", { agent, skillRelativePath });
+
+export const previewAgentDuplicateAlias = (
+  agent: string,
+  skillId: string,
+  redundantRelativePath: string,
+) => invoke<AgentDuplicateAliasPreview>("preview_agent_duplicate_alias", {
+  agent,
+  skillId,
+  redundantRelativePath,
+});
+
+export const applyAgentDuplicateAlias = (
+  agent: string,
+  skillId: string,
+  redundantRelativePath: string,
+) => invoke<AgentDuplicateAliasResult>("apply_agent_duplicate_alias", {
+  agent,
+  skillId,
+  redundantRelativePath,
+});
+
+export const undoAgentDuplicateAlias = (operationId: string) =>
+  invoke<AgentDuplicateAliasResult>("undo_agent_duplicate_alias", { operationId });

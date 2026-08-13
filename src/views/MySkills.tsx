@@ -170,7 +170,9 @@ export function MySkills() {
   } = useApp();
   const viewedPreset = CARD_MASTER_PRODUCT_SURFACE.presets ? upstreamViewedPreset : null;
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [libraryView, setLibraryView] = useState<"all" | "issues">("all");
+  const [libraryView, setLibraryView] = useState<"all" | "issues">(() =>
+    new URLSearchParams(window.location.search).get("view") === "issues" ? "issues" : "all"
+  );
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
@@ -189,7 +191,7 @@ export function MySkills() {
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
   const [tagToRename, setTagToRename] = useState<string | null>(null);
   const [tagToDelete, setTagToDelete] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("search") ?? "");
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const refreshAfterDeleteRef = useRef<number | null>(null);
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);

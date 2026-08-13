@@ -1,17 +1,48 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::commands::projects::{
     classify_sync_status, ensure_dir_within_root, ensure_safe_skill_relative_path,
     source_ref_matches_skill_path, ProjectSkillDocumentDto,
 };
-use crate::core::skill_store::{SkillRecord, SkillStore, SkillTargetRecord};
-use crate::core::{
-    content_hash, error::AppError, installer, project_scanner, scenario_service, sync_engine,
-    tool_adapters, tool_service,
+use crate::core::skill_store::{
+    OrganizationOperationRecord, SkillRecord, SkillStore, SkillTargetRecord,
 };
+use crate::core::{
+    content_hash, error::AppError, installer, project_scanner, repo_lock::RepoLock,
+    scenario_service, sync_engine, tool_adapters, tool_service,
+};
+
+#[derive(Debug, Serialize)]
+pub struct AgentDuplicateAliasPreview {
+    pub agent: String,
+    pub skill_id: String,
+    pub keep_relative_path: String,
+    pub redundant_relative_path: String,
+    pub redundant_path: String,
+    pub source_destination: String,
+    pub central_copy_preserved: bool,
+    pub reversible: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentDuplicateAliasResult {
+    pub operation_id: String,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AgentDuplicateAliasPayload {
+    agent: String,
+    skill_id: String,
+    old_source_ref: String,
+    new_source_ref: String,
+    redundant_path: String,
+    quarantined_path: String,
+}
 
 fn target_path_equals_skill(target_path: &str, skill_path: &str) -> bool {
     if target_path == skill_path {
@@ -156,6 +187,287 @@ pub async fn get_global_local_skills(
             &all_targets,
             &tags_map,
         ))
+    })
+    .await?
+}
+
+fn preview_duplicate_alias_sync(
+    store: &SkillStore,
+    agent: &str,
+    skill_id: &str,
+    redundant_relative_path: &str,
+) -> Result<AgentDuplicateAliasPreview, AppError> {
+    ensure_safe_skill_relative_path(redundant_relative_path)?;
+    let adapter = adapter_for_agent(store, agent)?;
+    let skills_root = adapter.skills_dir();
+    let redundant = find_agent_skill(&adapter, redundant_relative_path)?;
+    let redundant_path = PathBuf::from(&redundant.path);
+    ensure_agent_skill_path(&redundant_path, &skills_root)?;
+
+    let metadata = std::fs::symlink_metadata(&redundant_path).map_err(AppError::io)?;
+    if !metadata.file_type().is_symlink() {
+        return Err(AppError::invalid_input(
+            "The redundant Agent entry is not a symlink; it requires recoverable quarantine before it can be handled",
+        ));
+    }
+
+    let skill = store
+        .get_skill_by_id(skill_id)
+        .map_err(AppError::db)?
+        .filter(|skill| skill.status != "archived")
+        .ok_or_else(|| AppError::not_found("Managed Skill not found"))?;
+    let all_managed = store.get_all_skills().map_err(AppError::db)?;
+    let all_targets = store.get_all_targets().map_err(AppError::db)?;
+    if find_verified_center_match(&redundant, &all_managed, &all_targets)
+        .map(|matched| matched.id.as_str())
+        != Some(skill_id)
+    {
+        return Err(AppError::invalid_input(
+            "The selected Agent entry no longer matches this managed Skill",
+        ));
+    }
+    if skill.source_ref.as_deref() != Some(redundant.path.as_str()) {
+        return Err(AppError::invalid_input(
+            "Only a verified legacy source alias can be removed automatically",
+        ));
+    }
+
+    let target = store
+        .get_targets_for_skill(skill_id)
+        .map_err(AppError::db)?
+        .into_iter()
+        .find(|target| target.tool == agent)
+        .ok_or_else(|| {
+            AppError::invalid_input("This Skill has no managed Agent projection to keep")
+        })?;
+    if target.target_path == redundant.path {
+        return Err(AppError::invalid_input(
+            "The selected entry is the managed projection, not the redundant alias",
+        ));
+    }
+    let target_path = Path::new(&target.target_path);
+    ensure_agent_skill_path(target_path, &skills_root)?;
+    let mode = match target.mode.as_str() {
+        "symlink" => sync_engine::SyncMode::Symlink,
+        "copy" => sync_engine::SyncMode::Copy,
+        _ => return Err(AppError::invalid_input("Unsupported projection mode")),
+    };
+    if !sync_engine::is_target_current(
+        Path::new(&skill.central_path),
+        target_path,
+        mode,
+        None,
+        None,
+    ) {
+        return Err(AppError::invalid_input(
+            "The managed Agent projection changed; refresh before organizing",
+        ));
+    }
+
+    let source_destination = std::fs::canonicalize(&redundant_path).map_err(AppError::io)?;
+    let canonical_skills_root = std::fs::canonicalize(&skills_root).map_err(AppError::io)?;
+    if source_destination.starts_with(&canonical_skills_root) {
+        return Err(AppError::invalid_input(
+            "The legacy alias points back into the Agent folder and cannot be normalized safely",
+        ));
+    }
+    let source_hash = content_hash::hash_directory(&source_destination).map_err(AppError::io)?;
+    let central_hash =
+        content_hash::hash_directory(Path::new(&skill.central_path)).map_err(AppError::io)?;
+    if source_hash != central_hash || skill.content_hash.as_deref() != Some(central_hash.as_str()) {
+        return Err(AppError::invalid_input(
+            "The legacy source and managed copy are no longer identical; compare them before organizing",
+        ));
+    }
+
+    let keep_relative_path = target_path
+        .strip_prefix(&skills_root)
+        .map_err(|_| AppError::invalid_input("Invalid managed target path"))?
+        .to_string_lossy()
+        .to_string();
+
+    Ok(AgentDuplicateAliasPreview {
+        agent: agent.to_string(),
+        skill_id: skill_id.to_string(),
+        keep_relative_path,
+        redundant_relative_path: redundant_relative_path.to_string(),
+        redundant_path: redundant.path,
+        source_destination: source_destination.to_string_lossy().to_string(),
+        central_copy_preserved: true,
+        reversible: true,
+    })
+}
+
+#[tauri::command]
+pub async fn preview_agent_duplicate_alias(
+    store: State<'_, Arc<SkillStore>>,
+    agent: String,
+    skill_id: String,
+    redundant_relative_path: String,
+) -> Result<AgentDuplicateAliasPreview, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        preview_duplicate_alias_sync(&store, &agent, &skill_id, &redundant_relative_path)
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn apply_agent_duplicate_alias(
+    store: State<'_, Arc<SkillStore>>,
+    agent: String,
+    skill_id: String,
+    redundant_relative_path: String,
+) -> Result<AgentDuplicateAliasResult, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _lock = RepoLock::acquire_foreground("normalize duplicate Agent source alias")
+            .map_err(AppError::db)?;
+        let preview =
+            preview_duplicate_alias_sync(&store, &agent, &skill_id, &redundant_relative_path)?;
+        let skill = store
+            .get_skill_by_id(&skill_id)
+            .map_err(AppError::db)?
+            .ok_or_else(|| AppError::not_found("Managed Skill not found"))?;
+        let central = Path::new(&skill.central_path);
+        let central_root = central
+            .parent()
+            .and_then(Path::parent)
+            .ok_or_else(|| AppError::invalid_input("Invalid managed central path"))?;
+        let operation_id = uuid::Uuid::new_v4().to_string();
+        let quarantined_path = central_root
+            .join(".trash")
+            .join("workspace-duplicates")
+            .join(&operation_id)
+            .join(
+                Path::new(&preview.redundant_path)
+                    .file_name()
+                    .ok_or_else(|| AppError::invalid_input("Invalid redundant Agent path"))?,
+            );
+        let payload = AgentDuplicateAliasPayload {
+            agent: agent.clone(),
+            skill_id: skill_id.clone(),
+            old_source_ref: preview.redundant_path.clone(),
+            new_source_ref: preview.source_destination.clone(),
+            redundant_path: preview.redundant_path.clone(),
+            quarantined_path: quarantined_path.to_string_lossy().to_string(),
+        };
+        let now = chrono::Utc::now().timestamp_millis();
+        store
+            .create_organization_operation(&OrganizationOperationRecord {
+                operation_id: operation_id.clone(),
+                case_key: format!("workspace:{agent}:{skill_id}:{redundant_relative_path}"),
+                case_revision: skill
+                    .content_hash
+                    .clone()
+                    .unwrap_or_else(|| "unknown".to_string()),
+                kind: "normalize_workspace_source_alias".to_string(),
+                status: "planned".to_string(),
+                keep_skill_id: skill_id.clone(),
+                archive_skill_id: skill_id.clone(),
+                payload_json: serde_json::to_string(&payload).map_err(AppError::db)?,
+                error: None,
+                created_at: now,
+                updated_at: now,
+            })
+            .map_err(AppError::db)?;
+
+        let apply_result = (|| -> Result<(), AppError> {
+            let parent = quarantined_path
+                .parent()
+                .ok_or_else(|| AppError::invalid_input("Invalid quarantine path"))?;
+            std::fs::create_dir_all(parent).map_err(AppError::io)?;
+            store
+                .update_organization_operation(&operation_id, "staged", None)
+                .map_err(AppError::db)?;
+            std::fs::rename(&preview.redundant_path, &quarantined_path).map_err(AppError::io)?;
+            if let Err(error) =
+                store.update_skill_source_ref(&skill_id, &preview.source_destination)
+            {
+                let _ = std::fs::rename(&quarantined_path, &preview.redundant_path);
+                return Err(AppError::db(error));
+            }
+            if let Err(error) =
+                store.update_organization_operation(&operation_id, "complete", None)
+            {
+                let _ = store.update_skill_source_ref(&skill_id, &preview.redundant_path);
+                let _ = std::fs::rename(&quarantined_path, &preview.redundant_path);
+                return Err(AppError::db(error));
+            }
+            Ok(())
+        })();
+
+        if let Err(error) = apply_result {
+            let _ = store.update_organization_operation(
+                &operation_id,
+                "needs_recovery",
+                Some(&error.to_string()),
+            );
+            return Err(error);
+        }
+        Ok(AgentDuplicateAliasResult {
+            operation_id,
+            status: "complete".to_string(),
+        })
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn undo_agent_duplicate_alias(
+    store: State<'_, Arc<SkillStore>>,
+    operation_id: String,
+) -> Result<AgentDuplicateAliasResult, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _lock = RepoLock::acquire_foreground("undo duplicate Agent source alias")
+            .map_err(AppError::db)?;
+        let operation = store
+            .get_organization_operation(&operation_id)
+            .map_err(AppError::db)?
+            .ok_or_else(|| AppError::not_found("Organization operation not found"))?;
+        if operation.kind != "normalize_workspace_source_alias" || operation.status != "complete" {
+            return Err(AppError::invalid_input(
+                "This workspace operation cannot be undone",
+            ));
+        }
+        let payload: AgentDuplicateAliasPayload =
+            serde_json::from_str(&operation.payload_json).map_err(AppError::db)?;
+        let redundant = Path::new(&payload.redundant_path);
+        let quarantined = Path::new(&payload.quarantined_path);
+        if redundant.exists()
+            || std::fs::symlink_metadata(redundant).is_ok()
+            || std::fs::symlink_metadata(quarantined).is_err()
+        {
+            return Err(AppError::invalid_input(
+                "The Agent folder changed after organizing; refusing to overwrite it",
+            ));
+        }
+        let skill = store
+            .get_skill_by_id(&payload.skill_id)
+            .map_err(AppError::db)?
+            .ok_or_else(|| AppError::not_found("Managed Skill not found"))?;
+        if skill.source_ref.as_deref() != Some(payload.new_source_ref.as_str()) {
+            return Err(AppError::invalid_input(
+                "The Skill source changed after organizing; refresh instead of overwriting it",
+            ));
+        }
+        std::fs::rename(quarantined, redundant).map_err(AppError::io)?;
+        if let Err(error) =
+            store.update_skill_source_ref(&payload.skill_id, &payload.old_source_ref)
+        {
+            let _ = std::fs::rename(redundant, quarantined);
+            return Err(AppError::db(error));
+        }
+        if let Err(error) = store.update_organization_operation(&operation_id, "undone", None) {
+            let _ = store.update_skill_source_ref(&payload.skill_id, &payload.new_source_ref);
+            let _ = std::fs::rename(redundant, quarantined);
+            return Err(AppError::db(error));
+        }
+        Ok(AgentDuplicateAliasResult {
+            operation_id,
+            status: "undone".to_string(),
+        })
     })
     .await?
 }
@@ -656,13 +968,114 @@ fn delete_agent_local_skill(
 mod tests {
     use super::{
         backfill_stranded_agent_targets, enrich_center_status,
-        import_agent_local_skill_to_center, update_agent_local_skill_from_center,
+        import_agent_local_skill_to_center, preview_duplicate_alias_sync,
+        update_agent_local_skill_from_center,
     };
     use crate::core::content_hash;
     use crate::core::project_scanner::ProjectSkillInfo;
-    use crate::core::skill_store::{ScenarioRecord, SkillRecord, SkillStore};
-    use crate::core::{central_repo, installer, tool_adapters, tool_service};
+    use crate::core::skill_store::{
+        ScenarioRecord, SkillRecord, SkillStore, SkillTargetRecord,
+    };
+    use crate::core::{central_repo, installer, sync_engine, tool_adapters, tool_service};
     use std::collections::HashMap;
+
+    #[cfg(unix)]
+    #[test]
+    fn duplicate_alias_preview_only_accepts_verified_external_source_symlink() {
+        let _guard = central_repo::test_base_dir_lock();
+        let temp = tempfile::tempdir().unwrap();
+        central_repo::set_test_base_dir_override(Some(temp.path().join("center")));
+        let store = SkillStore::new(&temp.path().join("store.db")).unwrap();
+
+        let source = temp.path().join("proma-source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(
+            source.join("SKILL.md"),
+            "---\nname: autoplan\ndescription: Test\n---\nbody\n",
+        )
+        .unwrap();
+        let installed = installer::install_from_local(&source, Some("autoplan")).unwrap();
+
+        let skills_root = temp.path().join("agent-skills");
+        std::fs::create_dir_all(&skills_root).unwrap();
+        let managed_target = skills_root.join("autoplan");
+        sync_engine::sync_skill(
+            &installed.central_path,
+            &managed_target,
+            sync_engine::SyncMode::Symlink,
+        )
+        .unwrap();
+        let legacy_alias = skills_root.join("gstack-autoplan");
+        std::os::unix::fs::symlink(&source, &legacy_alias).unwrap();
+
+        let now = chrono::Utc::now().timestamp_millis();
+        store
+            .insert_skill(&SkillRecord {
+                id: "autoplan-id".to_string(),
+                name: "autoplan".to_string(),
+                description: installed.description.clone(),
+                source_type: "import".to_string(),
+                source_ref: Some(legacy_alias.to_string_lossy().to_string()),
+                source_ref_resolved: None,
+                source_subpath: None,
+                source_branch: None,
+                source_revision: None,
+                remote_revision: None,
+                central_path: installed.central_path.to_string_lossy().to_string(),
+                content_hash: Some(installed.content_hash.clone()),
+                enabled: true,
+                created_at: now,
+                updated_at: now,
+                status: "ok".to_string(),
+                update_status: "local_only".to_string(),
+                last_checked_at: Some(now),
+                last_check_error: None,
+            })
+            .unwrap();
+        store
+            .insert_target(&SkillTargetRecord {
+                id: "target-id".to_string(),
+                skill_id: "autoplan-id".to_string(),
+                tool: "test_agent".to_string(),
+                target_path: managed_target.to_string_lossy().to_string(),
+                mode: "symlink".to_string(),
+                status: "ok".to_string(),
+                synced_at: Some(now),
+                last_error: None,
+                source_hash: Some(installed.content_hash),
+            })
+            .unwrap();
+        store
+            .set_setting(
+                "custom_tools",
+                &serde_json::json!([{
+                    "key": "test_agent",
+                    "display_name": "Test Agent",
+                    "skills_dir": skills_root.to_string_lossy(),
+                    "project_relative_skills_dir": ".test-agent/skills"
+                }])
+                .to_string(),
+            )
+            .unwrap();
+
+        let preview = preview_duplicate_alias_sync(
+            &store,
+            "test_agent",
+            "autoplan-id",
+            "gstack-autoplan",
+        )
+        .unwrap();
+        assert_eq!(preview.keep_relative_path, "autoplan");
+        assert_eq!(preview.redundant_relative_path, "gstack-autoplan");
+        assert_eq!(
+            preview.source_destination,
+            std::fs::canonicalize(&source).unwrap().to_string_lossy()
+        );
+        assert!(preview.central_copy_preserved);
+        assert!(preview.reversible);
+
+        central_repo::set_test_base_dir_override(None);
+    }
 
     #[test]
     fn importing_agent_local_skill_attaches_target_but_not_scenario() {
