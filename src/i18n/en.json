@@ -117,6 +117,7 @@
           "understand": { "title": "Understand", "question": "Are problem and root cause clear?", "purpose": "Read code, reproduce, and separate symptoms from root cause." },
           "frame": { "title": "Frame", "question": "Are the smallest solution and boundary clear?", "purpose": "Define scope, data flow, and verification." },
           "build": { "title": "Build small", "question": "Can every step be verified?", "purpose": "Complete the task with the smallest change." },
+          "supervise": { "title": "Supervise & correct", "question": "Are we overengineering?", "purpose": "Run the IPO scope check and use independent challenge to correct drift." },
           "verify": { "title": "Review & ship", "question": "Did value hold and risks close?", "purpose": "Review, test, and produce a deliverable." }
         }
       }

@@ -287,7 +287,7 @@ export function WorkspaceDuplicatePanel({
 
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               {!selected.exactContent ? (
-                <button type="button" onClick={() => navigate(`/skills?view=issues&search=${encodeURIComponent(selected.label)}`)} className="app-button-primary">{t("globalWorkspace.duplicates.compareAndHandle")}<ArrowRight className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => navigate(`/my-skills?view=issues&search=${encodeURIComponent(selected.label)}`)} className="app-button-primary">{t("globalWorkspace.duplicates.compareAndHandle")}<ArrowRight className="h-3.5 w-3.5" /></button>
               ) : aliasPreview || archivePreview ? (
                 <button type="button" onClick={() => void apply()} disabled={working} className="app-button-primary">{working && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{aliasPreview ? t("globalWorkspace.duplicates.applyAlias", { keep: aliasPreview.keep_relative_path }) : t("globalWorkspace.duplicates.applyArchive", { keep: archivePreview?.keep_name })}</button>
               ) : (

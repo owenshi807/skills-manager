@@ -76,7 +76,7 @@
       },
       "vibeCoding": {
         "title": "Vibe Coding", "description": "理解程式碼、收斂方案、小步實現並監督過度工程化。", "outcome": "幫助人與 Agent 共同完成程式碼任務：先查清問題，再做最小實現，持續檢查過度工程化。", "supervision": "每階段回答 IPO：輸入是否充分、過程是否最小、輸出是否可驗證；用獨立評審尋找反例。", "stopRule": "已解決當前問題、驗證通過且沒有新使用者價值證據時，停止增加抽象和自動化。",
-        "stages": { "understand": { "title": "理解問題", "question": "問題和根因清楚了嗎？", "purpose": "查程式碼、復現問題，分清症狀與根因。" }, "frame": { "title": "收斂方案", "question": "最小解與邊界清楚了嗎？", "purpose": "定義範圍、資料流和驗證方式。" }, "build": { "title": "小步實現", "question": "每一步都能驗證嗎？", "purpose": "以最小改動完成當前任務。" }, "verify": { "title": "審查交付", "question": "價值成立，風險關閉了嗎？", "purpose": "評審、測試並形成可交付結果。" } }
+        "stages": { "understand": { "title": "理解問題", "question": "問題和根因清楚了嗎？", "purpose": "查程式碼、復現問題，分清症狀與根因。" }, "frame": { "title": "收斂方案", "question": "最小解與邊界清楚了嗎？", "purpose": "定義範圍、資料流和驗證方式。" }, "build": { "title": "小步實現", "question": "每一步都能驗證嗎？", "purpose": "以最小改動完成當前任務。" }, "supervise": { "title": "監督糾偏", "question": "是否正在過度工程化？", "purpose": "執行 IPO 範圍檢查，並用獨立反方及時糾正偏航。" }, "verify": { "title": "審查交付", "question": "價值成立，風險關閉了嗎？", "purpose": "評審、測試並形成可交付結果。" } }
       }
     },
     "vibeCoding": {

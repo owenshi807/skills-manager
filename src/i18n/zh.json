@@ -125,6 +125,7 @@
           "understand": { "title": "理解问题", "question": "问题和根因清楚了吗？", "purpose": "查代码、复现问题，分清症状与根因。" },
           "frame": { "title": "收敛方案", "question": "最小解与边界清楚了吗？", "purpose": "定义范围、数据流和验证方式。" },
           "build": { "title": "小步实现", "question": "每一步都能验证吗？", "purpose": "以最小改动完成当前任务。" },
+          "supervise": { "title": "监督纠偏", "question": "是否正在过度工程化？", "purpose": "执行 IPO 范围检查，并用独立反方及时纠正偏航。" },
           "verify": { "title": "审查交付", "question": "价值成立，风险关闭了吗？", "purpose": "评审、测试并形成可交付结果。" }
         }
       }

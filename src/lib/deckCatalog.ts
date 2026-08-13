@@ -5,6 +5,7 @@ export interface DeckStageDefinition {
   purposeKey: string;
   preferredSkills: string[];
   keywords: string[];
+  checkpoints?: { titleKey: string; purposeKey: string }[];
 }
 
 export interface DeckDefinition {
@@ -50,12 +51,24 @@ export const VIBE_CODING_DECK: DeckDefinition = {
       keywords: ["test-driven", "implement", "coding", "develop", "devex"],
     },
     {
+      id: "supervise",
+      titleKey: "decks.catalog.vibeCoding.stages.supervise.title",
+      questionKey: "decks.catalog.vibeCoding.stages.supervise.question",
+      purposeKey: "decks.catalog.vibeCoding.stages.supervise.purpose",
+      preferredSkills: ["adversarial-review"],
+      keywords: ["adversarial", "scope", "overengineering"],
+      checkpoints: [{
+        titleKey: "decks.cards.ipo.title",
+        purposeKey: "decks.cards.ipo.purpose",
+      }],
+    },
+    {
       id: "verify",
       titleKey: "decks.catalog.vibeCoding.stages.verify.title",
       questionKey: "decks.catalog.vibeCoding.stages.verify.question",
       purposeKey: "decks.catalog.vibeCoding.stages.verify.purpose",
-      preferredSkills: ["adversarial-review", "design-review", "ship", "codex-review-loop"],
-      keywords: ["review", "verify", "ship", "adversarial"],
+      preferredSkills: ["design-review", "ship", "codex-review-loop"],
+      keywords: ["review", "verify", "ship"],
     },
   ],
 };

@@ -316,7 +316,40 @@ impl SkillStore {
             params![skill_id],
             |row| row.get(0),
         )?;
-        Ok(count > 0)
+        drop(conn);
+        if count > 0 {
+            return Ok(true);
+        }
+        for key in [
+            "card_master_custom_decks_v1",
+            "card_master_deck_overrides_v1",
+        ] {
+            let Some(raw) = self.get_setting(key)? else {
+                continue;
+            };
+            let value: serde_json::Value = serde_json::from_str(&raw)?;
+            let referenced = match key {
+                "card_master_custom_decks_v1" => value
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|deck| deck.get("cards")?.as_array())
+                    .flatten()
+                    .any(|card| card.get("skill_id").and_then(|id| id.as_str()) == Some(skill_id)),
+                "card_master_deck_overrides_v1" => value
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|decks| decks.values())
+                    .filter_map(|deck| deck.get("addedSkills")?.as_array())
+                    .flatten()
+                    .any(|card| card.get("skillId").and_then(|id| id.as_str()) == Some(skill_id)),
+                _ => false,
+            };
+            if referenced {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub fn mark_skill_archived(
@@ -2336,6 +2369,35 @@ mod organization_operation_tests {
             .unwrap();
         assert!(store
             .skill_has_organization_dependencies(&archived.id)
+            .unwrap());
+    }
+
+    #[test]
+    fn dependency_guard_detects_custom_and_overridden_decks() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let custom = skill("custom-card", "/central/custom-card");
+        let override_card = skill("override-card", "/central/override-card");
+        store.insert_skill(&custom).unwrap();
+        store.insert_skill(&override_card).unwrap();
+        store
+            .set_setting(
+                "card_master_custom_decks_v1",
+                r#"[{"cards":[{"skill_id":"custom-card"}]}]"#,
+            )
+            .unwrap();
+        store
+            .set_setting(
+                "card_master_deck_overrides_v1",
+                r#"{"vibe-coding":{"removedSkillIds":[],"addedSkills":[{"skillId":"override-card","stageId":"verify"}]}}"#,
+            )
+            .unwrap();
+
+        assert!(store
+            .skill_has_organization_dependencies(&custom.id)
+            .unwrap());
+        assert!(store
+            .skill_has_organization_dependencies(&override_card.id)
             .unwrap());
     }
 }
