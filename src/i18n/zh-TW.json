@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Card Master"
+    "name": "Skill Car Master"
   },
   "sidebar": {
     "dashboard": "Dashboard",
@@ -160,7 +160,7 @@
   },
   "help": {
     "eyebrow": "操作指南",
-    "title": "快速上手 Card Master",
+    "title": "快速上手 Skill Car Master",
     "description": "最快路徑：先用「整理」盤點散落的 Skills → 在技能庫確認已納管內容 → 再到 Agent 工作區決定投放。按 ⌘K 可隨時呼出命令面板。",
     "items": {
       "workflows": {
@@ -985,7 +985,7 @@
     "language": "語言",
     "help": "說明",
     "about": "關於",
-    "version": "Card Master 1.28.5",
+    "version": "Skill Car Master 1.28.5",
     "tagline": "跨平台。極簡、高效、無感多 Preset 切換。",
     "checkUpdate": "檢查更新",
     "checking": "檢查中…",
@@ -1005,7 +1005,7 @@
     "exportLogsHint": "把最近日誌和操作紀錄打包成 zip 儲存到下載資料夾",
     "exportLogsDone": "已匯出日誌（{{count}} 個檔案），請把 zip 拖到 GitHub issue 附件區。",
     "exportLogsFailed": "匯出日誌失敗。",
-    "panicBanner": "上次執行 Card Master 時發生崩潰（{{time}}）。",
+    "panicBanner": "上次執行 Skill Car Master 時發生崩潰（{{time}}）。",
     "repoWarning_config_unreadable": "中央庫設定檔已損壞或無法讀取，本次啟動已回退到預設路徑（~/.skills-manager）。如果技能庫看起來是空的，你的資料仍在先前設定的路徑裡——請到「中央倉庫路徑」重新指定。",
     "repoWarning_repo_path_invalid": "設定的中央倉庫路徑無效，本次啟動已回退到預設路徑（~/.skills-manager）。如果技能庫看起來是空的，請到「中央倉庫路徑」重新指定資料所在位置。",
     "repoWarning_migration_incomplete": "將中央庫遷移到新位置的操作沒有完成，本次啟動仍在使用原位置的現有技能庫——資料沒有遺失。要完成遷移，請打開設定，把「中央倉庫路徑」指向一個空的、可寫的資料夾（點「編輯」可查看你選擇的目標位置），然後重新啟動。遷移成功前，目前的技能庫會留在原地——請不要刪除它。",

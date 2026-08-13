@@ -13,7 +13,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Card Master render failed", error, info.componentStack);
+    console.error("Skill Car Master render failed", error, info.componentStack);
     logStartupEvent(`render_error:${error.message}`, performance.now()).catch(() => {});
   }
 
@@ -22,7 +22,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
     return (
       <main className="flex h-screen items-center justify-center bg-background p-8 text-primary">
         <section className="w-full max-w-2xl rounded-xl border border-red-500/25 bg-surface p-6 shadow-card">
-          <h1 className="text-lg font-semibold">Card Master 无法显示</h1>
+          <h1 className="text-lg font-semibold">Skill Car Master 无法显示</h1>
           <p className="mt-2 text-sm text-muted">界面遇到运行错误，Skill 数据没有被修改。</p>
           <pre className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-bg-secondary p-3 text-xs text-secondary">
             {this.state.error.stack || this.state.error.message}
