@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleAlert,
   Copy,
@@ -69,6 +70,7 @@ export function WorkspaceDuplicatePanel({
   const [selectedKeepId, setSelectedKeepId] = useState<string | null>(null);
 
   const selected = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
+  const detailsId = `workspace-duplicates-${agentKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
   const exactCount = groups.filter((group) => group.exactContent).length;
   const judgmentCount = groups.length - exactCount;
   const selectedManaged = useMemo(
@@ -210,12 +212,27 @@ export function WorkspaceDuplicatePanel({
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => void onRefresh()} className="app-button-secondary h-8" disabled={refreshing}><RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />{t("mySkills.organization.refresh")}</button>
-          <button type="button" onClick={() => setExpanded((value) => !value)} className="app-button-primary h-8">{t("globalWorkspace.duplicates.viewAndHandle")}<ChevronRight className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-90")} /></button>
+          {!expanded && (
+            <button type="button" onClick={() => setExpanded(true)} className="app-button-primary h-8">
+              {t("globalWorkspace.duplicates.viewAndHandle")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={expanded}
+            aria-controls={detailsId}
+            aria-label={t(expanded ? "globalWorkspace.duplicates.collapseDetails" : "globalWorkspace.duplicates.expandDetails")}
+            title={t(expanded ? "globalWorkspace.duplicates.collapseDetails" : "globalWorkspace.duplicates.expandDetails")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-subtle bg-bg-secondary text-muted transition-colors hover:bg-surface-hover hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45"
+          >
+            <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+          </button>
         </div>
       </div>
 
       {expanded && selected && (
-        <div className="grid border-t border-amber-500/15 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <div id={detailsId} className="grid border-t border-amber-500/15 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="max-h-[480px] overflow-y-auto border-b border-border-faint p-2 lg:border-b-0 lg:border-r">
             {groups.map((group) => (
               <button key={group.id} type="button" onClick={() => onSelectedGroupChange(group.id)} className={cn("mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors", selected.id === group.id ? "bg-accent-bg" : "hover:bg-surface-hover")}>

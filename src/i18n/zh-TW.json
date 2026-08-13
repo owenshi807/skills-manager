@@ -1369,6 +1369,8 @@
       "found": "{{agent}} 中發現 {{count}} 組重複 Skill",
       "summary": "{{exact}} 組內容完全一致 · {{judgment}} 組需要判斷",
       "viewAndHandle": "查看並處理",
+      "expandDetails": "展開重複 Skill 詳情",
+      "collapseDetails": "收起重複 Skill 詳情",
       "badge": "重複",
       "openGroup": "查看這組重複 Skill",
       "exact": "內容一致",

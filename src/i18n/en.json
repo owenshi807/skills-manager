@@ -1495,6 +1495,8 @@
       "found": "{{count}} duplicate Skill groups found in {{agent}}",
       "summary": "{{exact}} exact-content groups · {{judgment}} need judgment",
       "viewAndHandle": "Review and handle",
+      "expandDetails": "Expand duplicate Skill details",
+      "collapseDetails": "Collapse duplicate Skill details",
       "badge": "Duplicate",
       "openGroup": "Open this duplicate group",
       "exact": "Exact content",
