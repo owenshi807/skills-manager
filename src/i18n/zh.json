@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Skill Car Master"
+    "name": "Skill Card Manager"
   },
   "sidebar": {
     "dashboard": "Dashboard",
@@ -124,7 +124,7 @@
     },
     "creator": {
       "title": "告诉 AI 你想完成什么",
-      "description": "Card Master 只把当前技能库的名称与简介交给你选择的本机 Agent。结果必须引用真实 Skill ID，不能发明能力，也不会自动投放。",
+      "description": "Skill Card Manager 只把当前技能库的名称与简介交给你选择的本机 Agent。结果必须引用真实 Skill ID，不能发明能力，也不会自动投放。",
       "placeholder": "例如：我要做一次新产品的市场调研，需要搜索、访谈分析、竞品比较、证据核验和最后的结论挑战。",
       "generate": "从技能库组牌",
       "generating": "正在分析技能库…",
@@ -181,7 +181,7 @@
     "scanSummary": "扫描 {{agents}} 个 Agent · 发现 {{locations}} 个位置 · 对应 {{skills}} 个 Skill 来源",
     "scanning": "正在扫描…",
     "rescan": "重新扫描",
-    "desktopOnly": "当前是网页预览，无法读取本机文件。请使用 Card Master 桌面应用中的“整理”页面。",
+    "desktopOnly": "当前是网页预览，无法读取本机文件。请使用 Skill Card Manager 桌面应用中的“整理”页面。",
     "queueLabel": "整理结果",
     "queues": { "pending": "待收入", "issues": "重复 / 冲突", "managed": "已纳管" },
     "search": "搜索名称、Agent 或路径…",
@@ -210,7 +210,7 @@
   },
   "help": {
     "eyebrow": "操作指南",
-    "title": "快速上手 Skill Car Master",
+    "title": "快速上手 Skill Card Manager",
     "description": "最快路径：先用“整理”盘点散落的 Skills → 在技能库确认已纳管内容 → 再到 Agent 工作区决定投放。按 ⌘K 可随时呼出命令面板。",
     "items": {
       "workflows": {
@@ -231,7 +231,7 @@
       },
       "global": {
         "title": "全局工作区",
-        "description": "每个 Agent 都有自己的页面，列出其全局目录里的所有 Skills（包括不是通过 Card Master 安装的），与 Agent 实际看到的内容保持一致。点击 + 添加 Skills 从中央库挑选，并通过内嵌的 Agent 标签选择目标；也可通过「全部 Agents」总览跨所有已安装 Agent 统一管理。仅存在于某个 Agent 目录的 Skills 可直接在卡片上删除。"
+        "description": "每个 Agent 都有自己的页面，列出其全局目录里的所有 Skills（包括不是通过 Skill Card Manager 安装的），与 Agent 实际看到的内容保持一致。点击 + 添加 Skills 从中央库挑选，并通过内嵌的 Agent 标签选择目标；也可通过「全部 Agents」总览跨所有已安装 Agent 统一管理。仅存在于 Agent 目录的 Skill 应先收入技能库；不要直接删除尚无可靠中央副本的文件。"
       },
       "projects": {
         "title": "项目工作区",
@@ -493,12 +493,12 @@
       "needsDecision": "需要判断",
       "relations": {
         "exactDuplicate": {
-          "fact": "名称和已有管理库指纹相同。Card Master 会用 strict 完整目录复核；只有通过才标为“系统已确认事实”。",
+          "fact": "名称和已有管理库指纹相同。Skill Card Manager 会用 strict 完整目录复核；只有通过才标为“系统已确认事实”。",
           "recommendation": "系统先做 strict 完整目录复核。内容关系可由规则确认；来源取舍仍由你决定，不交给 Agent 猜。",
           "impact": "当前只生成判断，不删除任何内容；以后确认合并时，冗余中央副本也只进入可撤销回收站。"
         },
         "contentAlias": {
-          "fact": "名称不同，但已有管理库指纹相同。Card Master 会用 strict 完整目录复核，确认它们当前是否完全一致。",
+          "fact": "名称不同，但已有管理库指纹相同。Skill Card Manager 会用 strict 完整目录复核，确认它们当前是否完全一致。",
           "recommendation": "先做 strict 完整目录复核，再核对 owner 与更新链路；确认后才统一实体。",
           "impact": "当前不删除内容；未来确认后也必须保留全部来源和 Agent 使用关系，并可撤销。"
         },
@@ -578,10 +578,10 @@
       "agentNeedsReview": "{{agent}} 发现需要人工判断的例外，结果已复制",
       "agentFailed": "Agent 执行失败",
       "agentResultTitle": "{{agent}} 的判断结果",
-      "agentResultHint": "这是 Agent 根据内容与来源生成的建议，不是 Card Master 的硬编码结论，也尚未执行文件操作。",
+      "agentResultHint": "这是 Agent 根据内容与来源生成的建议，不是 Skill Card Manager 的硬编码结论，也尚未执行文件操作。",
       "agentAssessmentReady": "{{agent}} 已完成比较，结论已写回对应事件",
       "agentAdviceTitle": "询问 {{agent}}",
-      "agentAssessmentHint": "Agent 只完成比较；Card Master 尚未修改、归档或删除任何 Skill。",
+      "agentAssessmentHint": "Agent 只完成比较；Skill Card Manager 尚未修改、归档或删除任何 Skill。",
       "agentResultStale": "Skill 或证据已变化，这个结论已过期。请重新比较。",
       "agentRelations": {
         "confirmed_newer_revision": "已确认新版替代旧版",
@@ -618,8 +618,8 @@
       "compareItems": "比较这两项",
       "compareAgain": "重新比较",
       "actionPlan": {
-        "title": "Card Master 结论",
-        "intro": "AI 负责比较，最终动作由 Card Master 明确预览并执行。选择要保留的主项；另一项只会进入可撤销回收区。",
+        "title": "Skill Card Manager 结论",
+        "intro": "AI 负责比较，最终动作由 Skill Card Manager 明确预览并执行。选择要保留的主项；另一项只会进入可撤销回收区。",
         "archiveConclusion": "建议保留「{{keep}}」，归档「{{archive}}」",
         "keepBothConclusion": "建议两项都保留，并确认它们的用途关系",
         "moreEvidenceConclusion": "证据不足，暂不执行整理",
@@ -634,11 +634,11 @@
         "previewRecommendation": "预览这项建议",
         "previewTitle": "执行后会发生",
         "keepNamed": "保留 {{name}} 作为主项",
-        "archiveNamed": "{{name}} 移入 Card Master 回收区，不永久删除",
+        "archiveNamed": "{{name}} 移入 Skill Card Manager 回收区，不永久删除",
         "rewireAgent": "{{agent}} 改为使用保留项",
         "removeRedundant": "移除 {{agent}} 的冗余投放；它已有保留项",
         "sourceRewired": "{{agent}} 原位置 {{path}} 的内容先进入回收区，再改为使用保留项",
-        "sourcePreserved": "外部原始来源保持不变；只整理 Card Master 管理副本与投放",
+        "sourcePreserved": "外部原始来源保持不变；只整理 Skill Card Manager 管理副本与投放",
         "undoable": "操作有日志，可立即撤销恢复",
         "applyArchive": "确认保留主项并归档另一项",
         "applyNamed": "执行：保留 {{keep}}，归档 {{archive}}",
@@ -1084,7 +1084,7 @@
     "language": "语言",
     "help": "帮助",
     "about": "关于",
-    "version": "Skill Car Master 1.28.5",
+    "version": "Skill Card Manager 1.28.5",
     "tagline": "跨平台。极简、高效、无感多 Preset 切换。",
     "checkUpdate": "检查更新",
     "checking": "检查中…",
@@ -1104,7 +1104,7 @@
     "exportLogsHint": "把最近日志和操作记录打包成 zip 保存到下载文件夹",
     "exportLogsDone": "已导出日志（{{count}} 个文件），请把 zip 拖到 GitHub issue 附件区。",
     "exportLogsFailed": "导出日志失败。",
-    "panicBanner": "上次运行 Skill Car Master 时发生崩溃（{{time}}）。",
+    "panicBanner": "上次运行 Skill Card Manager 时发生崩溃（{{time}}）。",
     "repoWarning_config_unreadable": "中央库配置文件已损坏或无法读取，本次启动已回退到默认路径（~/.skills-manager）。如果技能库看起来是空的，你的数据仍在之前配置的路径里——请到「中央仓库路径」重新指定。",
     "repoWarning_repo_path_invalid": "配置的中央仓库路径无效，本次启动已回退到默认路径（~/.skills-manager）。如果技能库看起来是空的，请到「中央仓库路径」重新指定数据所在位置。",
     "repoWarning_migration_incomplete": "将中央库迁移到新位置的操作没有完成，本次启动仍在使用原位置的现有技能库——数据没有丢失。要完成迁移，请打开设置，把「中央仓库路径」指向一个空的、可写的文件夹（点「编辑」可查看你选择的目标位置），然后重启。迁移成功前，当前技能库会留在原地——请不要删除它。",
@@ -1498,18 +1498,30 @@
     "batchRemoveConfirm": "从 {{agent}} 移除 {{count}} 个 Skills？此操作不会删除技能库中的数据。",
     "batchRemoved": "已移除 {{count}} 个 Skill",
     "batchRemoveFailed": "{{count}} 个 Skill 移除失败",
+    "foundationGuide": {
+      "open": "查看技能库与 Agent 目录的关系",
+      "title": "这里显示的是 {{agent}} 当前真正能看见的 Skills",
+      "flow": "技能库保存管理副本；点击“添加 Skill”会把选中的能力投放到 Agent 目录。投放可以是软链接或复制，但 Agent 只读取自己的目录。",
+      "managedTitle": "受管理投放 · {{count}} 个",
+      "managedBody": "可安全使用“从 Agent 移除”。只撤下投放，技能库副本保留，之后可以重新添加。",
+      "matchedTitle": "库内有对应 · {{count}} 个",
+      "matchedBody": "中央库找到了对应项，但它不是当前受管理投放；它仍可能是来源或独立副本，不要直接删除。",
+      "agentOnlyTitle": "仅 Agent 中 · {{count}} 个",
+      "agentOnlyBody": "中央库没有可靠副本。先收入技能库并确认同步，再考虑删除本地文件。",
+      "warning": "不要直接清空 Agent 的 Skills 文件夹。要卸载能力，请使用“从 Agent 移除”；“删除本地文件”是不可恢复的另一件事。"
+    },
     "localSkills": {
       "searchPlaceholder": "搜索 Agent Skills…",
       "empty": "未发现本地 Skills",
       "summary": "{{total}} / {{managed}} 个受管理 / {{synced}} 个已同步",
       "upload": "上传",
       "pull": "拉取",
-      "removeManaged": "从 Agent 移除",
-      "deleteLocal": "删除本地 Skill",
+      "removeManaged": "从 Agent 移除（技能库保留）",
+      "deleteLocal": "删除本地文件（不可恢复）",
       "deleteLocalConfirmTitle": "删除本地 Skill？",
-      "deleteLocalConfirmMessage": "从 {{agent}} 中删除“{{name}}”？此操作会删除本地文件且不可恢复。",
+      "deleteLocalConfirmMessage": "从 {{agent}} 中永久删除“{{name}}”？Skill Card Manager 当前没有可用于恢复它的受管理投放。请先收入技能库；继续删除将不可恢复。",
       "deletedLocalToast": "已从 {{agent}} 删除“{{name}}”。",
-      "uploadedToast": "已将“{{name}}”上传到 Skills 中心，未自动同步回 {{agent}}。",
+      "uploadedToast": "已将“{{name}}”收入技能库，并由 Skill Card Manager 纳管 {{agent}} 中的原位置。",
       "pulledToast": "已从 Skills 中心更新 {{agent}} 中的“{{name}}”。",
       "uploadConfirmTitle": "更新中心 Skill？",
       "uploadConfirmMessage": "将“{{name}}”上传到匹配的 Skills 中心条目？这会替换中心副本。",
