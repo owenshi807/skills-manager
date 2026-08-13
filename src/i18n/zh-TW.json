@@ -2,6 +2,11 @@
   "app": {
     "name": "Skill Card Manager"
   },
+  "errorBoundary": {
+    "title": "Skill Card Manager 無法顯示",
+    "description": "介面遇到執行錯誤，Skill 資料沒有被修改。",
+    "reload": "重新載入"
+  },
   "sidebar": {
     "dashboard": "Dashboard",
     "mySkills": "技能庫",
@@ -46,6 +51,12 @@
     "back": "返回牌組",
     "missingSkill": "Skill 已不在庫中",
     "gaps": "能力缺口",
+    "copy": {
+      "stage": "{{index}}. {{title}}：{{question}}",
+      "emptyStage": "- 目前沒有可用 Skill",
+      "supervision": "監督：{{value}}",
+      "stopLine": "停止線：{{value}}"
+    },
     "catalog": {
       "business": {
         "title": "商業與經營", "description": "從需求、市場和經營證據走向商業判斷。", "outcome": "識別真實商業機會，用市場、客戶與財務證據形成可執行判斷。", "supervision": "區分事實、假設與願望；讓反方審查收入邏輯、成本和不可逆風險。", "stopRule": "已有明確客戶、可驗證需求和最小商業實驗時，停止繼續寫宏大策略。",

@@ -82,19 +82,8 @@ function discoverDeck(deck: DeckDefinition, skills: ManagedSkill[], override?: D
   const used = new Set<string>();
   const result: ResolvedSkill[] = [];
 
-  for (const stage of deck.stages) {
-    const candidates = skills
-      .filter((skill) => !removed.has(skill.id) && !used.has(skill.id))
-      .map((skill) => ({ skill, score: scoreSkill(skill, stage) }))
-      .filter((candidate) => candidate.score >= 12)
-      .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name))
-      .slice(0, 5);
-    for (const candidate of candidates) {
-      used.add(candidate.skill.id);
-      result.push({ ...candidate, stage, source: "scan" });
-    }
-  }
-
+  // A user's explicit placement is the strongest relationship in a deck. Apply
+  // it before discovery so a broad keyword cannot reclaim the Skill.
   for (const added of override?.addedSkills ?? []) {
     if (removed.has(added.skillId) || used.has(added.skillId)) continue;
     const skill = skills.find((candidate) => candidate.id === added.skillId);
@@ -102,6 +91,39 @@ function discoverDeck(deck: DeckDefinition, skills: ManagedSkill[], override?: D
     if (!skill || !stage) continue;
     used.add(skill.id);
     result.push({ skill, stage, source: "added", score: 0 });
+  }
+
+  // Reserve exact catalog preferences across the whole deck before broad
+  // keyword matching. This keeps e.g. design-review in Review instead of an
+  // earlier stage that happens to contain the generic word "design".
+  for (const stage of deck.stages) {
+    for (const preferred of stage.preferredSkills) {
+      const preferredName = normalized(preferred);
+      const skill = skills.find((candidate) =>
+        !removed.has(candidate.id)
+        && !used.has(candidate.id)
+        && normalized(candidate.name) === preferredName);
+      if (!skill) continue;
+      used.add(skill.id);
+      result.push({ skill, stage, source: "scan", score: 100 });
+    }
+  }
+
+  for (const stage of deck.stages) {
+    const automaticSlots = Math.max(
+      0,
+      5 - result.filter((item) => item.stage.id === stage.id && item.source === "scan").length,
+    );
+    const candidates = skills
+      .filter((skill) => !removed.has(skill.id) && !used.has(skill.id))
+      .map((skill) => ({ skill, score: scoreSkill(skill, stage) }))
+      .filter((candidate) => candidate.score >= 12)
+      .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name))
+      .slice(0, automaticSlots);
+    for (const candidate of candidates) {
+      used.add(candidate.skill.id);
+      result.push({ ...candidate, stage, source: "scan" });
+    }
   }
   return result;
 }
@@ -112,10 +134,10 @@ function buildDeckPrompt(
   t: (key: string, options?: Record<string, unknown>) => string,
 ) {
   const stages = deck.stages.map((stage, index) => {
-    const names = resolved.filter((item) => item.stage.id === stage.id).map((item) => `- ${item.skill.name}`).join("\n") || "- 当前没有可用 Skill";
-    return `${index + 1}. ${t(stage.titleKey)}：${t(stage.questionKey)}\n${names}`;
+    const names = resolved.filter((item) => item.stage.id === stage.id).map((item) => `- ${item.skill.name}`).join("\n") || t("decks.copy.emptyStage");
+    return `${t("decks.copy.stage", { index: index + 1, title: t(stage.titleKey), question: t(stage.questionKey) })}\n${names}`;
   }).join("\n\n");
-  return `${t(deck.titleKey)}\n${t(deck.descriptionKey)}\n\n${stages}\n\n监督：${t(deck.supervisionKey)}\n停止线：${t(deck.stopRuleKey)}`;
+  return `${t(deck.titleKey)}\n${t(deck.descriptionKey)}\n\n${stages}\n\n${t("decks.copy.supervision", { value: t(deck.supervisionKey) })}\n${t("decks.copy.stopLine", { value: t(deck.stopRuleKey) })}`;
 }
 
 function Metric({ label, value, tone = "normal" }: { label: string; value: string | number; tone?: "normal" | "good" | "warn" }) {
@@ -250,7 +272,8 @@ export function Decks() {
       <div className="app-page">
         <button type="button" className="mb-3 flex items-center gap-1.5 text-[12px] text-muted hover:text-primary" onClick={() => setSelectedDeckId(null)}><ArrowLeft className="h-3.5 w-3.5" />{t("decks.back")}</button>
         <div className="app-page-header"><h1 className="app-page-title">{selectedCustomDeck.title}</h1><p className="mt-1.5 max-w-[760px] text-[13px] text-muted">{selectedCustomDeck.summary}</p></div>
-        <div className="grid gap-3 lg:grid-cols-2">{stages.map((stage, index) => <section key={stage} className="app-panel p-4"><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-bg text-[10px] font-semibold text-accent-light">{index + 1}</span><h2 className="text-[13px] font-semibold text-primary">{stage}</h2></div><div className="mt-3 space-y-2">{selectedCustomDeck.cards.filter((card) => card.stage === stage).map((card) => { const skill = skillById.get(card.skill_id); return <button key={card.skill_id} type="button" disabled={!skill} onClick={() => skill && openSkill(skill)} className="w-full rounded-lg border border-border-subtle bg-surface p-3 text-left hover:bg-surface-hover"><div className="flex justify-between"><span className="text-[12px] font-semibold text-primary">{skill?.name ?? t("decks.missingSkill")}</span><ChevronRight className="h-3.5 w-3.5 text-faint" /></div><p className="mt-1 text-[10.5px] text-muted">{card.reason}</p></button>; })}</div></section>)}</div>
+        <div className="grid gap-3 lg:grid-cols-2">{stages.map((stage, index) => <section key={stage} className="app-panel p-4"><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-bg text-[10px] font-semibold text-accent-light">{index + 1}</span><h2 className="text-[13px] font-semibold text-primary">{stage}</h2></div><div className="mt-3 space-y-2">{selectedCustomDeck.cards.filter((card) => card.stage === stage).map((card) => { const skill = skillById.get(card.skill_id); return <button key={card.skill_id} type="button" disabled={!skill} onClick={() => skill && openSkill(skill)} className="w-full rounded-lg border border-border-subtle bg-surface p-3 text-left hover:bg-surface-hover"><div className="flex justify-between"><span className="text-[12px] font-semibold text-primary">{skill?.name ?? t("decks.missingSkill")}</span><ChevronRight className="h-3.5 w-3.5 text-faint" /></div><p className="mt-1 text-[10.5px] font-medium text-secondary">{card.role}</p><p className="mt-1 text-[10.5px] text-muted">{card.reason}</p></button>; })}</div></section>)}</div>
+        {selectedCustomDeck.gaps.length > 0 && <section className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-4"><h2 className="text-[12px] font-semibold text-secondary">{t("decks.gaps")}</h2><ul className="mt-2 space-y-1.5 text-[11px] leading-5 text-muted">{selectedCustomDeck.gaps.map((gap) => <li key={gap}>· {gap}</li>)}</ul></section>}
       </div>
     );
   }
@@ -265,7 +288,9 @@ export function Decks() {
   const updateOverride = async (next: DeckOverride) => saveOverrides({ ...overrides, [selectedDefinition.id]: next });
   const removeSkill = (skillId: string) => void updateOverride({ ...currentOverride, removedSkillIds: [...new Set([...currentOverride.removedSkillIds, skillId])], addedSkills: currentOverride.addedSkills.filter((item) => item.skillId !== skillId) });
   const addSkill = (skillId: string) => {
-    const stageId = addStageId || selectedDefinition.stages[0].id;
+    const stageId = selectedDefinition.stages.some((stage) => stage.id === addStageId)
+      ? addStageId
+      : selectedDefinition.stages[0].id;
     void updateOverride({ ...currentOverride, removedSkillIds: currentOverride.removedSkillIds.filter((id) => id !== skillId), addedSkills: [...currentOverride.addedSkills.filter((item) => item.skillId !== skillId), { skillId, stageId }] });
     setSkillSearch("");
   };
@@ -296,7 +321,7 @@ export function Decks() {
       {editing && (
         <section className="mt-3 rounded-xl border border-accent/25 bg-accent-bg/20 p-4">
           <div className="flex items-center justify-between"><div><h2 className="text-[13px] font-semibold text-primary">{t("decks.editor.title")}</h2><p className="mt-1 text-[10.5px] text-muted">{t("decks.editor.description")}</p></div><button type="button" className="app-button-secondary" onClick={resetDeck}><RotateCcw className="h-3.5 w-3.5" />{t("decks.editor.reset")}</button></div>
-          <div className="mt-3 flex gap-2"><div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-faint" /><input value={skillSearch} onChange={(event) => setSkillSearch(event.target.value)} placeholder={t("decks.editor.search")} className="app-input h-9 w-full pl-9 text-[11px]" /></div><select value={addStageId || selectedDefinition.stages[0].id} onChange={(event) => setAddStageId(event.target.value)} className="app-input h-9 max-w-[190px] text-[11px]">{selectedDefinition.stages.map((stage) => <option key={stage.id} value={stage.id}>{t(stage.titleKey)}</option>)}</select></div>
+          <div className="mt-3 flex gap-2"><div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-faint" /><input value={skillSearch} onChange={(event) => setSkillSearch(event.target.value)} placeholder={t("decks.editor.search")} className="app-input h-9 w-full pl-9 text-[11px]" /></div><select value={selectedDefinition.stages.some((stage) => stage.id === addStageId) ? addStageId : selectedDefinition.stages[0].id} onChange={(event) => setAddStageId(event.target.value)} className="app-input h-9 max-w-[190px] text-[11px]">{selectedDefinition.stages.map((stage) => <option key={stage.id} value={stage.id}>{t(stage.titleKey)}</option>)}</select></div>
           {skillSearch.trim() && <div className="mt-2 grid gap-1.5 md:grid-cols-2">{availableToAdd.map((skill) => <button key={skill.id} type="button" onClick={() => addSkill(skill.id)} className="flex items-center justify-between rounded-lg border border-border-subtle bg-surface px-3 py-2 text-left hover:bg-surface-hover"><div className="min-w-0"><p className="truncate text-[11px] font-semibold text-primary">{skill.name}</p><p className="truncate text-[9.5px] text-muted">{skill.description}</p></div><Plus className="ml-2 h-3.5 w-3.5 text-accent-light" /></button>)}</div>}
         </section>
       )}

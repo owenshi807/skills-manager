@@ -2,6 +2,11 @@
   "app": {
     "name": "Skill Card Manager"
   },
+  "errorBoundary": {
+    "title": "Skill Card Manager cannot be displayed",
+    "description": "The interface encountered a runtime error. Your Skill data was not modified.",
+    "reload": "Reload"
+  },
   "sidebar": {
     "dashboard": "Dashboard",
     "mySkills": "Library",
@@ -51,6 +56,12 @@
     "back": "Back to decks",
     "missingSkill": "Skill no longer in library",
     "gaps": "Capability gaps",
+    "copy": {
+      "stage": "{{index}}. {{title}}: {{question}}",
+      "emptyStage": "- No available Skill yet",
+      "supervision": "Supervision: {{value}}",
+      "stopLine": "Stop line: {{value}}"
+    },
     "catalog": {
       "business": {
         "title": "Business & Operations", "description": "Move from demand and market evidence to business judgment.",

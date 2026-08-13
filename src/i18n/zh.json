@@ -2,6 +2,11 @@
   "app": {
     "name": "Skill Card Manager"
   },
+  "errorBoundary": {
+    "title": "Skill Card Manager 无法显示",
+    "description": "界面遇到运行错误，Skill 数据没有被修改。",
+    "reload": "重新载入"
+  },
   "sidebar": {
     "dashboard": "Dashboard",
     "mySkills": "技能库",
@@ -54,6 +59,12 @@
     "back": "返回牌组",
     "missingSkill": "Skill 已不在库中",
     "gaps": "能力缺口",
+    "copy": {
+      "stage": "{{index}}. {{title}}：{{question}}",
+      "emptyStage": "- 当前没有可用 Skill",
+      "supervision": "监督：{{value}}",
+      "stopLine": "停止线：{{value}}"
+    },
     "catalog": {
       "business": {
         "title": "商业与经营",

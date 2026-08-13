@@ -258,7 +258,7 @@ export function SkillIssuesView({
     { id: "source" as const, icon: Link2, tone: "text-violet-500 bg-violet-500/10" },
   ];
   const categories = categoryDefinitions.map((definition) => {
-    const categoryIssues = unresolvedIssues.filter((issue) => issueCategory(issue) === definition.id);
+    const categoryIssues = searchedIssues.filter((issue) => issueCategory(issue) === definition.id);
     return {
       ...definition,
       issues: categoryIssues,
@@ -268,11 +268,11 @@ export function SkillIssuesView({
   const currentCategory = categories.find((category) => category.id === selectedCategory);
   const categoryIssues = searchedIssues.filter((issue) => issueCategory(issue) === selectedCategory);
   const formatBuckets = [...new Set(
-    unresolvedIssues
+    searchedIssues
       .filter((issue) => issueCategory(issue) === "format")
       .flatMap((issue) => issue.healthCodes ?? ["unknown"]),
   )].map((code) => {
-    const bucketIssues = unresolvedIssues.filter((issue) =>
+    const bucketIssues = searchedIssues.filter((issue) =>
       issueCategory(issue) === "format" && (issue.healthCodes ?? ["unknown"]).includes(code));
     return {
       code,

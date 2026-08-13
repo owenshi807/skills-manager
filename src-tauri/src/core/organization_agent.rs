@@ -323,8 +323,10 @@ pub fn parse_deck_suggestion(
     raw: &str,
     allowed_skill_ids: &std::collections::HashSet<String>,
 ) -> Result<DeckSuggestion, AppError> {
-    let envelope: DeckSuggestionEnvelope = serde_json::from_str(json_body(raw))
-        .map_err(|error| AppError::invalid_input(format!("Agent returned invalid deck JSON: {error}")))?;
+    let envelope: DeckSuggestionEnvelope =
+        serde_json::from_str(json_body(raw)).map_err(|error| {
+            AppError::invalid_input(format!("Agent returned invalid deck JSON: {error}"))
+        })?;
     if envelope.schema_version != OUTPUT_SCHEMA_VERSION
         || envelope.method_version != DECK_METHOD_VERSION
     {
@@ -340,6 +342,16 @@ pub fn parse_deck_suggestion(
         || deck.cards.is_empty()
         || deck.cards.len() > 20
         || deck.gaps.len() > 12
+        || deck.gaps.iter().any(|gap| {
+            let trimmed = gap.trim();
+            trimmed.is_empty() || trimmed.chars().count() > 200
+        })
+        || deck
+            .gaps
+            .iter()
+            .map(|gap| gap.chars().count())
+            .sum::<usize>()
+            > 1_200
     {
         return Err(AppError::invalid_input("Agent returned an invalid deck"));
     }
@@ -424,5 +436,18 @@ mod tests {
     fn rejects_deck_with_invented_skill() {
         let raw = r#"{"schema_version":1,"method_version":"card-master-deck-builder-v1","deck":{"title":"Research","summary":"Find facts","cards":[{"skill_id":"invented","stage":"Research","role":"Search","reason":"Looks useful"}],"gaps":[]}}"#;
         assert!(parse_deck_suggestion(raw, &std::collections::HashSet::new()).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_or_oversized_deck_gaps() {
+        let allowed = std::collections::HashSet::from(["s1".to_string()]);
+        let empty_gap = r#"{"schema_version":1,"method_version":"card-master-deck-builder-v1","deck":{"title":"Research","summary":"Find facts","cards":[{"skill_id":"s1","stage":"Research","role":"Search","reason":"Useful"}],"gaps":["   "]}}"#;
+        assert!(parse_deck_suggestion(empty_gap, &allowed).is_err());
+
+        let oversized_gap = "x".repeat(201);
+        let raw = format!(
+            r#"{{"schema_version":1,"method_version":"card-master-deck-builder-v1","deck":{{"title":"Research","summary":"Find facts","cards":[{{"skill_id":"s1","stage":"Research","role":"Search","reason":"Useful"}}],"gaps":["{oversized_gap}"]}}}}"#
+        );
+        assert!(parse_deck_suggestion(&raw, &allowed).is_err());
     }
 }
