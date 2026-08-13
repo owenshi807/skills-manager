@@ -32,6 +32,7 @@ export interface SkillIssue {
   kind: SkillIssueKind;
   skills: ManagedSkill[];
   details?: string[];
+  healthCodes?: string[];
   decisionTier: OrganizationDecisionTier;
   caseRevision?: string;
   artifactStatus?: OrganizationCaseEvidence["artifact"]["status"];
@@ -141,6 +142,7 @@ export function buildSkillIssues(
       kind: "format_health",
       skills: [skill],
       details: inspection.issues.map((issue) => issue.detail),
+      healthCodes: inspection.issues.map((issue) => issue.code),
       decisionTier: inspection.issues.some((issue) => issue.severity === "error")
         ? "blocked"
         : "rule_diagnosed",

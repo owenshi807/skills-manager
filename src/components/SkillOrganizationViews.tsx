@@ -1,12 +1,14 @@
 import {
+  ArrowLeft,
   ArrowRight,
   Bot,
-  Boxes,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
+  Copy,
+  FileWarning,
   GitCompareArrows,
-  Layers3,
   Link2,
   Loader2,
   RefreshCw,
@@ -17,12 +19,11 @@ import { useTranslation } from "react-i18next";
 import type {
   ManagedSkill,
   OrganizationAgentAssessment,
+  OrganizationArchivePreview,
   OrganizationDisposition,
   ToolInfo,
 } from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
-import type { SkillCapabilityGroup } from "../lib/skillOrganization";
-import { countSkillsInCapabilityGroups } from "../lib/skillOrganization";
 import { cn } from "../utils";
 
 interface SharedProps {
@@ -31,14 +32,6 @@ interface SharedProps {
   displayNames: Map<string, string>;
   tools: ToolInfo[];
   onOpenSkill: (skillId: string) => void;
-}
-
-interface OrganizeProps extends SharedProps {
-  capabilityGroups: SkillCapabilityGroup[];
-  relationshipGroups: SkillRelationGroup[];
-  resolvedIds: Set<string>;
-  onShowIssues: () => void;
-  onUndoDecision: (caseKey: string) => void;
 }
 
 interface IssuesProps extends SharedProps {
@@ -55,6 +48,9 @@ interface IssuesProps extends SharedProps {
   refreshing: boolean;
   onRefresh: () => void;
   onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
+  onUndoDecision: (caseKey: string) => void;
+  onPreviewArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<OrganizationArchivePreview>;
+  onApplyArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<void>;
 }
 
 export type OrganizationExecutionMode = "codex" | "claude_code" | "hermes" | "copy_prompt";
@@ -155,169 +151,6 @@ function relationCopy(kind: SkillRelationGroup["kind"], t: ReturnType<typeof use
   };
 }
 
-export function SkillOrganizeView({
-  skills,
-  capabilityGroups,
-  relationshipGroups,
-  resolvedIds,
-  search,
-  displayNames,
-  tools,
-  onOpenSkill,
-  onShowIssues,
-  onUndoDecision,
-}: OrganizeProps) {
-  const { t } = useTranslation();
-  const groupedSkillCount = countSkillsInCapabilityGroups(capabilityGroups);
-  const confirmedRelationshipGroups = relationshipGroups.filter((group) => resolvedIds.has(group.id));
-  const pendingRelationshipCount = relationshipGroups.length - confirmedRelationshipGroups.length;
-  const visibleGroups = capabilityGroups.filter((group) => matchesSearch(
-    group.skills,
-    t(`mySkills.organization.families.${group.labelKey}.label`),
-    search,
-  ));
-
-  return (
-    <div className="space-y-4 pb-8">
-      <div className="grid grid-cols-3 gap-2">
-        <div className="app-panel px-4 py-3">
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-muted">
-            <Layers3 className="h-3.5 w-3.5" />
-            {t("mySkills.organization.summary.groups")}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{capabilityGroups.length}</div>
-          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.groupsHint")}</div>
-        </div>
-        <div className="app-panel px-4 py-3">
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-muted">
-            <Boxes className="h-3.5 w-3.5" />
-            {t("mySkills.organization.summary.grouped")}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{groupedSkillCount} / {skills.length}</div>
-          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.groupedHint")}</div>
-        </div>
-        <button type="button" onClick={onShowIssues} className="app-panel px-4 py-3 text-left transition-colors hover:bg-surface-hover">
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-muted">
-            <CircleAlert className="h-3.5 w-3.5" />
-            {t("mySkills.organization.summary.relationships")}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold text-primary">{pendingRelationshipCount}</div>
-          <div className="text-[10px] text-faint">{t("mySkills.organization.summary.relationshipsHint")}</div>
-        </button>
-      </div>
-
-      <div className="rounded-xl border border-border-subtle bg-surface px-4 py-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-accent-bg p-2 text-accent-light"><Layers3 className="h-4 w-4" /></div>
-          <div>
-            <h2 className="text-[14px] font-semibold text-primary">{t("mySkills.organization.organizeTitle")}</h2>
-            <p className="mt-0.5 max-w-[760px] text-[12px] leading-5 text-muted">
-              {t("mySkills.organization.organizeIntro")}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {visibleGroups.length === 0 ? (
-        <div className="app-panel py-16 text-center text-[13px] text-muted">{t("mySkills.organization.noGroups")}</div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {visibleGroups.map((group) => {
-            const label = t(`mySkills.organization.families.${group.labelKey}.label`);
-            const description = t(`mySkills.organization.families.${group.labelKey}.description`);
-            return (
-              <article key={group.id} className="app-panel flex flex-col p-4 shadow-card">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="truncate text-[15px] font-semibold text-primary">{label}</h3>
-                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-muted">
-                        {t("mySkills.organization.skillCount", { count: group.skills.length })}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[12px] leading-5 text-muted">{description}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-accent-bg px-2 py-1 text-[10px] font-semibold text-accent-light">
-                    {t(`mySkills.organization.groupBasis.${group.basisKey}`)}
-                  </span>
-                </div>
-
-                <div className="mt-3 space-y-1.5">
-                  {group.skills.slice(0, 6).map((skill) => (
-                    <MemberRow
-                      key={skill.id}
-                      skill={skill}
-                      displayName={displayNames.get(skill.id) || skill.name}
-                      tools={tools}
-                      onOpen={() => onOpenSkill(skill.id)}
-                    />
-                  ))}
-                  {group.skills.length > 6 && (
-                    <div className="px-3 py-1 text-[11px] text-faint">
-                      {t("mySkills.organization.moreMembers", { count: group.skills.length - 6 })}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 rounded-lg border border-border-faint bg-bg-secondary/50 px-3 py-2.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-                    {t("mySkills.organization.recommendation")}
-                  </div>
-                  <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">
-                    {t("mySkills.organization.familyRecommendation")}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-
-      {confirmedRelationshipGroups.length > 0 && (
-        <section className="space-y-3 pt-2">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-[14px] font-semibold text-primary">
-                {t("mySkills.organization.confirmedRelations", { count: confirmedRelationshipGroups.length })}
-              </h2>
-              <p className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.confirmedRelationsHint")}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-            {confirmedRelationshipGroups
-              .filter((group) => matchesSearch(group.skills, group.label, search))
-              .map((group) => (
-                <article key={group.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-[13px] font-semibold text-primary">{group.label}</h3>
-                        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
-                          {t("mySkills.organization.skillCount", { count: group.skills.length })}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[11px] text-muted">
-                        {group.kind === "name_collision"
-                          ? t("mySkills.organization.confirmedKeepGrouped")
-                          : t("mySkills.organization.confirmedRelation")}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onUndoDecision(group.id)}
-                      className="app-button-secondary shrink-0"
-                    >
-                      {t("mySkills.organization.undoDecision")}
-                    </button>
-                  </div>
-                </article>
-              ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
-
 function issueCopy(kind: SkillIssue["kind"], t: ReturnType<typeof useTranslation>["t"]) {
   if (kind === "format_health") return {
     title: t("mySkills.organization.issues.formatHealth.title"),
@@ -359,6 +192,19 @@ function issueCopy(kind: SkillIssue["kind"], t: ReturnType<typeof useTranslation
   };
 }
 
+type IssueCategory = "duplicate" | "same_name" | "format" | "source";
+
+function issueCategory(issue: SkillIssue): IssueCategory {
+  if (issue.kind === "exact_duplicate" || issue.kind === "content_alias") return "duplicate";
+  if (issue.kind === "name_collision") return "same_name";
+  if (issue.kind === "format_health") return "format";
+  return "source";
+}
+
+function issueMemberNames(issue: SkillIssue, displayNames: Map<string, string>) {
+  return issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ");
+}
+
 export function SkillIssuesView({
   issues,
   resolvedIds,
@@ -373,6 +219,9 @@ export function SkillIssuesView({
   refreshing,
   onRefresh,
   onDecide,
+  onUndoDecision,
+  onPreviewArchive,
+  onApplyArchive,
   search,
   displayNames,
   tools,
@@ -380,6 +229,13 @@ export function SkillIssuesView({
 }: IssuesProps) {
   const { t } = useTranslation();
   const [executionMenuOpen, setExecutionMenuOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<IssueCategory | null>(null);
+  const [selectedHealthCode, setSelectedHealthCode] = useState<string | null>(null);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [keepSkillId, setKeepSkillId] = useState<string | null>(null);
+  const [archivePreview, setArchivePreview] = useState<OrganizationArchivePreview | null>(null);
+  const [previewingArchive, setPreviewingArchive] = useState(false);
+  const [applyingArchive, setApplyingArchive] = useState(false);
   const executionMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!executionMenuOpen) return;
@@ -390,38 +246,144 @@ export function SkillIssuesView({
     return () => window.removeEventListener("mousedown", close);
   }, [executionMenuOpen]);
   const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
-  const visibleIssues = unresolvedIssues.filter((issue) => {
+  const resolvedIssues = issues.filter((issue) => resolvedIds.has(issue.id));
+  const searchedIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
     return matchesSearch(issue.skills, copy.title, search);
   });
-  const ruleDiagnosedIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "rule_diagnosed");
-  const semanticIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "needs_semantic");
-  const blockedIssues = unresolvedIssues.filter((issue) => issue.decisionTier === "blocked");
+  const categoryDefinitions = [
+    { id: "duplicate" as const, icon: Copy, tone: "text-emerald-500 bg-emerald-500/10" },
+    { id: "same_name" as const, icon: GitCompareArrows, tone: "text-amber-500 bg-amber-500/10" },
+    { id: "format" as const, icon: FileWarning, tone: "text-rose-500 bg-rose-500/10" },
+    { id: "source" as const, icon: Link2, tone: "text-violet-500 bg-violet-500/10" },
+  ];
+  const categories = categoryDefinitions.map((definition) => {
+    const categoryIssues = searchedIssues.filter((issue) => issueCategory(issue) === definition.id);
+    return {
+      ...definition,
+      issues: categoryIssues,
+      skillCount: new Set(categoryIssues.flatMap((issue) => issue.skills.map((skill) => skill.id))).size,
+    };
+  });
+  const currentCategory = categories.find((category) => category.id === selectedCategory);
+  const categoryIssues = searchedIssues.filter((issue) => issueCategory(issue) === selectedCategory);
+  const formatBuckets = [...new Set(
+    searchedIssues
+      .filter((issue) => issueCategory(issue) === "format")
+      .flatMap((issue) => issue.healthCodes ?? ["unknown"]),
+  )].map((code) => {
+    const bucketIssues = searchedIssues.filter((issue) =>
+      issueCategory(issue) === "format" && (issue.healthCodes ?? ["unknown"]).includes(code));
+    return {
+      code,
+      issues: bucketIssues,
+      skillCount: new Set(bucketIssues.flatMap((issue) => issue.skills.map((skill) => skill.id))).size,
+    };
+  }).sort((a, b) => b.issues.length - a.issues.length || a.code.localeCompare(b.code));
+  const narrowedIssues = categoryIssues.filter((issue) =>
+    selectedCategory !== "format" || !selectedHealthCode || (issue.healthCodes ?? ["unknown"]).includes(selectedHealthCode));
+  const activeIssue = narrowedIssues.find((issue) => issue.id === selectedIssueId) ?? narrowedIssues[0];
+  const visibleIssues = activeIssue ? [activeIssue] : [];
+  const semanticIssues = selectedCategory === "same_name"
+    ? categoryIssues.filter((issue) => issue.decisionTier === "needs_semantic")
+    : [];
   const selectedExecution = executionOptions.find((option) => option.id === executionMode) ?? executionOptions[0];
+  const activeAgentAssessment = activeIssue ? agentAssessments.get(activeIssue.id) : undefined;
+  const recommendedKeepSkillId = activeAgentAssessment?.assessment.recommended_action === "archive_one"
+    ? activeAgentAssessment.assessment.recommended_keep_skill_id
+    : null;
+
+  const openCategory = (category: IssueCategory) => {
+    const first = unresolvedIssues.find((issue) => issueCategory(issue) === category);
+    setSelectedCategory(category);
+    setSelectedHealthCode(null);
+    setSelectedIssueId(first?.id ?? null);
+  };
+
+  const openHealthBucket = (code: string, bucketIssues: SkillIssue[]) => {
+    setSelectedHealthCode(code);
+    setSelectedIssueId(bucketIssues[0]?.id ?? null);
+  };
+
+  const returnToDirectory = () => {
+    setSelectedCategory(null);
+    setSelectedHealthCode(null);
+    setSelectedIssueId(null);
+  };
+
+  useEffect(() => {
+    const recommendedId = activeIssue?.skills.some((skill) => skill.id === recommendedKeepSkillId)
+      ? recommendedKeepSkillId
+      : null;
+    setKeepSkillId(recommendedId ?? activeIssue?.skills[0]?.id ?? null);
+    setArchivePreview(null);
+  }, [activeIssue?.id, activeIssue?.skills, recommendedKeepSkillId]);
+
+  const previewArchivePlan = async (issue: SkillIssue) => {
+    const keepId = keepSkillId ?? issue.skills[0]?.id;
+    const archiveId = issue.skills.find((skill) => skill.id !== keepId)?.id;
+    if (!keepId || !archiveId) return;
+    setPreviewingArchive(true);
+    try {
+      setArchivePreview(await onPreviewArchive(issue, keepId, archiveId));
+    } catch {
+      // The parent owns the user-facing error toast.
+    } finally {
+      setPreviewingArchive(false);
+    }
+  };
+
+  const applyArchivePlan = async (issue: SkillIssue) => {
+    if (!archivePreview) return;
+    setApplyingArchive(true);
+    try {
+      await onApplyArchive(issue, archivePreview.keep_skill_id, archivePreview.archive_skill_id);
+      setArchivePreview(null);
+    } catch {
+      // The parent owns the user-facing error toast.
+    } finally {
+      setApplyingArchive(false);
+    }
+  };
 
   return (
     <div className="space-y-4 pb-8">
       <div className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-[15px] font-semibold text-primary">{t("mySkills.organization.issuesTitle")}</h2>
-            <p className="mt-1 text-[12px] leading-5 text-muted">{t("mySkills.organization.issuesIntro")}</p>
+          <div className="min-w-0">
+            {selectedCategory ? (
+              <button
+                type="button"
+                onClick={selectedCategory === "format" && selectedHealthCode
+                  ? () => {
+                    setSelectedHealthCode(null);
+                    setSelectedIssueId(null);
+                  }
+                  : returnToDirectory}
+                className="mb-2 inline-flex items-center gap-1 text-[11px] font-medium text-muted transition-colors hover:text-primary"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                {selectedCategory === "format" && selectedHealthCode
+                  ? t("mySkills.organization.issueDirectory.allFormatCauses")
+                  : t("mySkills.organization.issueDirectory.allCategories")}
+              </button>
+            ) : null}
+            <h2 className="text-[15px] font-semibold text-primary">
+              {currentCategory
+                ? t(`mySkills.organization.issueDirectory.categories.${currentCategory.id}.title`)
+                : t("mySkills.organization.issueDirectory.title")}
+            </h2>
+            <p className="mt-1 text-[12px] leading-5 text-muted">
+              {currentCategory
+                ? t(`mySkills.organization.issueDirectory.categories.${currentCategory.id}.hint`)
+                : t("mySkills.organization.issueDirectory.intro")}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-emerald-600 dark:text-emerald-300">{ruleDiagnosedIssues.length}</div>
-              <div className="text-[10px] text-emerald-600/80 dark:text-emerald-300/80">{t("mySkills.organization.ruleDiagnosedCount")}</div>
+            <div className="rounded-lg bg-bg-secondary px-3 py-2 text-center">
+              <div className="text-[17px] font-semibold text-primary">{currentCategory?.issues.length ?? unresolvedIssues.length}</div>
+              <div className="text-[10px] text-muted">{t("mySkills.organization.issueDirectory.events")}</div>
             </div>
-            <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-amber-600 dark:text-amber-300">{semanticIssues.length}</div>
-              <div className="text-[10px] text-amber-600/80 dark:text-amber-300/80">{t("mySkills.organization.semanticCount")}</div>
-            </div>
-            {blockedIssues.length > 0 && (
-              <div className="rounded-lg bg-violet-500/10 px-3 py-2 text-center">
-                <div className="text-[17px] font-semibold text-red-600 dark:text-red-300">{blockedIssues.length}</div>
-                <div className="text-[10px] text-red-600/80 dark:text-red-300/80">{t("mySkills.organization.blockedCount")}</div>
-              </div>
-            )}
             <button
               type="button"
               onClick={onRefresh}
@@ -434,6 +396,34 @@ export function SkillIssuesView({
             </button>
           </div>
         </div>
+        {!selectedCategory && (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {categories.map((category) => {
+              const Icon = category.icon;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => openCategory(category.id)}
+                  disabled={category.issues.length === 0}
+                  className="group rounded-xl border border-border-faint bg-bg-secondary/55 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-border-subtle hover:shadow-sm disabled:pointer-events-none disabled:opacity-45"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className={cn("rounded-lg p-2", category.tone)}><Icon className="h-4 w-4" /></span>
+                    <ChevronRight className="h-4 w-4 text-faint transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                  <div className="mt-4 text-[24px] font-semibold tracking-tight text-primary">{category.issues.length}</div>
+                  <div className="mt-0.5 text-[13px] font-semibold text-secondary">
+                    {t(`mySkills.organization.issueDirectory.categories.${category.id}.title`)}
+                  </div>
+                  <div className="mt-1 text-[11px] leading-4 text-muted">
+                    {t("mySkills.organization.issueDirectory.affectedSkills", { count: category.skillCount })}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {semanticIssues.length > 1 && (
           <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/20 bg-accent-bg px-3 py-2.5">
             <div>
@@ -525,16 +515,80 @@ export function SkillIssuesView({
         </section>
       )}
 
-      {visibleIssues.length === 0 ? (
-        <div className="app-panel py-16 text-center">
-          <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500" />
-          <div className="text-[13px] font-medium text-secondary">{t("mySkills.organization.noIssues")}</div>
-        </div>
-      ) : (
-        <div className="space-y-3">
+      {selectedCategory === "format" && !selectedHealthCode ? (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-[13px] font-semibold text-primary">{t("mySkills.organization.issueDirectory.formatCauses")}</h3>
+            <p className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.issueDirectory.formatCausesHint")}</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {formatBuckets.map((bucket) => (
+              <button
+                key={bucket.code}
+                type="button"
+                onClick={() => openHealthBucket(bucket.code, bucket.issues)}
+                className="group flex items-center justify-between gap-3 rounded-xl border border-border-faint bg-surface p-3.5 text-left shadow-card transition-colors hover:border-border-subtle hover:bg-surface-hover"
+              >
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold text-secondary">
+                    {t(`mySkills.organization.issueDirectory.healthCodes.${bucket.code}`, { defaultValue: bucket.code })}
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted">
+                    {t("mySkills.organization.issueDirectory.affectedSkills", { count: bucket.skillCount })}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-[18px] font-semibold text-primary">{bucket.issues.length}</span>
+                  <ChevronRight className="h-4 w-4 text-faint transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : selectedCategory ? (
+        <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="app-panel max-h-[680px] overflow-y-auto p-2 shadow-card lg:sticky lg:top-4">
+            <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
+              {t("mySkills.organization.issueDirectory.caseList", { count: narrowedIssues.length })}
+            </div>
+            <div className="space-y-1">
+              {narrowedIssues.map((issue, index) => (
+                <button
+                  key={issue.id}
+                  type="button"
+                  onClick={() => setSelectedIssueId(issue.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
+                    activeIssue?.id === issue.id ? "bg-accent-bg text-primary" : "text-secondary hover:bg-surface-hover",
+                  )}
+                >
+                  <span className="w-6 shrink-0 text-[10px] tabular-nums text-faint">{index + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[11px] font-semibold">{issueMemberNames(issue, displayNames)}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-muted">{issueCopy(issue.kind, t).title}</span>
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-faint" />
+                </button>
+              ))}
+            </div>
+          </aside>
+          {visibleIssues.length === 0 ? (
+            <div className="app-panel py-16 text-center">
+              <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500" />
+              <div className="text-[13px] font-medium text-secondary">{t("mySkills.organization.noIssues")}</div>
+            </div>
+          ) : (
+          <div className="min-w-0 space-y-3">
           {visibleIssues.map((issue) => {
             const copy = issueCopy(issue.kind, t);
             const agentAssessment = agentAssessments.get(issue.id);
+            const agentRecommendation = agentAssessment?.assessment.recommended_action;
+            const agentKeepSkill = issue.skills.find(
+              (skill) => skill.id === agentAssessment?.assessment.recommended_keep_skill_id,
+            );
+            const agentArchiveSkill = agentKeepSkill
+              ? issue.skills.find((skill) => skill.id !== agentKeepSkill.id)
+              : undefined;
             return (
               <article key={issue.id} className="app-panel overflow-hidden shadow-card">
                 <div className="flex items-start gap-4 p-4">
@@ -597,8 +651,11 @@ export function SkillIssuesView({
                           <div className="flex min-w-0 items-start gap-2">
                             <Bot className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />
                             <div>
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-accent-light">
+                                {t("mySkills.organization.agentAdviceTitle", { agent: agentAssessment.agentName })}
+                              </div>
                               <div className="text-[11px] font-semibold text-secondary">
-                                {agentAssessment.agentName} · {t(`mySkills.organization.agentRelations.${agentAssessment.assessment.relation_hypothesis}`)}
+                                {t(`mySkills.organization.agentRelations.${agentAssessment.assessment.relation_hypothesis}`)}
                               </div>
                               <p className="mt-1 text-[12px] leading-5 text-secondary">
                                 {agentAssessment.assessment.difference_summary}
@@ -646,20 +703,161 @@ export function SkillIssuesView({
                     <div className="mt-1 text-[12px] text-muted">{copy.impact}</div>
                   </div>
                 </div>
+                {issue.decisionTier === "needs_semantic" && agentAssessment && !agentAssessment.stale && (
+                  <section className="border-t border-border-faint bg-surface px-4 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-accent-light">
+                          {t("mySkills.organization.actionPlan.title")}
+                        </div>
+                        <h4 className="mt-1 text-[13px] font-semibold text-primary">
+                          {agentRecommendation === "archive_one" && agentKeepSkill && agentArchiveSkill
+                            ? t("mySkills.organization.actionPlan.archiveConclusion", {
+                                keep: displayNames.get(agentKeepSkill.id) || agentKeepSkill.name,
+                                archive: displayNames.get(agentArchiveSkill.id) || agentArchiveSkill.name,
+                              })
+                            : agentRecommendation === "keep_both"
+                              ? t("mySkills.organization.actionPlan.keepBothConclusion")
+                              : t("mySkills.organization.actionPlan.moreEvidenceConclusion")}
+                        </h4>
+                        <p className="mt-1 text-[11px] leading-4 text-muted">
+                          {agentAssessment.assessment.recommendation_reason
+                            || t("mySkills.organization.actionPlan.legacyConclusion")}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                        {t("mySkills.organization.actionPlan.notApplied")}
+                      </span>
+                    </div>
+                    {agentRecommendation === "archive_one"
+                    && agentKeepSkill
+                    && agentArchiveSkill
+                    && issue.skills.length === 2 ? (
+                      <>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {issue.skills.map((skill) => {
+                            const selected = keepSkillId === skill.id;
+                            return (
+                              <button
+                                key={skill.id}
+                                type="button"
+                                onClick={() => {
+                                  setKeepSkillId(skill.id);
+                                  setArchivePreview(null);
+                                }}
+                                className={cn(
+                                  "rounded-lg border px-3 py-3 text-left transition-colors",
+                                  selected
+                                    ? "border-accent/50 bg-accent-bg"
+                                    : "border-border-faint bg-bg-secondary/50 hover:border-border-subtle",
+                                )}
+                              >
+                                <span className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-[12px] font-semibold text-secondary">
+                                    {displayNames.get(skill.id) || skill.name}
+                                  </span>
+                                  <span className={cn(
+                                    "rounded-full px-2 py-0.5 text-[9px] font-medium",
+                                    selected ? "bg-accent text-white" : "bg-surface-hover text-muted",
+                                  )}>
+                                    {selected
+                                      ? t("mySkills.organization.actionPlan.keepThis")
+                                      : t("mySkills.organization.actionPlan.archiveThis")}
+                                  </span>
+                                </span>
+                                <span className="mt-1 block truncate text-[10px] text-muted">{sourceLabel(skill)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {archivePreview && (
+                          <div className="mt-3 rounded-lg border border-accent/25 bg-accent-bg p-3">
+                            <div className="text-[11px] font-semibold text-secondary">
+                              {t("mySkills.organization.actionPlan.previewTitle")}
+                            </div>
+                            <ul className="mt-2 space-y-1 text-[11px] leading-4 text-muted">
+                              <li>· {t("mySkills.organization.actionPlan.keepNamed", { name: archivePreview.keep_name })}</li>
+                              <li>· {t("mySkills.organization.actionPlan.archiveNamed", { name: archivePreview.archive_name })}</li>
+                              {archivePreview.source_effect && (
+                                <li>· {t("mySkills.organization.actionPlan.sourceRewired", {
+                                  agent: archivePreview.source_effect.tool,
+                                  path: archivePreview.source_effect.source_path,
+                                })}</li>
+                              )}
+                              {archivePreview.target_effects.map((effect) => (
+                                <li key={`${effect.tool}:${effect.target_path}`}>
+                                  · {effect.action === "rewire_to_keep"
+                                    ? t("mySkills.organization.actionPlan.rewireAgent", { agent: effect.tool })
+                                    : t("mySkills.organization.actionPlan.removeRedundant", { agent: effect.tool })}
+                                </li>
+                              ))}
+                              {archivePreview.source_preserved && (
+                                <li>· {t("mySkills.organization.actionPlan.sourcePreserved")}</li>
+                              )}
+                              <li>· {t("mySkills.organization.actionPlan.undoable")}</li>
+                            </ul>
+                          </div>
+                        )}
+                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onDecide(issue, "related")}
+                            className="app-button-secondary"
+                          >
+                            {t("mySkills.organization.actionPlan.overrideKeepBoth")}
+                          </button>
+                          {!archivePreview ? (
+                            <button
+                              type="button"
+                              onClick={() => previewArchivePlan(issue)}
+                              disabled={previewingArchive}
+                              className="app-button-primary"
+                            >
+                              {previewingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                              {t("mySkills.organization.actionPlan.previewRecommendation")}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => applyArchivePlan(issue)}
+                              disabled={applyingArchive}
+                              className="app-button-primary"
+                            >
+                              {applyingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                              {t("mySkills.organization.actionPlan.applyNamed", {
+                                keep: archivePreview.keep_name,
+                                archive: archivePreview.archive_name,
+                              })}
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : agentRecommendation === "keep_both" ? (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => onDecide(issue, "related")}
+                          className="app-button-primary"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {t("mySkills.organization.actionPlan.applyKeepBoth")}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                        {t("mySkills.organization.actionPlan.noSafeAction")}
+                      </p>
+                    )}
+                  </section>
+                )}
                 <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
                   {issue.decisionTier === "needs_semantic" && (
-                    <>
-                      <button type="button" onClick={() => onDecide(issue, "intentional_distinct")} className="app-button-secondary">
-                        {t("mySkills.organization.keepDistinct")}
-                      </button>
-                      <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-secondary">
-                        {t("mySkills.organization.confirmRelated")}
-                      </button>
-                      <button type="button" onClick={() => onHandOff(issue)} className="app-button-primary">
-                        <Bot className="h-3.5 w-3.5" />
-                        {t("mySkills.organization.compareItems")}
-                      </button>
-                    </>
+                    <button type="button" onClick={() => onHandOff(issue)} className={agentAssessment ? "app-button-secondary" : "app-button-primary"}>
+                      <Bot className="h-3.5 w-3.5" />
+                      {agentAssessment
+                        ? t("mySkills.organization.compareAgain")
+                        : t("mySkills.organization.compareItems")}
+                    </button>
                   )}
                   {issue.decisionTier === "rule_diagnosed" && issue.caseRevision && (
                     <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-primary">
@@ -677,7 +875,35 @@ export function SkillIssuesView({
               </article>
             );
           })}
+          </div>
+          )}
         </div>
+      ) : null}
+
+      {resolvedIssues.length > 0 && (
+        <section className="space-y-2 pt-2">
+          <div>
+            <h2 className="text-[13px] font-semibold text-primary">
+              {t("mySkills.organization.confirmedRelations", { count: resolvedIssues.length })}
+            </h2>
+            <p className="mt-0.5 text-[10.5px] text-muted">{t("mySkills.organization.confirmedRelationsHint")}</p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+            {resolvedIssues.map((issue) => (
+              <article key={issue.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2.5">
+                <div className="min-w-0">
+                  <h3 className="truncate text-[12px] font-semibold text-primary">{issueCopy(issue.kind, t).title}</h3>
+                  <p className="mt-0.5 truncate text-[10.5px] text-muted">
+                    {issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ")}
+                  </p>
+                </div>
+                <button type="button" onClick={() => onUndoDecision(issue.id)} className="app-button-secondary shrink-0">
+                  {t("mySkills.organization.undoDecision")}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

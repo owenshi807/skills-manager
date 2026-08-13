@@ -42,7 +42,7 @@ import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import { BatchTagDialog } from "../components/BatchTagDialog";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { CardActionMenu } from "../components/CardActionMenu";
-import { SkillIssuesView, SkillOrganizeView } from "../components/SkillOrganizationViews";
+import { SkillIssuesView } from "../components/SkillOrganizationViews";
 import type {
   OrganizationExecutionMode,
   OrganizationExecutionOption,
@@ -51,7 +51,6 @@ import type {
 import * as api from "../lib/tauri";
 import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER } from "../lib/skillTags";
 import {
-  buildSkillCapabilityGroups,
   buildSkillIssues,
   buildSkillRelationGroups,
 } from "../lib/skillOrganization";
@@ -171,7 +170,9 @@ export function MySkills() {
   } = useApp();
   const viewedPreset = CARD_MASTER_PRODUCT_SURFACE.presets ? upstreamViewedPreset : null;
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [libraryView, setLibraryView] = useState<"all" | "organize" | "issues">("all");
+  const [libraryView, setLibraryView] = useState<"all" | "issues">(() =>
+    new URLSearchParams(window.location.search).get("view") === "issues" ? "issues" : "all"
+  );
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
@@ -190,7 +191,7 @@ export function MySkills() {
   const [tagMenu, setTagMenu] = useState<{ tag: string; x: number; y: number } | null>(null);
   const [tagToRename, setTagToRename] = useState<string | null>(null);
   const [tagToDelete, setTagToDelete] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("search") ?? "");
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const refreshAfterDeleteRef = useRef<number | null>(null);
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
@@ -343,7 +344,6 @@ export function MySkills() {
   );
 
   const relationGroups = useMemo(() => buildSkillRelationGroups(skills), [skills]);
-  const capabilityGroups = useMemo(() => buildSkillCapabilityGroups(skills), [skills]);
   const evidenceByCaseId = useMemo(
     () => new Map(organizationCaseEvidence.map((evidence) => [evidence.case_id, evidence])),
     [organizationCaseEvidence],
@@ -432,7 +432,8 @@ export function MySkills() {
         result.set(issue.id, {
           agentName: capabilityNames.get(record.agent_key) ?? record.agent_key,
           assessment,
-          stale: assessment.case_revision !== issue.caseRevision,
+          stale: assessment.case_revision !== issue.caseRevision
+            || !["archive_one", "keep_both", "needs_more_evidence"].includes(assessment.recommended_action),
           createdAt: record.created_at,
         });
       } catch {
@@ -1346,6 +1347,70 @@ export function MySkills() {
     }
   }, [t]);
 
+  const previewOrganizationArchive = useCallback(async (
+    issue: SkillIssue,
+    keepSkillId: string,
+    archiveSkillId: string,
+  ) => {
+    if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    try {
+      return await api.previewOrganizationArchive({
+        case: {
+          case_id: issue.id,
+          issue_kind: issue.kind,
+          member_ids: issue.skills.map((skill) => skill.id),
+          verify_strict_artifact: true,
+        },
+        evidence_fingerprint: issue.caseRevision,
+        keep_skill_id: keepSkillId,
+        archive_skill_id: archiveSkillId,
+      });
+    } catch (error) {
+      const message = getErrorMessage(error, t("mySkills.organization.actionPlan.previewFailed"));
+      toast.error(message);
+      throw error;
+    }
+  }, [t]);
+
+  const applyOrganizationArchive = useCallback(async (
+    issue: SkillIssue,
+    keepSkillId: string,
+    archiveSkillId: string,
+  ) => {
+    if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    const request: api.OrganizationArchiveRequest = {
+      case: {
+        case_id: issue.id,
+        issue_kind: issue.kind,
+        member_ids: issue.skills.map((skill) => skill.id),
+        verify_strict_artifact: true,
+      },
+      evidence_fingerprint: issue.caseRevision,
+      keep_skill_id: keepSkillId,
+      archive_skill_id: archiveSkillId,
+    };
+    try {
+      const result = await api.applyOrganizationArchive(request);
+      await refreshManagedSkills();
+      toast.success(t("mySkills.organization.actionPlan.applied"), {
+        action: {
+          label: t("mySkills.organization.undo"),
+          onClick: () => {
+            void api.undoOrganizationArchive(result.operation_id)
+              .then(async () => {
+                await refreshManagedSkills();
+                toast.success(t("mySkills.organization.actionPlan.undone"));
+              })
+              .catch((error) => toast.error(getErrorMessage(error, t("mySkills.organization.actionPlan.undoFailed"))));
+          },
+        },
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("mySkills.organization.actionPlan.applyFailed")));
+      throw error;
+    }
+  }, [refreshManagedSkills, t]);
+
   const refreshOrganizationFacts = useCallback(async () => {
     const affectedIds = [...new Set(organizationIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)))];
     if (affectedIds.length === 0) {
@@ -1435,7 +1500,6 @@ export function MySkills() {
       <div className="flex items-center gap-1 border-b border-border-subtle">
         {([
           { id: "all", icon: LayoutGrid, count: skills.length },
-          { id: "organize", icon: Layers, count: capabilityGroups.length },
           { id: "issues", icon: CircleAlert, count: unresolvedOrganizationCount },
         ] as const).map((item) => {
           const Icon = item.icon;
@@ -1454,12 +1518,10 @@ export function MySkills() {
             >
               <Icon className="h-3.5 w-3.5" />
               {t(`mySkills.organization.tabs.${item.id}`)}
-              <span className={cn(
+              {item.count !== null && <span className={cn(
                 "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
                 libraryView === item.id ? "bg-accent-bg text-accent-light" : "bg-surface-hover text-faint",
-              )}>
-                {item.count}
-              </span>
+              )}>{item.count}</span>}
               {libraryView === item.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />}
             </button>
           );
@@ -1627,20 +1689,7 @@ export function MySkills() {
         />
       )}
 
-      {libraryView === "organize" ? (
-        <SkillOrganizeView
-          skills={skills}
-          capabilityGroups={capabilityGroups}
-          relationshipGroups={relationGroups}
-          resolvedIds={resolvedOrganizationIds}
-          search={search}
-          displayNames={skillDisplayNames}
-          tools={tools}
-          onOpenSkill={openSkillDetailById}
-          onShowIssues={() => setLibraryView("issues")}
-          onUndoDecision={undoOrganizationDecision}
-        />
-      ) : libraryView === "issues" ? (
+      {libraryView === "issues" ? (
         <SkillIssuesView
           skills={skills}
           issues={organizationIssues}
@@ -1659,6 +1708,9 @@ export function MySkills() {
           refreshing={refreshingOrganization}
           onRefresh={refreshOrganizationFacts}
           onDecide={decideOrganizationIssue}
+          onUndoDecision={undoOrganizationDecision}
+          onPreviewArchive={previewOrganizationArchive}
+          onApplyArchive={applyOrganizationArchive}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}

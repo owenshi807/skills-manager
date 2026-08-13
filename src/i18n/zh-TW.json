@@ -1,10 +1,16 @@
 {
   "app": {
-    "name": "Card Master"
+    "name": "Skill Card Manager"
+  },
+  "errorBoundary": {
+    "title": "Skill Card Manager 無法顯示",
+    "description": "介面遇到執行錯誤，Skill 資料沒有被修改。",
+    "reload": "重新載入"
   },
   "sidebar": {
     "dashboard": "Dashboard",
     "mySkills": "技能庫",
+    "decks": "牌組",
     "globalWorkspace": "全域工作區",
     "lobsterAgents": "龍蝦 Agent",
     "installSkills": "安裝 Skills",
@@ -14,6 +20,112 @@
     "projects": "專案工作區",
     "addProject": "關聯專案",
     "settings": "設定"
+  },
+  "decks": {
+    "eyebrow": "工作牌組 · 價值切片",
+    "libraryTitle": "牌組",
+    "libraryDescription": "已掃描技能庫中的 {{count}} 個 Skill，並按工作目的整理成可編輯牌組。先看見已有能力；需要新方向時，再讓 AI 幫你組牌。",
+    "newDeck": "告訴 AI 組一副牌",
+    "builtIn": "內建牌組",
+    "aiBuilt": "AI 組牌",
+    "deckMeta": "{{stages}} 個階段 · {{skills}} 個 Skill 位",
+    "customMeta": "{{skills}} 個 Skill · {{gaps}} 個缺口",
+    "discoveredTitle": "從技能庫發現的能力",
+    "scannedLibrary": "已掃描 {{count}} 個 Skill",
+    "discovered": "技能庫發現",
+    "editable": "可編輯牌組",
+    "coverage": "覆蓋 {{covered}}/{{total}} 階段",
+    "skillCount": "{{count}} 張技能牌",
+    "gapCount": "{{count}} 個缺口",
+    "solves": "這組解決什麼",
+    "supervision": "監督機制",
+    "stopLine": "停止線",
+    "metrics": { "skills": "技能牌", "coverage": "階段覆蓋", "gaps": "缺口" },
+    "editDeck": "編輯牌組",
+    "finishEditing": "完成編輯",
+    "emptyStage": "這個階段還沒有合適的 Skill。可以進入編輯補牌。",
+    "noDescription": "這個 Skill 暫無清晰說明。",
+    "openSkill": "查看 Skill 詳情",
+    "reasons": { "matched": "技能名稱與說明符合「{{stage}}」", "added": "由你加入這個階段" },
+    "editor": { "title": "調整這副牌", "description": "添加或移除只改變牌組關係，不修改 Skill 本身。", "search": "搜尋技能庫，添加 Skill…", "reset": "恢復掃描結果" },
+    "back": "返回牌組",
+    "missingSkill": "Skill 已不在庫中",
+    "gaps": "能力缺口",
+    "copy": {
+      "stage": "{{index}}. {{title}}：{{question}}",
+      "emptyStage": "- 目前沒有可用 Skill",
+      "supervision": "監督：{{value}}",
+      "stopLine": "停止線：{{value}}"
+    },
+    "catalog": {
+      "business": {
+        "title": "商業與經營", "description": "從需求、市場和經營證據走向商業判斷。", "outcome": "識別真實商業機會，用市場、客戶與財務證據形成可執行判斷。", "supervision": "區分事實、假設與願望；讓反方審查收入邏輯、成本和不可逆風險。", "stopRule": "已有明確客戶、可驗證需求和最小商業實驗時，停止繼續寫宏大策略。",
+        "stages": { "opportunity": { "title": "發現機會", "question": "誰的問題值得解決？", "purpose": "識別需求、客戶和市場變化。" }, "evidence": { "title": "建立證據", "question": "商業判斷有數據支撐嗎？", "purpose": "驗證競爭、交易和財務條件。" }, "decision": { "title": "形成決策", "question": "下一步行動和代價清楚嗎？", "purpose": "收斂戰略選擇並挑戰關鍵假設。" } }
+      },
+      "research": {
+        "title": "調研與資訊獲取", "description": "提出問題、尋找證據、比較並形成可信結論。", "outcome": "把模糊問題轉成可調查問題，建立來源鏈，產出能被質疑和複查的結論。", "supervision": "檢查來源獨立性、時效性和反證；不讓單一搜尋結果冒充結論。", "stopRule": "新增來源不再改變核心判斷，且主要反例已處理時停止搜尋。",
+        "stages": { "question": { "title": "定義問題", "question": "真正需要回答什麼？", "purpose": "明確範圍、判斷標準和未知項。" }, "collect": { "title": "收集證據", "question": "證據來自哪裡、可信度如何？", "purpose": "搜尋不同來源並保存可追溯證據。" }, "synthesize": { "title": "綜合判斷", "question": "結論能經得住反證嗎？", "purpose": "比較、壓縮並輸出有邊界的結論。" } }
+      },
+      "redTeam": {
+        "title": "紅隊與風險審查", "description": "主動攻擊方案，發現盲點、安全問題和失敗路徑。", "outcome": "在交付前讓方案遭遇最強反例，找出隱藏風險和未驗證假設。", "supervision": "紅隊只暴露證據充分的風險；不能用無止境挑錯阻塞交付。", "stopRule": "高風險失敗已有緩解或被接受，剩餘問題不改變決策時停止審查。",
+        "stages": { "challenge": { "title": "挑戰假設", "question": "最可能錯在哪裡？", "purpose": "用反例攻擊目標、邏輯和依賴。" }, "inspect": { "title": "檢查風險", "question": "失敗會怎樣發生？", "purpose": "檢查安全、品質和系統邊界。" }, "verify": { "title": "驗證修復", "question": "風險真的被關閉了嗎？", "purpose": "複測關鍵路徑並記錄剩餘風險。" } }
+      },
+      "productDesign": {
+        "title": "Product Design", "description": "從使用者問題走向清晰、可用、可驗證的產品體驗。", "outcome": "定義產品是什麼，把需求轉成資訊架構和互動，再用真實介面驗證價值。", "supervision": "每個介面元素必須服務使用者任務；審查概念重疊、資訊層級和不必要功能。", "stopRule": "使用者能理解頁面、完成核心任務並暴露下一條真實問題時，先停止擴功能。",
+        "stages": { "define": { "title": "定義問題", "question": "產品在使用者心裡是什麼？", "purpose": "釐清使用者、場景、需求和產品本質。" }, "explore": { "title": "探索結構", "question": "資訊和動作如何組織？", "purpose": "比較方向，形成資訊架構和互動骨架。" }, "make": { "title": "做出介面", "question": "使用者能直接使用嗎？", "purpose": "把確認的結構變成可操作原型。" }, "review": { "title": "驗證體驗", "question": "使用者看懂並完成任務了嗎？", "purpose": "檢查密度、層級、文案和互動摩擦。" } }
+      },
+      "vibeCoding": {
+        "title": "Vibe Coding", "description": "理解程式碼、收斂方案、小步實現並監督過度工程化。", "outcome": "幫助人與 Agent 共同完成程式碼任務：先查清問題，再做最小實現，持續檢查過度工程化。", "supervision": "每階段回答 IPO：輸入是否充分、過程是否最小、輸出是否可驗證；用獨立評審尋找反例。", "stopRule": "已解決當前問題、驗證通過且沒有新使用者價值證據時，停止增加抽象和自動化。",
+        "stages": { "understand": { "title": "理解問題", "question": "問題和根因清楚了嗎？", "purpose": "查程式碼、復現問題，分清症狀與根因。" }, "frame": { "title": "收斂方案", "question": "最小解與邊界清楚了嗎？", "purpose": "定義範圍、資料流和驗證方式。" }, "build": { "title": "小步實現", "question": "每一步都能驗證嗎？", "purpose": "以最小改動完成當前任務。" }, "supervise": { "title": "監督糾偏", "question": "是否正在過度工程化？", "purpose": "執行 IPO 範圍檢查，並用獨立反方及時糾正偏航。" }, "verify": { "title": "審查交付", "question": "價值成立，風險關閉了嗎？", "purpose": "評審、測試並形成可交付結果。" } }
+      }
+    },
+    "vibeCoding": {
+      "title": "Vibe Coding",
+      "description": "按工作階段組織 Skill 與監督機制。它指導這次任務怎麼推進，不改變 Agent 投放，也不會常駐 Prompt。"
+    },
+    "creator": {
+      "title": "告訴 AI 你想完成什麼",
+      "description": "Skill Card Manager 只把目前技能庫的名稱與簡介交給你選擇的本機 Agent。結果必須引用真實 Skill ID，不能發明能力，也不會自動投放。",
+      "placeholder": "例如：我要做一次新產品的市場調研，需要搜尋、訪談分析、競品比較、證據核驗和最後的結論挑戰。",
+      "generate": "從技能庫組牌",
+      "generating": "正在分析技能庫…",
+      "created": "牌組已建立，自動放入 {{count}} 個 Skill",
+      "failed": "AI 組牌失敗"
+    },
+    "types": { "skill": "Skill", "checkpoint": "監督" },
+    "status": {
+      "ready": "技能庫中可用",
+      "missing": "未獨立納管",
+      "ambiguous": "{{count}} 個候選待整理",
+      "builtIn": "牌組內建檢查點"
+    },
+    "stats": { "ready": "可直接使用", "gaps": "缺口 / 衝突", "library": "技能庫總量" },
+    "copyPrompt": "複製給 Agent",
+    "promptCopied": "牌組指引已複製；貼給本次工作的 Agent 即可",
+    "stopRule": {
+      "title": "停止線：先交付最小可驗證結果",
+      "description": "每加一層架構、抽象或自動化，都要說明它解決的當前失敗；否則刪除或後置。"
+    },
+    "boundaryNote": "目前是唯讀牌組 v0：使用真實技能庫核對可用性，缺口直接暴露。未建立新 Skill、未自動投放、未執行工作流。",
+    "stages": {
+      "understand": { "title": "理解問題", "question": "問題和根因清楚了嗎？" },
+      "frame": { "title": "收斂方案", "question": "最小解與邊界清楚了嗎？" },
+      "build": { "title": "小步實現", "question": "每步都能驗證嗎？" },
+      "supervise": { "title": "監督糾偏", "question": "是否正在過度工程化？" },
+      "verify": { "title": "驗證交付", "question": "使用者價值真的成立嗎？" }
+    },
+    "cards": {
+      "brainstorming": { "title": "brainstorming", "purpose": "先展開目標、約束與備選路徑，再收斂。" },
+      "investigate": { "title": "investigate", "purpose": "讀程式碼、復現 Bug、找到根因；不猜修復。" },
+      "gstack": { "title": "gstack", "purpose": "根據任務路由計畫、實現、評審與交付 Skill。" },
+      "planEngReview": { "title": "plan-eng-review", "purpose": "鎖定架構、資料流、邊界與測試，不擴無關範圍。" },
+      "designHtml": { "title": "design-html", "purpose": "把已確認方案做成可用 Web 介面。" },
+      "tdd": { "title": "test-driven-development", "purpose": "用失敗測試約束最小實現，防止盲目擴建。" },
+      "ipo": { "title": "IPO Scope Check", "purpose": "Input 是否充分；Process 是否最小；Output 是否可驗；現在能否停止。" },
+      "adversarial": { "title": "adversarial-review", "purpose": "用反例、FMEA 與獨立模型找隱藏失敗路徑。" },
+      "designReview": { "title": "design-review", "purpose": "檢查資訊層級、密度、可讀性與互動摩擦。" },
+      "ship": { "title": "ship", "purpose": "驗證、提交、評審並形成可交付結果。" }
+    }
   },
   "organize": {
     "eyebrow": "基礎整理 · 第 1 步",
@@ -30,7 +142,7 @@
     "scanSummary": "掃描 {{agents}} 個 Agent · 發現 {{locations}} 個位置 · 對應 {{skills}} 個 Skill 來源",
     "scanning": "正在掃描…",
     "rescan": "重新掃描",
-    "desktopOnly": "目前是網頁預覽，無法讀取本機檔案。請使用 Card Master 桌面應用程式中的「整理」頁面。",
+    "desktopOnly": "目前是網頁預覽，無法讀取本機檔案。請使用 Skill Card Manager 桌面應用程式中的「整理」頁面。",
     "queueLabel": "整理結果",
     "queues": { "pending": "待收入", "issues": "重複 / 衝突", "managed": "已納管" },
     "search": "搜尋名稱、Agent 或路徑…",
@@ -59,7 +171,7 @@
   },
   "help": {
     "eyebrow": "操作指南",
-    "title": "快速上手 Card Master",
+    "title": "快速上手 Skill Card Manager",
     "description": "最快路徑：先用「整理」盤點散落的 Skills → 在技能庫確認已納管內容 → 再到 Agent 工作區決定投放。按 ⌘K 可隨時呼出命令面板。",
     "items": {
       "workflows": {
@@ -80,7 +192,7 @@
       },
       "global": {
         "title": "全域工作區",
-        "description": "每個 Agent 都有自己的頁面，列出其全域目錄裡的所有 Skills（包括不是透過 Card Master 安裝的），與 Agent 實際看到的內容保持一致。點 + 新增 Skills 即可從中央庫挑選，並透過內嵌的 Agent 標籤選擇目標；也可透過「全部 Agents」總覽跨所有已安裝 Agent 統一管理。只存在於某個 Agent 目錄的 Skills 可直接在卡片上刪除。"
+        "description": "每個 Agent 都有自己的頁面，列出其全域目錄裡的所有 Skills（包括不是透過 Skill Card Manager 安裝的），與 Agent 實際看到的內容保持一致。點 + 新增 Skills 即可從中央庫挑選，並透過內嵌的 Agent 標籤選擇目標；也可透過「全部 Agents」總覽跨所有已安裝 Agent 統一管理。只存在於 Agent 目錄的 Skill 應先收入技能庫；不要直接刪除尚無可靠中央副本的檔案。"
       },
       "projects": {
         "title": "專案工作區",
@@ -290,6 +402,15 @@
       "placed": "已投放"
     },
     "organization": {
+      "healthTitle": "技能庫健康",
+      "healthIntro": "這裡只做基礎治理：查重、格式檢查、來源與投放完整性。能力組合與工作策略在獨立的「牌組」中完成。",
+      "healthySkills": "目前未命中待處理事件",
+      "healthChecks": {
+        "exact": { "title": "重複內容候選", "hint": "內容相同仍需確認來源" },
+        "sameName": { "title": "同名不同內容", "hint": "判斷版本、變體或不同用途" },
+        "format": { "title": "格式健康問題", "hint": "檢查 SKILL.md 結構與必填欄位" },
+        "source": { "title": "來源與投放異常", "hint": "檢查缺失、衝突與讀取失敗" }
+      },
       "tabs": {
         "all": "全部",
         "organize": "整理",
@@ -333,12 +454,12 @@
       "needsDecision": "需要判斷",
       "relations": {
         "exactDuplicate": {
-          "fact": "名稱和既有管理庫指紋相同。Card Master 會用 strict 完整目錄複核；只有通過才標為「系統已確認事實」。",
+          "fact": "名稱和既有管理庫指紋相同。Skill Card Manager 會用 strict 完整目錄複核；只有通過才標為「系統已確認事實」。",
           "recommendation": "系統先做 strict 完整目錄複核。內容關係可由規則確認；來源取捨仍由你決定，不交給 Agent 猜。",
           "impact": "目前只產生判斷，不刪除任何內容；以後確認合併時，冗餘中央副本也只進入可撤銷回收站。"
         },
         "contentAlias": {
-          "fact": "名稱不同，但既有管理庫指紋相同。Card Master 會用 strict 完整目錄複核，確認它們目前是否完全一致。",
+          "fact": "名稱不同，但既有管理庫指紋相同。Skill Card Manager 會用 strict 完整目錄複核，確認它們目前是否完全一致。",
           "recommendation": "先做 strict 完整目錄複核，再核對 owner 與更新鏈路；確認後才統一實體。",
           "impact": "目前不刪除內容；未來確認後也必須保留全部來源和 Agent 使用關係，並可撤銷。"
         },
@@ -350,6 +471,42 @@
       },
       "issuesTitle": "逐件理解，再執行整理建議",
       "issuesIntro": "這裡以「事情」計數，不再把兩個相關 Skill 算成兩項問題。每件事都說明發現、建議和執行影響。",
+      "issueDirectory": {
+        "title": "待處理問題目錄",
+        "intro": "先按問題類型歸類，再進入具體關係組。這裡統計的是事件，不是把相關 Skill 重複計數。",
+        "events": "件待處理",
+        "affectedSkills": "涉及 {{count}} 個 Skill",
+        "allCategories": "全部問題類型",
+        "allFormatCauses": "全部格式原因",
+        "caseList": "{{count}} 個關係事件",
+        "formatCauses": "先按具體原因檢視",
+        "formatCausesHint": "一個 Skill 可能同時命中多個格式問題，因此原因分組的數量可以重疊。",
+        "categories": {
+          "duplicate": { "title": "重複內容", "hint": "內容完全相同或名稱不同但內容一致；先核實來源，再決定是否統一。" },
+          "same_name": { "title": "同名不同內容", "hint": "每一組是一件關係事件；比較新版、舊版、變體、自訂分支或不同用途。" },
+          "format": { "title": "格式與可用性", "hint": "按缺失欄位、檔案結構和 Agent 可發現性等具體原因歸類。" },
+          "source": { "title": "來源與同步", "hint": "集中處理來源失效、同步衝突和讀取失敗。" }
+        },
+        "healthCodes": {
+          "nonstandard_marker_case": "SKILL.md 檔名大小寫不規範",
+          "skill_md_missing": "缺少 SKILL.md",
+          "skill_md_unreadable": "SKILL.md 無法讀取",
+          "skill_md_too_long": "SKILL.md 內容過長",
+          "frontmatter_missing": "缺少 Frontmatter",
+          "frontmatter_unclosed": "Frontmatter 未閉合",
+          "frontmatter_invalid": "Frontmatter 格式錯誤",
+          "name_missing": "缺少名稱",
+          "name_invalid": "名稱不符合規範",
+          "target_name_mismatch": "投放名稱與 Skill 名稱不一致",
+          "description_missing": "缺少描述",
+          "description_empty": "描述為空",
+          "description_too_long": "描述過長",
+          "compatibility_too_long": "相容性說明過長",
+          "compatibility_invalid_type": "相容性欄位類型錯誤",
+          "allowed_tools_invalid_type": "可用工具欄位類型錯誤",
+          "unknown": "其他格式問題"
+        }
+      },
       "duplicateCount": "重複候選",
       "nameCollisionCount": "同名異內容",
       "formatHealthCount": "格式健康",
@@ -382,9 +539,10 @@
       "agentNeedsReview": "{{agent}} 發現需要人工判斷的例外，結果已複製",
       "agentFailed": "Agent 執行失敗",
       "agentResultTitle": "{{agent}} 的判斷結果",
-      "agentResultHint": "這是 Agent 根據內容與來源生成的建議，不是 Card Master 的硬編碼結論，也尚未執行檔案操作。",
+      "agentResultHint": "這是 Agent 根據內容與來源生成的建議，不是 Skill Card Manager 的硬編碼結論，也尚未執行檔案操作。",
       "agentAssessmentReady": "{{agent}} 已完成比較，結論已寫回對應事件",
-      "agentAssessmentHint": "Agent 只完成比較；Card Master 尚未修改、封存或刪除任何 Skill。",
+      "agentAdviceTitle": "詢問 {{agent}}",
+      "agentAssessmentHint": "Agent 只完成比較；Skill Card Manager 尚未修改、封存或刪除任何 Skill。",
       "agentResultStale": "Skill 或證據已變化，這個結論已過期。請重新比較。",
       "agentRelations": {
         "confirmed_newer_revision": "已確認新版替代舊版",
@@ -398,6 +556,7 @@
       },
       "agentActions": {
         "prefer_newer_archive_old": "建議新版優先，舊版待封存",
+        "prefer_more_complete_archive_redundant": "建議保留更完整項，封存功能冗餘項",
         "keep_variants_linked": "保留變體並建立關聯",
         "keep_both_grouped": "兩項保留並歸組",
         "keep_both_mark_fork": "兩項保留，標記自訂分支",
@@ -418,6 +577,39 @@
       "keepDistinct": "確認分別保留",
       "confirmRelated": "確認用途相關",
       "compareItems": "比較這兩項",
+      "compareAgain": "重新比較",
+      "actionPlan": {
+        "title": "Skill Card Manager 結論",
+        "intro": "AI 負責比較，最終動作由 Skill Card Manager 明確預覽並執行。選擇要保留的主項；另一項只會進入可撤銷回收區。",
+        "archiveConclusion": "建議保留「{{keep}}」，封存「{{archive}}」",
+        "keepBothConclusion": "建議兩項都保留，並確認它們的用途關係",
+        "moreEvidenceConclusion": "證據不足，暫不執行整理",
+        "legacyConclusion": "這是一條舊版 AI 結論，尚未給出可執行建議。請重新詢問 Agent。",
+        "notApplied": "尚未執行",
+        "keepThis": "保留主項",
+        "archiveThis": "待封存",
+        "keepBoth": "兩項都保留並結束",
+        "overrideKeepBoth": "改為兩項都保留",
+        "applyKeepBoth": "按建議保留兩項",
+        "previewOne": "預覽整理為一個",
+        "previewRecommendation": "預覽這項建議",
+        "previewTitle": "執行後會發生",
+        "keepNamed": "保留 {{name}} 作為主項",
+        "archiveNamed": "{{name}} 移入 Skill Card Manager 回收區，不永久刪除",
+        "rewireAgent": "{{agent}} 改為使用保留項",
+        "removeRedundant": "移除 {{agent}} 的冗餘投放；它已有保留項",
+        "sourceRewired": "{{agent}} 原位置 {{path}} 的內容先進入回收區，再改為使用保留項",
+        "sourcePreserved": "外部原始來源保持不變；只整理 Skill Card Manager 管理副本與投放",
+        "undoable": "操作有日誌，可立即撤銷恢復",
+        "applyArchive": "確認保留主項並封存另一項",
+        "applyNamed": "執行：保留 {{keep}}，封存 {{archive}}",
+        "noSafeAction": "目前沒有安全的檔案動作。請重新詢問 Agent，或補充來源與行為證據。",
+        "previewFailed": "無法產生安全執行預覽",
+        "applyFailed": "整理未執行",
+        "applied": "整理完成；冗餘項已進入回收區",
+        "undoFailed": "無法安全撤銷這次整理",
+        "undone": "已撤銷，原 Skill 和 Agent 投放已恢復"
+      },
       "confirmRelation": "確認這個關係",
       "recheck": "重新檢查",
       "refresh": "重新整理結果",
@@ -804,7 +996,7 @@
     "language": "語言",
     "help": "說明",
     "about": "關於",
-    "version": "Card Master 1.28.5",
+    "version": "Skill Card Manager 1.28.5",
     "tagline": "跨平台。極簡、高效、無感多 Preset 切換。",
     "checkUpdate": "檢查更新",
     "checking": "檢查中…",
@@ -824,7 +1016,7 @@
     "exportLogsHint": "把最近日誌和操作紀錄打包成 zip 儲存到下載資料夾",
     "exportLogsDone": "已匯出日誌（{{count}} 個檔案），請把 zip 拖到 GitHub issue 附件區。",
     "exportLogsFailed": "匯出日誌失敗。",
-    "panicBanner": "上次執行 Card Master 時發生崩潰（{{time}}）。",
+    "panicBanner": "上次執行 Skill Card Manager 時發生崩潰（{{time}}）。",
     "repoWarning_config_unreadable": "中央庫設定檔已損壞或無法讀取，本次啟動已回退到預設路徑（~/.skills-manager）。如果技能庫看起來是空的，你的資料仍在先前設定的路徑裡——請到「中央倉庫路徑」重新指定。",
     "repoWarning_repo_path_invalid": "設定的中央倉庫路徑無效，本次啟動已回退到預設路徑（~/.skills-manager）。如果技能庫看起來是空的，請到「中央倉庫路徑」重新指定資料所在位置。",
     "repoWarning_migration_incomplete": "將中央庫遷移到新位置的操作沒有完成，本次啟動仍在使用原位置的現有技能庫——資料沒有遺失。要完成遷移，請打開設定，把「中央倉庫路徑」指向一個空的、可寫的資料夾（點「編輯」可查看你選擇的目標位置），然後重新啟動。遷移成功前，目前的技能庫會留在原地——請不要刪除它。",
@@ -1183,18 +1375,65 @@
     "batchRemoveConfirm": "從 {{agent}} 移除 {{count}} 個 Skills？此操作不會刪除技能庫中的資料。",
     "batchRemoved": "已移除 {{count}} 個 Skill",
     "batchRemoveFailed": "{{count}} 個 Skill 移除失敗",
+    "duplicates": {
+      "clean": "{{agent}} 目前未發現同名重複",
+      "found": "{{agent}} 中發現 {{count}} 組重複 Skill",
+      "summary": "{{exact}} 組內容完全一致 · {{judgment}} 組需要判斷",
+      "viewAndHandle": "查看並處理",
+      "expandDetails": "展開重複 Skill 詳情",
+      "collapseDetails": "收起重複 Skill 詳情",
+      "badge": "重複",
+      "openGroup": "查看這組重複 Skill",
+      "exact": "內容一致",
+      "needsJudgment": "需要判斷",
+      "sameSkillFact": "這是同一個中央 Skill 同時以受管理投放和歷史來源別名出現在 {{agent}}。嚴格目錄指紋一致，可以安全整理裝載結果。",
+      "exactCopiesFact": "這是兩個不同的中央 Skill，但嚴格目錄指紋完全一致；{{agent}} 目前同時載入了兩份。",
+      "collisionFact": "名稱相同，但嚴格內容不同。它們可能是新版/舊版、平台變體或不同用途，不能按名稱刪除。",
+      "keep": "建議保留",
+      "exactRecommendation": "保留來源健康、受管理的主項；冗餘來源別名進入可撤銷隔離區，或將完全相同的舊中央項封存。",
+      "collisionRecommendation": "呼叫本機 Agent 比較內容與來源，形成明確的保留、封存或分別保留動作。",
+      "impact": "整理後目前 Agent 只看見一份能力；不會永久刪除外部原始來源，所有自動動作可撤銷。",
+      "previewAction": "驗證並預覽整理",
+      "compareAndHandle": "比較並處理",
+      "aliasPreview": "保留投放 {{keep}}；把歷史來源別名 {{remove}} 移入隔離區，並把來源追蹤改到它真實指向的位置。",
+      "archivePreview": "保留 {{keep}}；封存 {{archive}}；將校正 {{agents}} 個 Agent 投放。",
+      "undoable": "執行後可以撤銷。",
+      "applyAlias": "執行：保留 {{keep}}，隔離重複別名",
+      "applyArchive": "執行：保留 {{keep}}，封存重複項",
+      "aliasApplied": "已整理 {{agent}} 的重複裝載；技能庫副本與真實來源均保留。",
+      "archiveApplied": "已封存重複 Skill，並重新檢查 {{agent}}。",
+      "undone": "已撤銷整理並恢復投放關係。",
+      "previewFailed": "無法生成安全整理方案",
+      "applyFailed": "整理未執行",
+      "undoFailed": "無法撤銷整理",
+      "noRedundantAlias": "沒有找到可安全隔離的歷史來源別名",
+      "contentChanged": "內容已變化，不能按完全重複處理",
+      "noSafeAction": "目前關係沒有可自動執行的安全動作"
+    },
+    "foundationGuide": {
+      "open": "查看技能庫與 Agent 目錄的關係",
+      "title": "這裡顯示的是 {{agent}} 目前真正能看見的 Skills",
+      "flow": "技能庫保存管理副本；點擊「加入 Skill」會把選中的能力投放到 Agent 目錄。投放可以是軟連結或複製，但 Agent 只讀取自己的目錄。",
+      "managedTitle": "受管理投放 · {{count}} 個",
+      "managedBody": "可安全使用「從 Agent 移除」。只撤下投放，技能庫副本保留，之後可以重新加入。",
+      "matchedTitle": "庫內有對應 · {{count}} 個",
+      "matchedBody": "中央庫找到了對應項，但它不是目前受管理投放；它仍可能是來源或獨立副本，不要直接刪除。",
+      "agentOnlyTitle": "僅 Agent 中 · {{count}} 個",
+      "agentOnlyBody": "中央庫沒有可靠副本。先收入技能庫並確認同步，再考慮刪除本機檔案。",
+      "warning": "不要直接清空 Agent 的 Skills 資料夾。要卸載能力，請使用「從 Agent 移除」；「刪除本機檔案」是不可復原的另一件事。"
+    },
     "localSkills": {
       "searchPlaceholder": "搜尋 Agent Skills…",
       "empty": "未發現本機 Skills",
       "summary": "{{total}} / {{managed}} 個受管理 / {{synced}} 個已同步",
       "upload": "上傳",
       "pull": "拉取",
-      "removeManaged": "從 Agent 移除",
-      "deleteLocal": "刪除本機 Skill",
+      "removeManaged": "從 Agent 移除（技能庫保留）",
+      "deleteLocal": "刪除本機檔案（不可復原）",
       "deleteLocalConfirmTitle": "刪除本機 Skill？",
-      "deleteLocalConfirmMessage": "從 {{agent}} 中刪除「{{name}}」？此操作會刪除本機檔案且不可復原。",
+      "deleteLocalConfirmMessage": "從 {{agent}} 中永久刪除「{{name}}」？Skill Card Manager 目前沒有可用於恢復它的受管理投放。請先收入技能庫；繼續刪除將不可復原。",
       "deletedLocalToast": "已從 {{agent}} 刪除「{{name}}」。",
-      "uploadedToast": "已將「{{name}}」上傳到 Skills 中心，未自動同步回 {{agent}}。",
+      "uploadedToast": "已將「{{name}}」收入技能庫，並由 Skill Card Manager 納管 {{agent}} 中的原位置。",
       "pulledToast": "已從 Skills 中心更新 {{agent}} 中的「{{name}}」。",
       "uploadConfirmTitle": "更新中心 Skill？",
       "uploadConfirmMessage": "將「{{name}}」上傳到匹配的 Skills 中心項目？這會替換中心副本。",

@@ -95,12 +95,29 @@ export interface OrganizationAgentAssessment {
   unresolved_questions: string[];
   behavior_eval_required: boolean;
   suggested_actions: string[];
+  recommended_action: "archive_one" | "keep_both" | "needs_more_evidence";
+  recommended_keep_skill_id: string | null;
+  recommendation_reason: string;
   confidence: number;
 }
 
 export interface OrganizationAgentTaskResult {
   agent_key: string;
   assessments: OrganizationAgentAssessment[];
+}
+
+export interface DeckSuggestionCard {
+  skill_id: string;
+  stage: string;
+  role: string;
+  reason: string;
+}
+
+export interface DeckSuggestion {
+  title: string;
+  summary: string;
+  cards: DeckSuggestionCard[];
+  gaps: string[];
 }
 
 export interface OrganizationAgentAssessmentRecord {
@@ -174,6 +191,36 @@ export interface OrganizationDecision {
   disposition: OrganizationDisposition;
   decided_at: number;
   updated_at: number;
+}
+
+export interface OrganizationArchiveRequest {
+  case: OrganizationCaseRequest;
+  evidence_fingerprint: string;
+  keep_skill_id: string;
+  archive_skill_id: string;
+}
+
+export interface OrganizationArchivePreview {
+  keep_skill_id: string;
+  keep_name: string;
+  archive_skill_id: string;
+  archive_name: string;
+  target_effects: Array<{
+    tool: string;
+    target_path: string;
+    action: "remove_redundant" | "rewire_to_keep";
+  }>;
+  source_effect: {
+    tool: string;
+    source_path: string;
+    action: "archive_and_rewire_to_keep";
+  } | null;
+  source_preserved: boolean;
+}
+
+export interface OrganizationOperationResult {
+  operation_id: string;
+  status: string;
 }
 
 export interface SkillDocument {
@@ -293,6 +340,23 @@ export interface ProjectSkill {
   in_center: boolean;
   sync_status: "project_only" | "in_sync" | "project_newer" | "center_newer" | "diverged";
   center_skill_id: string | null;
+  content_hash: string | null;
+}
+
+export interface AgentDuplicateAliasPreview {
+  agent: string;
+  skill_id: string;
+  keep_relative_path: string;
+  redundant_relative_path: string;
+  redundant_path: string;
+  source_destination: string;
+  central_copy_preserved: boolean;
+  reversible: boolean;
+}
+
+export interface AgentDuplicateAliasResult {
+  operation_id: string;
+  status: string;
 }
 
 export interface ProjectSkillDocument {
@@ -379,6 +443,15 @@ export const setOrganizationDecision = (
 
 export const clearOrganizationDecision = (caseKey: string) =>
   invoke<void>("clear_organization_decision", { caseKey });
+
+export const previewOrganizationArchive = (request: OrganizationArchiveRequest) =>
+  invoke<OrganizationArchivePreview>("preview_organization_archive", { request });
+
+export const applyOrganizationArchive = (request: OrganizationArchiveRequest) =>
+  invoke<OrganizationOperationResult>("apply_organization_archive", { request });
+
+export const undoOrganizationArchive = (operationId: string) =>
+  invoke<OrganizationOperationResult>("undo_organization_archive", { operationId });
 
 export const getOrganizationAgentCapabilities = () =>
   invoke<OrganizationAgentCapability[]>("get_organization_agent_capabilities");
@@ -562,6 +635,11 @@ export const getSettings = (key: string) =>
 
 export const setSettings = (key: string, value: string) =>
   invoke<void>("set_settings", { key, value });
+
+export const suggestDeckFromLibrary = (goal: string, agentKey: string) =>
+  invoke<DeckSuggestion>("suggest_deck_from_library", {
+    request: { goal, agent_key: agentKey },
+  });
 
 export const getCentralRepoPath = () =>
   invoke<string>("get_central_repo_path");
@@ -948,3 +1026,26 @@ export const updateGlobalLocalSkillFromCenter = (agent: string, skillRelativePat
 
 export const deleteGlobalLocalSkill = (agent: string, skillRelativePath: string) =>
   invoke<void>("delete_global_local_skill", { agent, skillRelativePath });
+
+export const previewAgentDuplicateAlias = (
+  agent: string,
+  skillId: string,
+  redundantRelativePath: string,
+) => invoke<AgentDuplicateAliasPreview>("preview_agent_duplicate_alias", {
+  agent,
+  skillId,
+  redundantRelativePath,
+});
+
+export const applyAgentDuplicateAlias = (
+  agent: string,
+  skillId: string,
+  redundantRelativePath: string,
+) => invoke<AgentDuplicateAliasResult>("apply_agent_duplicate_alias", {
+  agent,
+  skillId,
+  redundantRelativePath,
+});
+
+export const undoAgentDuplicateAlias = (operationId: string) =>
+  invoke<AgentDuplicateAliasResult>("undo_agent_duplicate_alias", { operationId });

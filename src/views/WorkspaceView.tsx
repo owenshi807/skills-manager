@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 import {
   ChevronRight,
+  CircleAlert,
+  CircleHelp,
   Download,
   FileText,
   Globe,
@@ -32,6 +34,8 @@ import { getTagActiveColor, getTagColor, pruneStaleTagFilters, UNTAGGED_FILTER }
 import { AddSkillsSheet } from "../components/AddSkillsSheet";
 import type { WorkspaceConfig } from "./workspaceConfigs";
 import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
+import { WorkspaceDuplicatePanel } from "../components/WorkspaceDuplicatePanel";
+import { buildWorkspaceDuplicateGroups } from "../lib/workspaceDuplicates";
 
 function compactHomePath(path: string) {
   return path.replace(/^\/Users\/[^/]+/, "~");
@@ -56,6 +60,7 @@ function WorkspaceSkillCard({
   fileCount = 0,
   active = false,
   actions,
+  attention,
   actionsHover = false,
   onClick,
 }: {
@@ -67,6 +72,7 @@ function WorkspaceSkillCard({
   fileCount?: number;
   active?: boolean;
   actions?: ReactNode;
+  attention?: ReactNode;
   actionsHover?: boolean;
   onClick: () => void;
 }) {
@@ -92,6 +98,7 @@ function WorkspaceSkillCard({
         >
           {title}
         </h3>
+        {attention}
         <p className="min-w-0 flex-1 truncate text-[13px] text-muted">
           {description || "-"}
         </p>
@@ -159,6 +166,7 @@ function WorkspaceSkillCard({
         >
           {title}
         </h3>
+        {attention}
         {fileCount > 0 && (
           <span className="flex shrink-0 items-center gap-1 text-[12px] text-faint">
             <FileText className="h-3 w-3" />
@@ -249,6 +257,8 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
   const [uploadConfirmSkill, setUploadConfirmSkill] = useState<ProjectSkill | null>(null);
   const [pullConfirmSkill, setPullConfirmSkill] = useState<ProjectSkill | null>(null);
   const [deleteLocalConfirmSkill, setDeleteLocalConfirmSkill] = useState<ProjectSkill | null>(null);
+  const [showFoundationGuide, setShowFoundationGuide] = useState(false);
+  const [selectedDuplicateGroupId, setSelectedDuplicateGroupId] = useState<string | null>(null);
   const localDetailRequestRef = useRef(0);
 
   // Cross-category redirect: a deep link like /global-workspace/openclaw should
@@ -478,6 +488,27 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
     () => localSkills.filter((skill) => !!skill.center_skill_id && managedLocalIds.has(skill.center_skill_id)).length,
     [localSkills, managedLocalIds]
   );
+
+  const centerMatchedLocalCount = useMemo(
+    () => localSkills.filter((skill) => !!skill.center_skill_id).length,
+    [localSkills]
+  );
+
+  const centerMatchedUnmanagedCount = centerMatchedLocalCount - managedLocalCount;
+  const agentOnlyCount = localSkills.length - centerMatchedLocalCount;
+
+  const duplicateGroups = useMemo(
+    () => buildWorkspaceDuplicateGroups(localSkills),
+    [localSkills]
+  );
+
+  const duplicateGroupByPath = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const group of duplicateGroups) {
+      for (const member of group.members) result.set(member.relative_path, group.id);
+    }
+    return result;
+  }, [duplicateGroups]);
 
   const handleRemoveLocalManagedSkill = async (skill: ProjectSkill) => {
     if (!agentKey || !skill.center_skill_id || !managedLocalIds.has(skill.center_skill_id)) return;
@@ -796,15 +827,32 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
               {currentTool.display_name}
               <span className="app-badge">{localSkills.length}</span>
             </h1>
-            <p className="mt-1 truncate text-[13px] text-muted" title={currentTool.skills_dir}>
-              {compactHomePath(currentTool.skills_dir)}
-              <span className="px-1.5">·</span>
-              {t("globalWorkspace.localSkills.summary", {
-                total: localSkills.length,
-                managed: managedLocalCount,
-                synced: inSyncLocalCount,
-              })}
-            </p>
+            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+              <p className="truncate text-[13px] text-muted" title={currentTool.skills_dir}>
+                {compactHomePath(currentTool.skills_dir)}
+                <span className="px-1.5">·</span>
+                {t("globalWorkspace.localSkills.summary", {
+                  total: localSkills.length,
+                  managed: managedLocalCount,
+                  synced: inSyncLocalCount,
+                })}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowFoundationGuide((value) => !value)}
+                className={cn(
+                  "shrink-0 rounded-full p-0.5 transition-colors",
+                  showFoundationGuide
+                    ? "bg-accent-bg text-accent-light"
+                    : "text-muted hover:bg-surface-hover hover:text-secondary"
+                )}
+                title={t("globalWorkspace.foundationGuide.open")}
+                aria-label={t("globalWorkspace.foundationGuide.open")}
+                aria-expanded={showFoundationGuide}
+              >
+                <CircleHelp className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className="flex min-w-0 flex-[2_1_520px] flex-wrap items-center justify-end gap-2">
@@ -860,6 +908,51 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
             </button>
           </div>
         </div>
+
+        {showFoundationGuide && (
+          <section className="rounded-xl border border-accent/25 bg-accent-bg/40 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />
+              <div className="min-w-0">
+                <h2 className="text-[13px] font-semibold text-primary">
+                  {t("globalWorkspace.foundationGuide.title", { agent: currentTool.display_name })}
+                </h2>
+                <p className="mt-1 text-[12px] leading-5 text-muted">
+                  {t("globalWorkspace.foundationGuide.flow")}
+                </p>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <div className="rounded-lg border border-border-faint bg-surface/70 px-3 py-2">
+                    <p className="text-[12px] font-semibold text-secondary">
+                      {t("globalWorkspace.foundationGuide.managedTitle", { count: managedLocalCount })}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted">
+                      {t("globalWorkspace.foundationGuide.managedBody")}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border-faint bg-surface/70 px-3 py-2">
+                    <p className="text-[12px] font-semibold text-secondary">
+                      {t("globalWorkspace.foundationGuide.matchedTitle", { count: centerMatchedUnmanagedCount })}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted">
+                      {t("globalWorkspace.foundationGuide.matchedBody")}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border-faint bg-surface/70 px-3 py-2">
+                    <p className="text-[12px] font-semibold text-secondary">
+                      {t("globalWorkspace.foundationGuide.agentOnlyTitle", { count: agentOnlyCount })}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted">
+                      {t("globalWorkspace.foundationGuide.agentOnlyBody")}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] font-medium leading-4 text-amber-700 dark:text-amber-300">
+                  {t("globalWorkspace.foundationGuide.warning")}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         {CARD_MASTER_PRODUCT_SURFACE.tags && allLocalTags.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -939,6 +1032,22 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
         )}
       </div>
 
+      {!localSkillsLoading && (
+        <WorkspaceDuplicatePanel
+          agentKey={currentTool.key}
+          agentName={currentTool.display_name}
+          groups={duplicateGroups}
+          managedSkills={managedSkills}
+          selectedGroupId={selectedDuplicateGroupId}
+          onSelectedGroupChange={setSelectedDuplicateGroupId}
+          refreshing={localSkillsLoading}
+          onRefresh={loadLocalSkills}
+          onApplied={async () => {
+            await Promise.all([refreshManagedSkills(), refreshTools(), loadLocalSkills()]);
+          }}
+        />
+      )}
+
       {localSkillsLoading ? (
         <div className="flex items-center gap-2 py-4 text-[13px] text-muted">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -974,6 +1083,7 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
           {visibleLocalSkills.map((skill) => {
             const statusMeta = getLocalStatusMeta(t, skill.sync_status);
             const isManaged = !!skill.center_skill_id && managedLocalIds.has(skill.center_skill_id);
+            const duplicateGroupId = duplicateGroupByPath.get(skill.relative_path);
 
             return (
               <WorkspaceSkillCard
@@ -987,6 +1097,20 @@ export function WorkspaceView({ config }: { config: WorkspaceConfig }) {
                 status={statusMeta}
                 fileCount={skill.files.length}
                 active={isManaged}
+                attention={duplicateGroupId ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedDuplicateGroupId(duplicateGroupId);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
+                    title={t("globalWorkspace.duplicates.openGroup")}
+                  >
+                    <CircleAlert className="h-3 w-3" />
+                    {t("globalWorkspace.duplicates.badge")}
+                  </button>
+                ) : undefined}
                 actions={renderLocalSkillActions(skill, viewMode)}
                 actionsHover={viewMode === "list"}
                 onClick={() => void openLocalDetail(skill)}

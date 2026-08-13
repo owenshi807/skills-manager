@@ -1,10 +1,16 @@
 {
   "app": {
-    "name": "Card Master"
+    "name": "Skill Card Manager"
+  },
+  "errorBoundary": {
+    "title": "Skill Card Manager cannot be displayed",
+    "description": "The interface encountered a runtime error. Your Skill data was not modified.",
+    "reload": "Reload"
   },
   "sidebar": {
     "dashboard": "Dashboard",
     "mySkills": "Library",
+    "decks": "Decks",
     "globalWorkspace": "Global Workspace",
     "lobsterAgents": "Lobster Agents",
     "installSkills": "Install Skills",
@@ -14,6 +20,155 @@
     "projects": "Project Workspaces",
     "addProject": "Link Project",
     "settings": "Settings"
+  },
+  "decks": {
+    "eyebrow": "Work deck · Value slice",
+    "libraryTitle": "Decks",
+    "libraryDescription": "Scanned {{count}} managed Skills and organized them into editable work decks. See what you already have, then ask AI for a new direction when needed.",
+    "newDeck": "Ask AI to build a deck",
+    "builtIn": "Built-in",
+    "aiBuilt": "AI-curated",
+    "deckMeta": "{{stages}} stages · {{skills}} Skill slots",
+    "customMeta": "{{skills}} Skills · {{gaps}} gaps",
+    "discoveredTitle": "Capabilities found in your library",
+    "scannedLibrary": "Scanned {{count}} Skills",
+    "discovered": "Library discovery",
+    "editable": "Editable deck",
+    "coverage": "{{covered}}/{{total}} stages covered",
+    "skillCount": "{{count}} Skill cards",
+    "gapCount": "{{count}} gaps",
+    "solves": "What this deck solves",
+    "supervision": "Supervision",
+    "stopLine": "Stop line",
+    "metrics": { "skills": "Skill cards", "coverage": "Stage coverage", "gaps": "Gaps" },
+    "editDeck": "Edit deck",
+    "finishEditing": "Finish editing",
+    "emptyStage": "No suitable Skill yet. Edit this deck to add one.",
+    "noDescription": "No clear description for this Skill.",
+    "openSkill": "Open Skill details",
+    "reasons": { "matched": "Name and description match “{{stage}}”", "added": "Added by you to this stage" },
+    "editor": {
+      "title": "Adjust this deck",
+      "description": "Adding or removing changes only the deck relationship, never the Skill itself.",
+      "search": "Search the library to add a Skill…",
+      "reset": "Reset discovery"
+    },
+    "back": "Back to decks",
+    "missingSkill": "Skill no longer in library",
+    "gaps": "Capability gaps",
+    "copy": {
+      "stage": "{{index}}. {{title}}: {{question}}",
+      "emptyStage": "- No available Skill yet",
+      "supervision": "Supervision: {{value}}",
+      "stopLine": "Stop line: {{value}}"
+    },
+    "catalog": {
+      "business": {
+        "title": "Business & Operations", "description": "Move from demand and market evidence to business judgment.",
+        "outcome": "Identify real opportunities and form actionable judgments from customer, market, and financial evidence.",
+        "supervision": "Separate facts, assumptions, and wishes. Challenge revenue logic, costs, and irreversible risks.",
+        "stopRule": "Stop writing strategy once the customer, testable demand, and smallest business experiment are clear.",
+        "stages": {
+          "opportunity": { "title": "Find opportunity", "question": "Whose problem is worth solving?", "purpose": "Identify demand, customers, and market change." },
+          "evidence": { "title": "Build evidence", "question": "Does the judgment have evidence?", "purpose": "Verify competition, deals, and financial conditions." },
+          "decision": { "title": "Make decision", "question": "Are the next action and cost clear?", "purpose": "Converge on a choice and challenge key assumptions." }
+        }
+      },
+      "research": {
+        "title": "Research & Intelligence", "description": "Frame questions, find evidence, compare, and form credible conclusions.",
+        "outcome": "Turn ambiguity into researchable questions, preserve source chains, and produce conclusions others can challenge.",
+        "supervision": "Check independence, recency, and counter-evidence. One search result is not a conclusion.",
+        "stopRule": "Stop when new sources no longer change the core judgment and major counterexamples are handled.",
+        "stages": {
+          "question": { "title": "Frame question", "question": "What must be answered?", "purpose": "Define scope, criteria, and unknowns." },
+          "collect": { "title": "Collect evidence", "question": "Where is the evidence from?", "purpose": "Search diverse sources and keep traceable evidence." },
+          "synthesize": { "title": "Synthesize", "question": "Can the conclusion survive challenge?", "purpose": "Compare, distill, and state bounded conclusions." }
+        }
+      },
+      "redTeam": {
+        "title": "Red Team & Risk", "description": "Attack plans to uncover blind spots, security risks, and failure paths.",
+        "outcome": "Expose hidden risks and untested assumptions with the strongest counterexamples before delivery.",
+        "supervision": "Raise evidence-backed risks; do not let endless critique block delivery.",
+        "stopRule": "Stop when high-risk failures are mitigated or accepted and remaining issues do not change the decision.",
+        "stages": {
+          "challenge": { "title": "Challenge assumptions", "question": "Where is this most likely wrong?", "purpose": "Attack goals, logic, and dependencies." },
+          "inspect": { "title": "Inspect risks", "question": "How could failure happen?", "purpose": "Inspect security, quality, and system boundaries." },
+          "verify": { "title": "Verify fixes", "question": "Is the risk truly closed?", "purpose": "Retest critical paths and record residual risk." }
+        }
+      },
+      "productDesign": {
+        "title": "Product Design", "description": "Move from user problem to a clear, usable, testable product experience.",
+        "outcome": "Define what the product is, turn needs into information architecture and interaction, then test value through a real interface.",
+        "supervision": "Every interface element must serve a user task. Review overlapping concepts, hierarchy, and unnecessary features.",
+        "stopRule": "Stop adding features once users understand the page, complete the core task, and expose the next real problem.",
+        "stages": {
+          "define": { "title": "Define problem", "question": "What is this product to the user?", "purpose": "Clarify users, context, needs, and product essence." },
+          "explore": { "title": "Explore structure", "question": "How should information and actions fit?", "purpose": "Compare directions and form an interaction skeleton." },
+          "make": { "title": "Make interface", "question": "Can users operate it directly?", "purpose": "Turn the structure into a working prototype." },
+          "review": { "title": "Validate experience", "question": "Can users understand and finish?", "purpose": "Check density, hierarchy, copy, and friction." }
+        }
+      },
+      "vibeCoding": {
+        "title": "Vibe Coding", "description": "Understand code, converge, build small, and supervise overengineering.",
+        "outcome": "Help people and Agents solve code tasks together: investigate first, make the smallest change, and continuously check overengineering.",
+        "supervision": "At every stage check IPO: sufficient input, minimal process, verifiable output. Use independent review for counterexamples.",
+        "stopRule": "Stop adding abstractions and automation when the current problem is solved, verified, and no new user-value evidence exists.",
+        "stages": {
+          "understand": { "title": "Understand", "question": "Are problem and root cause clear?", "purpose": "Read code, reproduce, and separate symptoms from root cause." },
+          "frame": { "title": "Frame", "question": "Are the smallest solution and boundary clear?", "purpose": "Define scope, data flow, and verification." },
+          "build": { "title": "Build small", "question": "Can every step be verified?", "purpose": "Complete the task with the smallest change." },
+          "supervise": { "title": "Supervise & correct", "question": "Are we overengineering?", "purpose": "Run the IPO scope check and use independent challenge to correct drift." },
+          "verify": { "title": "Review & ship", "question": "Did value hold and risks close?", "purpose": "Review, test, and produce a deliverable." }
+        }
+      }
+    },
+    "vibeCoding": {
+      "title": "Vibe Coding",
+      "description": "Organizes skills and checkpoints by work stage. It guides this task without changing agent deployments or staying in every prompt."
+    },
+    "creator": {
+      "title": "Tell AI what you want to accomplish",
+      "description": "Skill Card Manager sends only names and summaries from this library to your chosen local Agent. Results must reference real Skill IDs and never deploy automatically.",
+      "placeholder": "For example: research a new product market with search, interview analysis, competitor comparison, evidence verification, and a final challenge pass.",
+      "generate": "Build from library",
+      "generating": "Analyzing the Skill library…",
+      "created": "Deck created with {{count}} Skills",
+      "failed": "AI deck creation failed"
+    },
+    "types": { "skill": "Skill", "checkpoint": "Check" },
+    "status": {
+      "ready": "Ready in library",
+      "missing": "Not managed alone",
+      "ambiguous": "{{count}} candidates to organize",
+      "builtIn": "Deck checkpoint"
+    },
+    "stats": { "ready": "Ready to use", "gaps": "Gaps / conflicts", "library": "Library total" },
+    "copyPrompt": "Copy for Agent",
+    "promptCopied": "Deck guide copied. Paste it into the agent handling this task.",
+    "stopRule": {
+      "title": "Stop rule: ship the smallest verifiable result first",
+      "description": "Every new abstraction, architecture layer, or automation must name the current failure it fixes. Otherwise remove or defer it."
+    },
+    "boundaryNote": "Read-only deck v0: availability is checked against the real library and gaps stay visible. It creates no skills, deploys nothing, and runs no workflow.",
+    "stages": {
+      "understand": { "title": "Understand", "question": "Are the problem and root cause clear?" },
+      "frame": { "title": "Frame", "question": "Are the smallest solution and boundary clear?" },
+      "build": { "title": "Build small", "question": "Can every step be verified?" },
+      "supervise": { "title": "Supervise", "question": "Are we overengineering?" },
+      "verify": { "title": "Verify & ship", "question": "Did user value actually hold?" }
+    },
+    "cards": {
+      "brainstorming": { "title": "brainstorming", "purpose": "Expand goals, constraints, and paths before converging." },
+      "investigate": { "title": "investigate", "purpose": "Read code, reproduce bugs, find root cause; do not guess fixes." },
+      "gstack": { "title": "gstack", "purpose": "Route planning, implementation, review, and shipping skills by task." },
+      "planEngReview": { "title": "plan-eng-review", "purpose": "Lock architecture, data flow, boundaries, and tests without scope drift." },
+      "designHtml": { "title": "design-html", "purpose": "Turn an approved direction into a usable web interface." },
+      "tdd": { "title": "test-driven-development", "purpose": "Use failing tests to constrain the smallest implementation." },
+      "ipo": { "title": "IPO Scope Check", "purpose": "Is Input sufficient, Process minimal, Output verifiable, and can we stop now?" },
+      "adversarial": { "title": "adversarial-review", "purpose": "Use counterexamples, FMEA, and an independent model to find hidden failures." },
+      "designReview": { "title": "design-review", "purpose": "Check hierarchy, density, readability, and interaction friction." },
+      "ship": { "title": "ship", "purpose": "Verify, commit, review, and produce a deliverable result." }
+    }
   },
   "organize": {
     "eyebrow": "Foundation · Step 1",
@@ -30,7 +185,7 @@
     "scanSummary": "Scanned {{agents}} agents · found {{locations}} locations · representing {{skills}} skill sources",
     "scanning": "Scanning…",
     "rescan": "Scan again",
-    "desktopOnly": "This is a web preview and cannot read local files. Open Organize in the Card Master desktop app.",
+    "desktopOnly": "This is a web preview and cannot read local files. Open Organize in the Skill Card Manager desktop app.",
     "queueLabel": "Organization results",
     "queues": { "pending": "To collect", "issues": "Duplicates / conflicts", "managed": "Managed" },
     "search": "Search name, agent, or path…",
@@ -59,7 +214,7 @@
   },
   "help": {
     "eyebrow": "Guide",
-    "title": "Quick Start for Card Master",
+    "title": "Quick Start for Skill Card Manager",
     "description": "Fastest path: organize scattered skills → confirm the managed library → choose agent deployments in a workspace. Press ⌘K anytime for the command palette.",
     "items": {
       "workflows": {
@@ -80,7 +235,7 @@
       },
       "global": {
         "title": "Global Workspace",
-        "description": "Each agent gets its own page listing every skill in its global folder — including ones installed outside Card Master — so the view matches what the agent actually sees. Use + Add Skills to pull from your central library with inline target-agent chips, or use the All Agents overview to manage every installed agent at once. Skills that only exist in an agent folder can be deleted directly from the card."
+        "description": "Each agent gets its own page listing every skill in its global folder — including ones installed outside Skill Card Manager — so the view matches what the agent actually sees. Use + Add Skills to pull from your central library with inline target-agent chips, or use the All Agents overview to manage every installed agent at once. Import agent-only Skills first; do not directly delete files without a reliable central copy."
       },
       "projects": {
         "title": "Project Workspaces",
@@ -290,6 +445,15 @@
       "placed": "Deployed"
     },
     "organization": {
+      "healthTitle": "Library health",
+      "healthIntro": "Foundation governance only: duplicates, format, provenance, and projection integrity. Work strategy belongs in the separate Decks area.",
+      "healthySkills": "not in pending events",
+      "healthChecks": {
+        "exact": { "title": "Duplicate-content candidates", "hint": "Equal content still needs source proof" },
+        "sameName": { "title": "Same name, different content", "hint": "Separate revisions, variants, and purposes" },
+        "format": { "title": "Format health", "hint": "Validate SKILL.md structure and required fields" },
+        "source": { "title": "Source and projection", "hint": "Find missing, conflicted, or unreadable state" }
+      },
       "tabs": {
         "all": "All",
         "organize": "Organize",
@@ -333,12 +497,12 @@
       "needsDecision": "Needs judgment",
       "relations": {
         "exactDuplicate": {
-          "fact": "The name and current managed-library fingerprint match. Card Master runs strict full-directory verification and only then marks the fact as confirmed.",
-          "recommendation": "Card Master runs strict full-directory verification first. Rules can confirm content facts; you choose source ownership instead of asking an Agent to guess.",
+          "fact": "The name and current managed-library fingerprint match. Skill Card Manager runs strict full-directory verification and only then marks the fact as confirmed.",
+          "recommendation": "Skill Card Manager runs strict full-directory verification first. Rules can confirm content facts; you choose source ownership instead of asking an Agent to guess.",
           "impact": "This step only produces a judgment and deletes nothing; a future confirmed merge would place the redundant central copy in undoable trash."
         },
         "contentAlias": {
-          "fact": "The names differ, but the managed-library fingerprint matches. Card Master runs strict full-directory verification to confirm whether the current artifacts are identical.",
+          "fact": "The names differ, but the managed-library fingerprint matches. Skill Card Manager runs strict full-directory verification to confirm whether the current artifacts are identical.",
           "recommendation": "Run strict full-directory verification, then check ownership and update lineage before unifying the entity.",
           "impact": "Nothing is deleted now; any future confirmed merge must preserve every source and Agent usage relation and remain undoable."
         },
@@ -350,6 +514,42 @@
       },
       "issuesTitle": "Understand each case before applying a recommendation",
       "issuesIntro": "Cases are counted as events, not flagged skills. Every event explains what was found, what we recommend, and what execution would change.",
+      "issueDirectory": {
+        "title": "Review directory",
+        "intro": "Start with an issue type, then open a relationship case. Counts represent events, not duplicated skill rows.",
+        "events": "cases to review",
+        "affectedSkills": "Affects {{count}} skills",
+        "allCategories": "All issue types",
+        "allFormatCauses": "All format causes",
+        "caseList": "{{count}} relationship cases",
+        "formatCauses": "Browse by specific cause",
+        "formatCausesHint": "One skill may have multiple format issues, so cause groups can overlap.",
+        "categories": {
+          "duplicate": { "title": "Duplicate content", "hint": "Identical content or aliases with different names. Verify provenance before consolidation." },
+          "same_name": { "title": "Same name, different content", "hint": "Each group is one relationship case: revision, variant, customization, or a different purpose." },
+          "format": { "title": "Format and usability", "hint": "Grouped by missing metadata, file structure, and Agent discoverability." },
+          "source": { "title": "Source and sync", "hint": "Handle missing sources, synchronization conflicts, and read failures." }
+        },
+        "healthCodes": {
+          "nonstandard_marker_case": "Non-standard SKILL.md filename case",
+          "skill_md_missing": "Missing SKILL.md",
+          "skill_md_unreadable": "SKILL.md cannot be read",
+          "skill_md_too_long": "SKILL.md is too long",
+          "frontmatter_missing": "Missing frontmatter",
+          "frontmatter_unclosed": "Unclosed frontmatter",
+          "frontmatter_invalid": "Invalid frontmatter",
+          "name_missing": "Missing name",
+          "name_invalid": "Invalid name",
+          "target_name_mismatch": "Projection name does not match skill name",
+          "description_missing": "Missing description",
+          "description_empty": "Empty description",
+          "description_too_long": "Description is too long",
+          "compatibility_too_long": "Compatibility note is too long",
+          "compatibility_invalid_type": "Invalid compatibility field type",
+          "allowed_tools_invalid_type": "Invalid allowed-tools field type",
+          "unknown": "Other format issue"
+        }
+      },
       "duplicateCount": "Duplicate candidates",
       "nameCollisionCount": "Same name, different content",
       "formatHealthCount": "Format health",
@@ -382,9 +582,10 @@
       "agentNeedsReview": "{{agent}} found exceptions that need judgment; the result was copied",
       "agentFailed": "Agent execution failed",
       "agentResultTitle": "Judgment from {{agent}}",
-      "agentResultHint": "This recommendation was generated by the Agent from content and source evidence. It is not a hard-coded Card Master conclusion and no file operation has run.",
+      "agentResultHint": "This recommendation was generated by the Agent from content and source evidence. It is not a hard-coded Skill Card Manager conclusion and no file operation has run.",
       "agentAssessmentReady": "{{agent}} finished the comparison; its conclusion is attached to the case",
-      "agentAssessmentHint": "The Agent only compared content. Card Master has not edited, archived, or deleted any Skill.",
+      "agentAdviceTitle": "Ask {{agent}}",
+      "agentAssessmentHint": "The Agent only compared content. Skill Card Manager has not edited, archived, or deleted any Skill.",
       "agentResultStale": "The Skill or evidence changed, so this conclusion is stale. Compare again.",
       "agentRelations": {
         "confirmed_newer_revision": "Confirmed newer revision",
@@ -398,6 +599,7 @@
       },
       "agentActions": {
         "prefer_newer_archive_old": "Prefer newer; old candidate for archive",
+        "prefer_more_complete_archive_redundant": "Keep the more complete item; archive the redundant one",
         "keep_variants_linked": "Keep and link variants",
         "keep_both_grouped": "Keep both in one group",
         "keep_both_mark_fork": "Keep both; mark customization fork",
@@ -418,6 +620,39 @@
       "keepDistinct": "Keep as distinct",
       "confirmRelated": "Confirm related purpose",
       "compareItems": "Compare these items",
+      "compareAgain": "Compare again",
+      "actionPlan": {
+        "title": "Skill Card Manager conclusion",
+        "intro": "The AI compares content; Skill Card Manager previews and applies the final action. Choose the primary item to keep. The other item only moves to undoable trash.",
+        "archiveConclusion": "Keep “{{keep}}” and archive “{{archive}}”",
+        "keepBothConclusion": "Keep both and confirm their functional relationship",
+        "moreEvidenceConclusion": "Evidence is insufficient; do not organize yet",
+        "legacyConclusion": "This legacy AI result has no executable recommendation. Ask the Agent again.",
+        "notApplied": "Not applied",
+        "keepThis": "Keep primary",
+        "archiveThis": "Archive candidate",
+        "keepBoth": "Keep both and finish",
+        "overrideKeepBoth": "Keep both instead",
+        "applyKeepBoth": "Apply: keep both",
+        "previewOne": "Preview consolidation",
+        "previewRecommendation": "Preview this recommendation",
+        "previewTitle": "What will happen",
+        "keepNamed": "Keep {{name}} as the primary item",
+        "archiveNamed": "Move {{name}} to Skill Card Manager trash, not permanent deletion",
+        "rewireAgent": "Switch {{agent}} to the retained item",
+        "removeRedundant": "Remove the redundant {{agent}} projection; it already has the retained item",
+        "sourceRewired": "Archive the content at {{agent}} source {{path}}, then rewire that location to the retained item",
+        "sourcePreserved": "The external source stays unchanged; only Skill Card Manager’s managed copy and projections are organized",
+        "undoable": "The operation is journaled and can be undone immediately",
+        "applyArchive": "Keep primary and archive the other item",
+        "applyNamed": "Apply: keep {{keep}}, archive {{archive}}",
+        "noSafeAction": "No safe file action is available. Ask the Agent again or add provenance and behavior evidence.",
+        "previewFailed": "Could not create a safe execution preview",
+        "applyFailed": "Organization was not applied",
+        "applied": "Organization complete; the redundant item is in trash",
+        "undoFailed": "Could not safely undo this operation",
+        "undone": "Undone; the original Skill and Agent projection were restored"
+      },
       "confirmRelation": "Confirm relation",
       "recheck": "Check again",
       "refresh": "Refresh results",
@@ -853,7 +1088,7 @@
     "language": "Language",
     "help": "Help",
     "about": "About",
-    "version": "Card Master 1.28.5",
+    "version": "Skill Card Manager 1.28.5",
     "tagline": "Cross-platform. Minimal, efficient, seamless multi-preset switching.",
     "checkUpdate": "Check for Updates",
     "checking": "Checking…",
@@ -873,7 +1108,7 @@
     "exportLogsHint": "Bundle recent logs and activity history as a zip in your Downloads folder",
     "exportLogsDone": "Logs exported ({{count}} file(s)). Drag the zip into your GitHub issue.",
     "exportLogsFailed": "Failed to export logs.",
-    "panicBanner": "Card Master crashed during the last session ({{time}}).",
+    "panicBanner": "Skill Card Manager crashed during the last session ({{time}}).",
     "repoWarning_config_unreadable": "The central library config file is unreadable or corrupt, so this session fell back to the default location (~/.skills-manager). If your library looks empty, your data is still at the previously configured path — set “Central Repo Path” back to it.",
     "repoWarning_repo_path_invalid": "The configured central repository path is invalid, so this session fell back to the default location (~/.skills-manager). If your library looks empty, re-set “Central Repo Path” to where your data lives.",
     "repoWarning_migration_incomplete": "Moving your central library to the new location couldn’t finish, so this session is using your existing library at its current location — nothing was lost. To complete the move, open Settings and point “Central Repo Path” at an empty, writable folder (tap Edit to see the destination you chose), then restart. Your current library stays where it is until the move succeeds — don’t delete it.",
@@ -1267,18 +1502,65 @@
     "batchRemoveConfirm": "Remove {{count}} selected skills from {{agent}}? This only unlinks them from the global workspace; central library files are kept.",
     "batchRemoved": "{{count}} skills removed",
     "batchRemoveFailed": "{{count}} skills failed to remove",
+    "duplicates": {
+      "clean": "No same-name duplicates found in {{agent}}",
+      "found": "{{count}} duplicate Skill groups found in {{agent}}",
+      "summary": "{{exact}} exact-content groups · {{judgment}} need judgment",
+      "viewAndHandle": "Review and handle",
+      "expandDetails": "Expand duplicate Skill details",
+      "collapseDetails": "Collapse duplicate Skill details",
+      "badge": "Duplicate",
+      "openGroup": "Open this duplicate group",
+      "exact": "Exact content",
+      "needsJudgment": "Needs judgment",
+      "sameSkillFact": "The same central Skill appears in {{agent}} as both a managed projection and a historical source alias. Their strict directory digests match.",
+      "exactCopiesFact": "These are separate central Skills with identical strict directory digests, and {{agent}} currently loads both.",
+      "collisionFact": "The names match but strict content differs. They may be revisions, platform variants, or different purposes and cannot be deleted by name.",
+      "keep": "Recommended",
+      "exactRecommendation": "Keep the healthy managed primary item; quarantine the redundant source alias, or archive the strictly identical redundant central item.",
+      "collisionRecommendation": "Use a local Agent to compare content and provenance, then produce an explicit keep, archive, or keep-both action.",
+      "impact": "The agent will see one capability after organizing. External sources are never permanently deleted, and every automatic action is undoable.",
+      "previewAction": "Verify and preview",
+      "compareAndHandle": "Compare and handle",
+      "aliasPreview": "Keep projection {{keep}}; quarantine historical alias {{remove}} and point provenance to its real destination.",
+      "archivePreview": "Keep {{keep}}; archive {{archive}}; reconcile {{agents}} agent projections.",
+      "undoable": "You can undo this after applying.",
+      "applyAlias": "Apply: keep {{keep}}, quarantine alias",
+      "applyArchive": "Apply: keep {{keep}}, archive duplicate",
+      "aliasApplied": "Organized duplicate loading in {{agent}}; the library copy and real source were preserved.",
+      "archiveApplied": "Archived the redundant Skill and rescanned {{agent}}.",
+      "undone": "Organization was undone and projection relationships restored.",
+      "previewFailed": "Could not produce a safe organization plan",
+      "applyFailed": "Organization was not applied",
+      "undoFailed": "Could not undo organization",
+      "noRedundantAlias": "No historical source alias can be safely quarantined",
+      "contentChanged": "Content changed and is no longer an exact duplicate",
+      "noSafeAction": "This relationship has no safe automatic action"
+    },
+    "foundationGuide": {
+      "open": "How the library relates to the agent folder",
+      "title": "These are the Skills {{agent}} can actually see",
+      "flow": "The library keeps managed copies. Add Skill projects selected capabilities into the agent folder by symlink or copy; the agent reads only its own folder.",
+      "managedTitle": "Managed projections · {{count}}",
+      "managedBody": "Remove from Agent is safe: it removes only the projection, keeps the library copy, and lets you add it again later.",
+      "matchedTitle": "Matched in library · {{count}}",
+      "matchedBody": "A central counterpart exists, but this is not a managed projection. It may still be a source or independent copy, so do not delete it directly.",
+      "agentOnlyTitle": "Agent only · {{count}}",
+      "agentOnlyBody": "No reliable central copy exists. Import it and verify synchronization before deleting the local files.",
+      "warning": "Do not empty an agent's Skills folder directly. Use Remove from Agent to unload a capability; Delete local file is a separate, irreversible operation."
+    },
     "localSkills": {
       "searchPlaceholder": "Search agent skills...",
       "empty": "No local skills found",
       "summary": "{{total}} / {{managed}} managed / {{synced}} in sync",
       "upload": "Upload",
       "pull": "Pull",
-      "removeManaged": "Remove from agent",
-      "deleteLocal": "Delete local skill",
+      "removeManaged": "Remove from agent (library copy kept)",
+      "deleteLocal": "Delete local file (irreversible)",
       "deleteLocalConfirmTitle": "Delete local skill?",
-      "deleteLocalConfirmMessage": "Delete \"{{name}}\" from {{agent}}? This removes the local files and cannot be undone.",
+      "deleteLocalConfirmMessage": "Permanently delete \"{{name}}\" from {{agent}}? Skill Card Manager has no managed projection available for recovery. Import it first; continuing cannot be undone.",
       "deletedLocalToast": "Deleted \"{{name}}\" from {{agent}}.",
-      "uploadedToast": "Uploaded \"{{name}}\" to Skills Center. It was not synced back to {{agent}}.",
+      "uploadedToast": "Imported \"{{name}}\" into the library and placed its original {{agent}} location under Skill Card Manager control.",
       "pulledToast": "Updated \"{{name}}\" from Skills Center in {{agent}}.",
       "uploadConfirmTitle": "Update center skill?",
       "uploadConfirmMessage": "Upload \"{{name}}\" to the matching Skills Center entry? This replaces the center copy.",

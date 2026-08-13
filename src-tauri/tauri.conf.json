@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Card Master",
+  "productName": "Skill Card Manager",
   "version": "1.28.5",
   "identifier": "com.agentskills.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Card Master",
+        "title": "Skill Card Manager",
         "width": 1440,
         "height": 860,
         "minWidth": 1100,

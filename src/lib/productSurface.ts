@@ -1,5 +1,5 @@
 /**
- * Card Master deliberately exposes only the validated Foundation product
+ * Skill Card Manager deliberately exposes only the validated Foundation product
  * surface. Upstream Skills Manager capabilities remain available in the
  * backend for compatibility, but they must not silently define the product.
  */
