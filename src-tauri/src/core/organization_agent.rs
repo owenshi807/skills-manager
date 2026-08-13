@@ -210,6 +210,10 @@ fn json_body(raw: &str) -> &str {
     trimmed
 }
 
+fn bounded_nonempty(value: &str, max_chars: usize) -> bool {
+    !value.trim().is_empty() && value.chars().count() <= max_chars
+}
+
 pub fn parse_assessments(
     raw: &str,
     expected: &[(String, String, Vec<String>)],
@@ -264,6 +268,19 @@ pub fn parse_assessments(
                 "Agent returned a duplicate or stale organization case",
             ));
         }
+        let assessment_text_chars = assessment.difference_summary.chars().count()
+            + assessment.recommendation_reason.chars().count()
+            + assessment
+                .evidence
+                .iter()
+                .chain(&assessment.counter_evidence)
+                .map(|item| item.claim.chars().count())
+                .sum::<usize>()
+            + assessment
+                .unresolved_questions
+                .iter()
+                .map(|question| question.chars().count())
+                .sum::<usize>();
         if !allowed_relations.contains(&assessment.relation_hypothesis.as_str())
             || assessment.suggested_actions.is_empty()
             || assessment
@@ -271,12 +288,20 @@ pub fn parse_assessments(
                 .iter()
                 .any(|action| !allowed_actions.contains(&action.as_str()))
             || !(0.0..=1.0).contains(&assessment.confidence)
-            || assessment.difference_summary.trim().is_empty()
+            || !bounded_nonempty(&assessment.difference_summary, 600)
             || !matches!(
                 assessment.recommended_action.as_str(),
                 "archive_one" | "keep_both" | "needs_more_evidence"
             )
-            || assessment.recommendation_reason.trim().is_empty()
+            || !bounded_nonempty(&assessment.recommendation_reason, 600)
+            || assessment.evidence.len() > 20
+            || assessment.counter_evidence.len() > 20
+            || assessment.unresolved_questions.len() > 12
+            || assessment
+                .unresolved_questions
+                .iter()
+                .any(|question| !bounded_nonempty(question, 400))
+            || assessment_text_chars > 12_000
             || match assessment.recommended_action.as_str() {
                 "archive_one" => assessment
                     .recommended_keep_skill_id
@@ -308,7 +333,7 @@ pub fn parse_assessments(
                 .chain(&assessment.counter_evidence)
                 .any(|item| {
                     !matches!(item.strength.as_str(), "strong" | "medium" | "weak")
-                        || item.claim.trim().is_empty()
+                        || !bounded_nonempty(&item.claim, 800)
                 })
         {
             return Err(AppError::invalid_input(
@@ -422,6 +447,23 @@ mod tests {
         )
         .unwrap();
         assert_eq!(parsed[0].recommended_keep_skill_id.as_deref(), Some("s2"));
+    }
+
+    #[test]
+    fn rejects_oversized_organization_recommendation_text() {
+        let reason = "x".repeat(601);
+        let raw = format!(
+            r#"{{"schema_version":1,"method_version":"card-master-six-gates-v2","assessments":[{{"case_id":"c1","case_revision":"r1","relation_hypothesis":"behavior_overlap_candidate","difference_summary":"overlap","evidence":[{{"strength":"medium","claim":"same workflow"}}],"counter_evidence":[],"unresolved_questions":[],"behavior_eval_required":false,"suggested_actions":["keep_both_grouped"],"recommended_action":"keep_both","recommended_keep_skill_id":null,"recommendation_reason":"{reason}","confidence":0.8}}]}}"#
+        );
+        assert!(parse_assessments(
+            &raw,
+            &[(
+                "c1".to_string(),
+                "r1".to_string(),
+                vec!["s1".to_string(), "s2".to_string()]
+            )],
+        )
+        .is_err());
     }
 
     #[test]

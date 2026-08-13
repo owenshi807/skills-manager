@@ -1072,6 +1072,50 @@ pub async fn preview_organization_archive(
     .await?
 }
 
+fn organization_archive_target_changes(
+    preview: &OrganizationArchivePreview,
+    original_targets: &[SkillTargetRecord],
+    keep: &SkillRecord,
+) -> Result<(Vec<SkillTargetRecord>, Vec<String>), AppError> {
+    let mut transferred_targets = Vec::new();
+    let mut removed_tools = Vec::new();
+    for target in original_targets {
+        let effect = preview
+            .target_effects
+            .iter()
+            .find(|effect| effect.tool == target.tool && effect.target_path == target.target_path)
+            .ok_or_else(|| AppError::invalid_input("Organization target preview changed"))?;
+        if effect.action == "remove_redundant" {
+            removed_tools.push(target.tool.clone());
+            continue;
+        }
+        if effect.action != "rewire_to_keep" {
+            return Err(AppError::invalid_input(
+                "Unsupported organization target action",
+            ));
+        }
+        let mut transferred = target.clone();
+        transferred.skill_id = keep.id.clone();
+        if preview
+            .source_effect
+            .as_ref()
+            .is_some_and(|source| source.tool == target.tool)
+        {
+            transferred.target_path = preview
+                .source_effect
+                .as_ref()
+                .expect("source effect checked")
+                .source_path
+                .clone();
+            transferred.mode = "symlink".to_string();
+        }
+        transferred.source_hash = keep.content_hash.clone();
+        transferred.synced_at = Some(chrono::Utc::now().timestamp_millis());
+        transferred_targets.push(transferred);
+    }
+    Ok((transferred_targets, removed_tools))
+}
+
 #[tauri::command]
 pub async fn apply_organization_archive(
     request: OrganizationArchiveRequest,
@@ -1201,45 +1245,8 @@ pub async fn apply_organization_archive(
                 }
                 std::fs::rename(&central, &archive_path).map_err(AppError::db)?;
 
-                let mut transferred_targets = Vec::new();
-                let mut removed_tools = Vec::new();
-                for target in &original_targets {
-                    let effect = preview
-                        .target_effects
-                        .iter()
-                        .find(|effect| {
-                            effect.tool == target.tool && effect.target_path == target.target_path
-                        })
-                        .ok_or_else(|| {
-                            AppError::invalid_input("Organization target preview changed")
-                        })?;
-                    if preview
-                        .source_effect
-                        .as_ref()
-                        .is_some_and(|source| source.tool == target.tool)
-                    {
-                        let mut transferred = target.clone();
-                        transferred.skill_id = keep.id.clone();
-                        transferred.target_path = preview
-                            .source_effect
-                            .as_ref()
-                            .expect("source effect checked")
-                            .source_path
-                            .clone();
-                        transferred.mode = "symlink".to_string();
-                        transferred.source_hash = keep.content_hash.clone();
-                        transferred.synced_at = Some(chrono::Utc::now().timestamp_millis());
-                        transferred_targets.push(transferred);
-                    } else if effect.action == "rewire_to_keep" {
-                        let mut transferred = target.clone();
-                        transferred.skill_id = keep.id.clone();
-                        transferred.source_hash = keep.content_hash.clone();
-                        transferred.synced_at = Some(chrono::Utc::now().timestamp_millis());
-                        transferred_targets.push(transferred);
-                    } else {
-                        removed_tools.push(target.tool.clone());
-                    }
-                }
+                let (transferred_targets, removed_tools) =
+                    organization_archive_target_changes(&preview, &original_targets, &keep)?;
                 store
                     .mark_skill_archived(
                         &archive.id,
@@ -1873,6 +1880,12 @@ mod organization_health_tests {
             Some(crate::core::content_hash::hash_directory(&archive_dir).unwrap());
         store.insert_skill(&keep).unwrap();
         store.insert_skill(&archive).unwrap();
+        let keep_target_dir = agent_root.join("managed-find-skills");
+        std::os::unix::fs::symlink(&keep_dir, &keep_target_dir).unwrap();
+        let mut keep_projection = target(&keep_target_dir);
+        keep_projection.id = "keep-target".to_string();
+        keep_projection.skill_id = "keep".to_string();
+        store.insert_target(&keep_projection).unwrap();
         let mut projection = target(&target_dir);
         projection.id = "archive-target".to_string();
         projection.skill_id = "archive".to_string();
@@ -1903,6 +1916,16 @@ mod organization_health_tests {
         .unwrap();
 
         assert_eq!(preview.target_effects[0].action, "remove_redundant");
+        let (transferred, removed) =
+            organization_archive_target_changes(&preview, &[projection], &keep).unwrap();
+        assert!(transferred.is_empty());
+        assert_eq!(removed, vec!["codex"]);
+        store
+            .mark_skill_archived("archive", "/trash/archive", &transferred, &removed)
+            .unwrap();
+        assert_eq!(store.get_targets_for_skill("keep").unwrap().len(), 1);
+        assert!(store.get_targets_for_skill("archive").unwrap().is_empty());
+
         let source_effect = preview.source_effect.unwrap();
         assert_eq!(source_effect.tool, "codex");
         assert_eq!(source_effect.source_path, source_dir.to_string_lossy());
