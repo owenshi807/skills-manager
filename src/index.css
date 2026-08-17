@@ -171,6 +171,10 @@
   }
 
   .scm-execution-summary {
-    @apply mt-3 rounded-lg bg-bg-secondary px-3 py-3;
+    @apply mt-3 min-h-24 rounded-lg bg-bg-secondary px-3 py-3;
+  }
+
+  .scm-button-tertiary {
+    @apply inline-flex items-center justify-center rounded-lg bg-transparent px-2 text-[12px] font-medium text-muted transition-colors outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50;
   }
 }

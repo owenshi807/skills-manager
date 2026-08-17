@@ -62,8 +62,10 @@ themed later.
 - Each row contains radio → Skill identity/source → consequence.
 - Selection changes only the radio and the consequence label. The row does not
   gain a bright border or colored fill.
-- An Agent recommendation lives on the affected option as a compact
-  “Agent recommends keep/archive” label. It is not repeated as a section title.
+- An Agent recommendation lives only on the recommended option as a compact
+  “Agent recommends keeping” label. The rejected option stays unlabelled so two
+  labels cannot both read as endorsements. The recommendation is not repeated as
+  a section title.
   A nearby help icon reveals the evidence reason on hover or keyboard focus.
 - Recommendation and current selection remain separate facts: changing the radio
   never rewrites which option the Agent originally recommended.

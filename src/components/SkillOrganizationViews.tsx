@@ -144,18 +144,13 @@ function RecommendationTag({
   label,
   reason,
   helpLabel,
-  emphasized,
 }: {
   label: string;
   reason: string;
   helpLabel: string;
-  emphasized: boolean;
 }) {
   return (
-    <span className={cn(
-      "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold",
-      emphasized ? "bg-accent-bg text-accent-light" : "bg-surface text-muted",
-    )}>
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-accent-bg px-2 py-1 text-[10px] font-semibold text-accent-light">
       {label}
       <span
         className="group/reason relative inline-flex"
@@ -930,13 +925,12 @@ export function SkillIssuesView({
                             const selected = keepSkillId === skill.id;
                             const agentRecommendsKeeping = hasAgentArchiveRecommendation
                               && skill.id === recommendedKeep.id;
-                            const recommendationLabel = hasAgentArchiveRecommendation
+                            const showRecommendation = hasAgentArchiveRecommendation
                               ? agentRecommendsKeeping
-                                ? t("mySkills.organization.actionPlan.agentKeepThis", { agent: agentAssessment?.agentName })
-                                : t("mySkills.organization.actionPlan.agentArchiveThis", { agent: agentAssessment?.agentName })
-                              : selected
-                                ? t("mySkills.organization.actionPlan.keepThis")
-                                : t("mySkills.organization.actionPlan.archiveThis");
+                              : selected;
+                            const recommendationLabel = hasAgentArchiveRecommendation
+                              ? t("mySkills.organization.actionPlan.agentKeepThis", { agent: agentAssessment?.agentName })
+                              : t("mySkills.organization.actionPlan.keepThis");
                             return (
                               <label
                                 key={skill.id}
@@ -950,6 +944,7 @@ export function SkillIssuesView({
                                   onChange={() => {
                                     setKeepSkillId(skill.id);
                                     setArchivePreview(null);
+                                    setPreviewingArchive(true);
                                   }}
                                   className="scm-radio-control"
                                 />
@@ -959,86 +954,113 @@ export function SkillIssuesView({
                                   </span>
                                   <span className="mt-0.5 block truncate text-[10px] text-muted">{sourceLabel(skill)}</span>
                                 </span>
-                                <RecommendationTag
-                                  label={recommendationLabel}
-                                  reason={archiveRecommendationReason}
-                                  helpLabel={t("mySkills.organization.actionPlan.whyRecommended")}
-                                  emphasized={hasAgentArchiveRecommendation || selected}
-                                />
+                                {showRecommendation && (
+                                  <RecommendationTag
+                                    label={recommendationLabel}
+                                    reason={archiveRecommendationReason}
+                                    helpLabel={t("mySkills.organization.actionPlan.whyRecommended")}
+                                  />
+                                )}
                               </label>
                             );
                           })}
                         </fieldset>
-                        {archivePreview && (
+                        {(archivePreview || previewingArchive) && (
                           <div className="scm-execution-summary">
-                            <div className="text-[11px] font-semibold text-secondary">
-                              {t("mySkills.organization.actionPlan.previewTitle")}
-                            </div>
-                            <ul className="mt-2 space-y-1 text-[11px] leading-4 text-muted">
-                              <li>· {t("mySkills.organization.actionPlan.keepNamed", { name: archivePreview.keep_name })}</li>
-                              <li>· {t("mySkills.organization.actionPlan.archiveNamed", { name: archivePreview.archive_name })}</li>
-                              {archivePreview.source_effect && (
-                                <li>· {t("mySkills.organization.actionPlan.sourceRewired", {
-                                  agent: archivePreview.source_effect.tool,
-                                  path: archivePreview.source_effect.source_path,
-                                })}</li>
-                              )}
-                              {archivePreview.target_effects.map((effect) => (
-                                <li key={`${effect.tool}:${effect.target_path}`}>
-                                  · {effect.action === "rewire_to_keep"
-                                    ? t("mySkills.organization.actionPlan.rewireAgent", { agent: effect.tool })
-                                    : t("mySkills.organization.actionPlan.removeRedundant", { agent: effect.tool })}
-                                </li>
-                              ))}
-                              {archivePreview.source_preserved && (
-                                <li>· {t("mySkills.organization.actionPlan.sourcePreserved")}</li>
-                              )}
-                              <li>· {t("mySkills.organization.actionPlan.undoable")}</li>
-                            </ul>
+                            {archivePreview ? (
+                              <>
+                                <div className="text-[11px] font-semibold text-secondary">
+                                  {t("mySkills.organization.actionPlan.previewTitle")}
+                                </div>
+                                <ul className="mt-2 space-y-1 text-[11px] leading-4 text-muted">
+                                  <li>· {t("mySkills.organization.actionPlan.keepNamed", { name: archivePreview.keep_name })}</li>
+                                  <li>· {t("mySkills.organization.actionPlan.archiveNamed", { name: archivePreview.archive_name })}</li>
+                                  {archivePreview.source_effect && (
+                                    <li>· {t("mySkills.organization.actionPlan.sourceRewired", {
+                                      agent: archivePreview.source_effect.tool,
+                                      path: archivePreview.source_effect.source_path,
+                                    })}</li>
+                                  )}
+                                  {archivePreview.target_effects.map((effect) => (
+                                    <li key={`${effect.tool}:${effect.target_path}`}>
+                                      · {effect.action === "rewire_to_keep"
+                                        ? t("mySkills.organization.actionPlan.rewireAgent", { agent: effect.tool })
+                                        : t("mySkills.organization.actionPlan.removeRedundant", { agent: effect.tool })}
+                                    </li>
+                                  ))}
+                                  {archivePreview.source_preserved && (
+                                    <li>· {t("mySkills.organization.actionPlan.sourcePreserved")}</li>
+                                  )}
+                                  <li>· {t("mySkills.organization.actionPlan.undoable")}</li>
+                                </ul>
+                              </>
+                            ) : (
+                              <div className="flex min-h-20 items-center gap-2 text-[11px] text-muted">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {t("mySkills.organization.actionPlan.checkingImpact")}
+                              </div>
+                            )}
                           </div>
                         )}
-                        <div className="mt-3 flex flex-wrap justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onDecide(issue, "related")}
-                            className="app-button-secondary"
-                          >
-                            {t("mySkills.organization.actionPlan.overrideKeepBoth")}
-                          </button>
-                          {!archivePreview ? (
+                        <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                          {issue.decisionTier === "needs_semantic" ? (
                             <button
                               type="button"
-                              onClick={() => previewArchivePlan(issue)}
-                              disabled={previewingArchive}
-                              className="app-button-primary"
+                              onClick={() => onHandOff(issue)}
+                              className="scm-button-tertiary h-10"
                             >
-                              {previewingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                              {previewingArchive
-                                ? t("mySkills.organization.actionPlan.checkingImpact")
-                                : t("mySkills.organization.actionPlan.retryImpactCheck")}
+                              {t("mySkills.organization.compareAgain")}
                             </button>
-                          ) : (
+                          ) : <span />}
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => applyArchivePlan(issue)}
-                              disabled={applyingArchive}
-                              className="app-button-primary"
+                              onClick={() => onDecide(issue, "related")}
+                              className="app-button-secondary h-10"
                             >
-                              {applyingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                              {t("mySkills.organization.actionPlan.applyNamed", {
-                                keep: archivePreview.keep_name,
-                                archive: archivePreview.archive_name,
-                              })}
+                              {t("mySkills.organization.actionPlan.overrideKeepBoth")}
                             </button>
-                          )}
+                            {!archivePreview ? (
+                              <button
+                                type="button"
+                                onClick={() => previewArchivePlan(issue)}
+                                disabled={previewingArchive}
+                                className="app-button-primary h-10"
+                              >
+                                {previewingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                {previewingArchive
+                                  ? t("mySkills.organization.actionPlan.checkingImpact")
+                                  : t("mySkills.organization.actionPlan.retryImpactCheck")}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => applyArchivePlan(issue)}
+                                disabled={applyingArchive}
+                                className="app-button-primary h-10"
+                              >
+                                {applyingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                {t("mySkills.organization.actionPlan.executeKeepNamed", {
+                                  keep: archivePreview.keep_name,
+                                })}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </>
                     ) : agentRecommendation === "keep_both" ? (
-                      <div className="mt-3 flex justify-end">
+                      <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => onHandOff(issue)}
+                          className="scm-button-tertiary h-10"
+                        >
+                          {t("mySkills.organization.compareAgain")}
+                        </button>
                         <button
                           type="button"
                           onClick={() => onDecide(issue, "related")}
-                          className="app-button-primary"
+                          className="app-button-primary h-10"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           {t("mySkills.organization.actionPlan.applyKeepBoth")}
@@ -1052,7 +1074,7 @@ export function SkillIssuesView({
                   </section>
                 )}
                 <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
-                  {issue.decisionTier === "needs_semantic" && (
+                  {issue.decisionTier === "needs_semantic" && !showActionPlan && (
                     <button type="button" onClick={() => onHandOff(issue)} className={agentAssessment ? "app-button-secondary" : "app-button-primary"}>
                       <Bot className="h-3.5 w-3.5" />
                       {agentAssessment
