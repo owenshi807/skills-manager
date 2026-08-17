@@ -154,6 +154,30 @@ function centralDirName(skill: ManagedSkill) {
   return skill.central_path.split(/[\\/]/).filter(Boolean).pop() || skill.name;
 }
 
+function dispositionForBatchAssessment(
+  assessment: OrganizationAgentAssessment,
+): OrganizationDisposition {
+  if (assessment.relation_hypothesis === "exact_artifact_multi_source") return "same_intent";
+  if (["platform_variant", "user_customization", "different_purpose"].includes(
+    assessment.relation_hypothesis,
+  )) return "intentional_distinct";
+  return "related";
+}
+
+type OrganizationBatchConclusionPlan = {
+  kind: "decision";
+  issue: SkillIssue;
+  assessment: OrganizationAgentAssessment;
+  caseRevision: string;
+} | {
+  kind: "archive";
+  issue: SkillIssue;
+  assessment: OrganizationAgentAssessment;
+  caseRevision: string;
+  keepSkill: ManagedSkill;
+  archiveSkill: ManagedSkill;
+};
+
 export function MySkills() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -178,6 +202,7 @@ export function MySkills() {
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
+  const [processingOrganizationConclusions, setProcessingOrganizationConclusions] = useState(false);
   const [refreshingOrganization, setRefreshingOrganization] = useState(false);
   const [organizationAgentCapabilities, setOrganizationAgentCapabilities] = useState<OrganizationAgentCapability[]>([]);
   const [organizationAssessmentRecords, setOrganizationAssessmentRecords] = useState<OrganizationAgentAssessmentRecord[]>([]);
@@ -1440,6 +1465,96 @@ export function MySkills() {
     }
   }, [refreshManagedSkills, reloadOrganizationOperations, t]);
 
+  const applyOrganizationBatchConclusions = useCallback(async (issues: SkillIssue[]) => {
+    const plans = issues.flatMap<OrganizationBatchConclusionPlan>((issue) => {
+      const displayAssessment = organizationAgentAssessments.get(issue.id);
+      const caseRevision = issue.caseRevision;
+      if (!displayAssessment || displayAssessment.stale || !caseRevision) return [];
+      const { assessment } = displayAssessment;
+      if (assessment.recommended_action === "keep_both") {
+        return [{ kind: "decision" as const, issue, assessment, caseRevision }];
+      }
+      if (assessment.recommended_action !== "archive_one" || issue.skills.length !== 2) return [];
+      const keepSkill = issue.skills.find((skill) => skill.id === assessment.recommended_keep_skill_id);
+      const archiveSkill = issue.skills.find((skill) => skill.id !== keepSkill?.id);
+      if (!keepSkill || !archiveSkill) return [];
+      return [{ kind: "archive" as const, issue, assessment, caseRevision, keepSkill, archiveSkill }];
+    });
+    if (plans.length === 0) {
+      toast.info(t("mySkills.organization.noBatchConclusions"));
+      return;
+    }
+
+    setProcessingOrganizationConclusions(true);
+    const toastId = toast.loading(t("mySkills.organization.applyingBatchConclusions"));
+    let archived = 0;
+    let kept = 0;
+    let failed = 0;
+    try {
+      for (const plan of plans) {
+        try {
+          const caseRequest: api.OrganizationCaseRequest = {
+            case_id: plan.issue.id,
+            issue_kind: plan.issue.kind,
+            member_ids: plan.issue.skills.map((skill) => skill.id),
+            verify_strict_artifact: true,
+          };
+          if (plan.kind === "decision") {
+            await api.setOrganizationDecision(
+              caseRequest,
+              plan.caseRevision,
+              dispositionForBatchAssessment(plan.assessment),
+            );
+            kept += 1;
+          } else {
+            await api.applyOrganizationArchive({
+              case: caseRequest,
+              evidence_fingerprint: plan.caseRevision,
+              keep_skill_id: plan.keepSkill.id,
+              archive_skill_id: plan.archiveSkill.id,
+            });
+            archived += 1;
+          }
+        } catch {
+          failed += 1;
+        }
+      }
+
+      const refreshTasks: Promise<unknown>[] = [
+        api.getOrganizationDecisions().then(setOrganizationDecisions),
+        reloadOrganizationOperations(),
+      ];
+      if (archived > 0) refreshTasks.push(refreshManagedSkills());
+      await Promise.all(refreshTasks);
+
+      const completed = archived + kept;
+      if (completed > 0) {
+        toast.success(t("mySkills.organization.batchConclusionsApplied", {
+          count: completed,
+          archive: archived,
+          keep: kept,
+        }), {
+          id: toastId,
+          action: {
+            label: t("mySkills.organization.viewProcessed"),
+            onClick: () => setLibraryView("processed"),
+          },
+        });
+      } else {
+        toast.dismiss(toastId);
+      }
+      if (failed > 0) {
+        toast.error(t("mySkills.organization.batchConclusionsFailed", { count: failed }));
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("mySkills.organization.batchConclusionsUnexpectedFailure")), {
+        id: toastId,
+      });
+    } finally {
+      setProcessingOrganizationConclusions(false);
+    }
+  }, [organizationAgentAssessments, refreshManagedSkills, reloadOrganizationOperations, t]);
+
   const undoOrganizationOperation = useCallback(async (operationId: string) => {
     try {
       await api.undoOrganizationArchive(operationId);
@@ -1741,10 +1856,12 @@ export function MySkills() {
             void api.setSettings("organization_default_agent", mode).catch(() => {});
           }}
           onExecuteBatch={executeOrganizationBatch}
+          onApplyBatchConclusions={applyOrganizationBatchConclusions}
           onHandOff={handOffOrganizationIssue}
           agentAssessments={organizationAgentAssessments}
           agentError={organizationAgentError}
           processingBatch={processingOrganizationBatch}
+          processingConclusions={processingOrganizationConclusions}
           refreshing={refreshingOrganization}
           onRefresh={refreshOrganizationFacts}
           onDecide={decideOrganizationIssue}

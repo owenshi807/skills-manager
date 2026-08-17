@@ -43,10 +43,12 @@ interface IssuesProps extends SharedProps {
   executionOptions: OrganizationExecutionOption[];
   onExecutionModeChange: (mode: OrganizationExecutionMode) => void;
   onExecuteBatch: (issues: SkillIssue[]) => void;
+  onApplyBatchConclusions: (issues: SkillIssue[]) => void;
   onHandOff: (issue: SkillIssue) => void;
   agentAssessments: Map<string, OrganizationAgentDisplayAssessment>;
   agentError: string | null;
   processingBatch: boolean;
+  processingConclusions: boolean;
   refreshing: boolean;
   onRefresh: () => void;
   onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
@@ -223,10 +225,12 @@ export function SkillIssuesView({
   executionOptions,
   onExecutionModeChange,
   onExecuteBatch,
+  onApplyBatchConclusions,
   onHandOff,
   agentAssessments,
   agentError,
   processingBatch,
+  processingConclusions,
   refreshing,
   onRefresh,
   onDecide,
@@ -296,6 +300,23 @@ export function SkillIssuesView({
   const semanticIssues = selectedCategory === "same_name"
     ? categoryIssues.filter((issue) => issue.decisionTier === "needs_semantic")
     : [];
+  const assessedSemanticIssues = semanticIssues.filter((issue) => {
+    const assessment = agentAssessments.get(issue.id);
+    return assessment && !assessment.stale;
+  });
+  const actionableSemanticIssues = assessedSemanticIssues.filter((issue) => {
+    const recommendation = agentAssessments.get(issue.id)?.assessment;
+    if (!recommendation) return false;
+    if (recommendation.recommended_action === "keep_both") return true;
+    return recommendation.recommended_action === "archive_one"
+      && issue.skills.length === 2
+      && issue.skills.some((skill) => skill.id === recommendation.recommended_keep_skill_id);
+  });
+  const batchArchiveCount = actionableSemanticIssues.filter((issue) =>
+    agentAssessments.get(issue.id)?.assessment.recommended_action === "archive_one").length;
+  const batchKeepBothCount = actionableSemanticIssues.length - batchArchiveCount;
+  const batchNeedsEvidenceCount = semanticIssues.length - actionableSemanticIssues.length;
+  const hasBatchAssessments = assessedSemanticIssues.length > 0;
   const selectedExecution = executionOptions.find((option) => option.id === executionMode) ?? executionOptions[0];
   const activeAgentAssessment = activeIssue ? agentAssessments.get(activeIssue.id) : undefined;
   const recommendedKeepSkillId = activeAgentAssessment?.assessment.recommended_action === "archive_one"
@@ -483,16 +504,66 @@ export function SkillIssuesView({
           <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/20 bg-accent-bg px-3 py-2.5">
             <div>
               <div className="text-[12px] font-semibold text-secondary">
-                {t("mySkills.organization.batchTitle", { count: semanticIssues.length })}
+                {hasBatchAssessments
+                  ? t("mySkills.organization.batchResultsTitle", {
+                      assessed: assessedSemanticIssues.length,
+                      total: semanticIssues.length,
+                    })
+                  : t("mySkills.organization.batchTitle", { count: semanticIssues.length })}
               </div>
-              <div className="mt-0.5 text-[11px] text-muted">{t("mySkills.organization.batchHint")}</div>
+              <div className="mt-0.5 text-[11px] text-muted">
+                {hasBatchAssessments
+                  ? t("mySkills.organization.batchResultsHint", {
+                      archive: batchArchiveCount,
+                      keep: batchKeepBothCount,
+                      pending: batchNeedsEvidenceCount,
+                    })
+                  : t("mySkills.organization.batchHint")}
+              </div>
             </div>
-            <div ref={executionMenuRef} className="relative flex shrink-0 items-stretch rounded-xl bg-emerald-600 text-white shadow-sm transition-shadow hover:shadow-md">
+            <div className="flex shrink-0 items-stretch gap-2">
+              {actionableSemanticIssues.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onApplyBatchConclusions(actionableSemanticIssues)}
+                  disabled={processingConclusions || processingBatch}
+                  className="flex min-w-[230px] items-center gap-3 rounded-xl bg-emerald-600 px-4 py-2.5 text-left text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:opacity-60"
+                >
+                  {processingConclusions
+                    ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                    : <CheckCircle2 className="h-5 w-5 shrink-0" />}
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-semibold leading-5">
+                      {processingConclusions
+                        ? t("mySkills.organization.applyingBatchConclusions")
+                        : t("mySkills.organization.applyBatchConclusions", { count: actionableSemanticIssues.length })}
+                    </span>
+                    <span className="block truncate text-[10px] leading-4 text-white/75">
+                      {t("mySkills.organization.batchActionImpact", {
+                        archive: batchArchiveCount,
+                        keep: batchKeepBothCount,
+                      })}
+                    </span>
+                  </span>
+                </button>
+              )}
+              <div
+                ref={executionMenuRef}
+                className={cn(
+                  "relative flex items-stretch rounded-xl shadow-sm transition-shadow hover:shadow-md",
+                  hasBatchAssessments
+                    ? "border border-border-subtle bg-surface text-secondary"
+                    : "bg-emerald-600 text-white",
+                )}
+              >
               <button
                 type="button"
                 onClick={() => onExecuteBatch(semanticIssues)}
-                disabled={processingBatch}
-                className="flex min-w-[230px] items-center gap-3 rounded-l-xl px-4 py-2.5 text-left transition-colors hover:bg-white/10 disabled:opacity-60"
+                disabled={processingBatch || processingConclusions}
+                className={cn(
+                  "flex min-w-[210px] items-center gap-3 rounded-l-xl px-4 py-2.5 text-left transition-colors disabled:opacity-60",
+                  hasBatchAssessments ? "hover:bg-surface-hover" : "hover:bg-white/10",
+                )}
               >
                 {processingBatch
                   ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
@@ -501,9 +572,14 @@ export function SkillIssuesView({
                   <span className="block text-[14px] font-semibold leading-5">
                     {processingBatch
                       ? t("mySkills.organization.processingBatch")
-                      : t("mySkills.organization.batchAction", { count: semanticIssues.length })}
+                      : hasBatchAssessments
+                        ? t("mySkills.organization.compareAgainBatch", { count: semanticIssues.length })
+                        : t("mySkills.organization.batchAction", { count: semanticIssues.length })}
                   </span>
-                  <span className="block truncate text-[10px] leading-4 text-white/75">
+                  <span className={cn(
+                    "block truncate text-[10px] leading-4",
+                    hasBatchAssessments ? "text-muted" : "text-white/75",
+                  )}>
                     {selectedExecution?.description}
                   </span>
                 </span>
@@ -511,8 +587,13 @@ export function SkillIssuesView({
               <button
                 type="button"
                 onClick={() => setExecutionMenuOpen((open) => !open)}
-                disabled={processingBatch}
-                className="flex w-10 items-center justify-center rounded-r-xl border-l border-white/20 transition-colors hover:bg-white/10 disabled:opacity-60"
+                disabled={processingBatch || processingConclusions}
+                className={cn(
+                  "flex w-10 items-center justify-center rounded-r-xl border-l transition-colors disabled:opacity-60",
+                  hasBatchAssessments
+                    ? "border-border-subtle hover:bg-surface-hover"
+                    : "border-white/20 hover:bg-white/10",
+                )}
                 aria-label={t("mySkills.organization.chooseAgent")}
                 aria-expanded={executionMenuOpen}
               >
@@ -544,6 +625,7 @@ export function SkillIssuesView({
                   ))}
                 </div>
               )}
+              </div>
             </div>
           </div>
         )}
@@ -601,8 +683,8 @@ export function SkillIssuesView({
           </div>
         </section>
       ) : selectedCategory ? (
-        <div className="grid items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="app-panel max-h-[680px] overflow-y-auto p-2 shadow-card lg:sticky lg:top-4">
+        <div className="app-panel grid items-start overflow-hidden shadow-card lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="max-h-[680px] overflow-y-auto border-b border-border-faint bg-bg-secondary/35 p-2 lg:sticky lg:top-4 lg:border-b-0 lg:border-r">
             <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
               {t("mySkills.organization.issueDirectory.caseList", { count: narrowedIssues.length })}
             </div>
@@ -628,12 +710,12 @@ export function SkillIssuesView({
             </div>
           </aside>
           {visibleIssues.length === 0 ? (
-            <div className="app-panel py-16 text-center">
+            <div className="py-16 text-center">
               <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-500" />
               <div className="text-[13px] font-medium text-secondary">{t("mySkills.organization.noIssues")}</div>
             </div>
           ) : (
-          <div className="min-w-0 space-y-3">
+          <div className="min-w-0">
           {visibleIssues.map((issue) => {
             const copy = issueCopy(issue.kind, t);
             const agentAssessment = agentAssessments.get(issue.id);
@@ -655,7 +737,7 @@ export function SkillIssuesView({
             const showActionPlan = deterministicArchive
               || (issue.decisionTier === "needs_semantic" && !!agentAssessment && !agentAssessment.stale);
             return (
-              <article key={issue.id} className="app-panel overflow-hidden shadow-card">
+              <article key={issue.id} className="overflow-hidden">
                 <div className="flex items-start gap-4 p-4">
                   <div className={cn(
                     "mt-0.5 rounded-lg p-2",
