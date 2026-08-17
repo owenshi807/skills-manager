@@ -465,7 +465,8 @@
       "tabs": {
         "all": "全部",
         "organize": "整理",
-        "issues": "待处理"
+        "issues": "待处理",
+        "processed": "已处理"
       },
       "summary": {
         "groups": "能力组",
@@ -629,6 +630,15 @@
       "confirmRelated": "确认用途相关",
       "compareItems": "比较这两项",
       "compareAgain": "重新比较",
+      "processed": {
+        "title": "已处理",
+        "records": "条记录",
+        "intro": "已做的关系判断和真实整理操作都保存在这里。判断只改变分类；归档会让冗余 Skill 停止提供给 Agent，但不会永久删除。",
+        "trashTitle": "Skill Card Manager 回收区",
+        "trashHint": "这里不是 macOS 废纸篓，而是 Skill Card Manager 自己的可恢复区域。你不需要手动寻找文件；在下方整理记录中点击“撤销”，即可恢复 Skill 和原有 Agent 投放。",
+        "trashPath": "内部位置：~/.skills-manager/skills/.trash/organization/",
+        "empty": "还没有已处理记录"
+      },
       "actionPlan": {
         "title": "Skill Card Manager 结论",
         "intro": "AI 负责比较，最终动作由 Skill Card Manager 明确预览并执行。选择要保留的主项；另一项只会进入可撤销回收区。",
@@ -660,7 +670,7 @@
         "noSafeAction": "当前没有安全的文件动作。请重新询问 Agent，或补充来源与行为证据。",
         "previewFailed": "无法生成安全执行预览",
         "applyFailed": "整理未执行",
-        "applied": "整理完成；冗余项已进入回收区",
+        "applied": "已归档「{{archive}}」；可在“技能库 → 已处理”查看或撤销",
         "undoFailed": "无法安全撤销这次整理",
         "undone": "已撤销，原 Skill 和 Agent 投放已恢复"
       },

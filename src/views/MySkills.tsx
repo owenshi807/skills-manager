@@ -42,7 +42,7 @@ import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import { BatchTagDialog } from "../components/BatchTagDialog";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { CardActionMenu } from "../components/CardActionMenu";
-import { SkillIssuesView } from "../components/SkillOrganizationViews";
+import { SkillIssuesView, SkillProcessedView } from "../components/SkillOrganizationViews";
 import type {
   OrganizationExecutionMode,
   OrganizationExecutionOption,
@@ -171,9 +171,10 @@ export function MySkills() {
   } = useApp();
   const viewedPreset = CARD_MASTER_PRODUCT_SURFACE.presets ? upstreamViewedPreset : null;
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [libraryView, setLibraryView] = useState<"all" | "issues">(() =>
-    new URLSearchParams(window.location.search).get("view") === "issues" ? "issues" : "all"
-  );
+  const [libraryView, setLibraryView] = useState<"all" | "issues" | "processed">(() => {
+    const view = new URLSearchParams(window.location.search).get("view");
+    return view === "issues" || view === "processed" ? view : "all";
+  });
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
@@ -366,6 +367,11 @@ export function MySkills() {
   const unresolvedOrganizationCount = useMemo(
     () => organizationIssues.filter((issue) => !resolvedOrganizationIds.has(issue.id)).length,
     [organizationIssues, resolvedOrganizationIds],
+  );
+  const processedOrganizationCount = useMemo(
+    () => organizationIssues.filter((issue) => resolvedOrganizationIds.has(issue.id)).length
+      + organizationOperations.length,
+    [organizationIssues, organizationOperations.length, resolvedOrganizationIds],
   );
   const organizationExecutionOptions = useMemo<OrganizationExecutionOption[]>(() => {
     const descriptionByKey: Record<string, string> = {
@@ -1400,6 +1406,7 @@ export function MySkills() {
     archiveSkillId: string,
   ) => {
     if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    const archivedSkillName = issue.skills.find((skill) => skill.id === archiveSkillId)?.name ?? archiveSkillId;
     const request: api.OrganizationArchiveRequest = {
       case: {
         case_id: issue.id,
@@ -1414,7 +1421,7 @@ export function MySkills() {
     try {
       const result = await api.applyOrganizationArchive(request);
       await Promise.all([refreshManagedSkills(), reloadOrganizationOperations()]);
-      toast.success(t("mySkills.organization.actionPlan.applied"), {
+      toast.success(t("mySkills.organization.actionPlan.applied", { archive: archivedSkillName }), {
         action: {
           label: t("mySkills.organization.undo"),
           onClick: () => {
@@ -1533,6 +1540,7 @@ export function MySkills() {
         {([
           { id: "all", icon: LayoutGrid, count: skills.length },
           { id: "issues", icon: CircleAlert, count: unresolvedOrganizationCount },
+          { id: "processed", icon: CheckCircle2, count: processedOrganizationCount },
         ] as const).map((item) => {
           const Icon = item.icon;
           return (
@@ -1740,15 +1748,22 @@ export function MySkills() {
           refreshing={refreshingOrganization}
           onRefresh={refreshOrganizationFacts}
           onDecide={decideOrganizationIssue}
-          onUndoDecision={undoOrganizationDecision}
           onPreviewArchive={previewOrganizationArchive}
           onApplyArchive={applyOrganizationArchive}
-          operations={organizationOperations}
-          onUndoOperation={undoOrganizationOperation}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}
           onOpenSkill={openSkillDetailById}
+        />
+      ) : libraryView === "processed" ? (
+        <SkillProcessedView
+          issues={organizationIssues}
+          resolvedIds={resolvedOrganizationIds}
+          operations={organizationOperations}
+          search={search}
+          displayNames={skillDisplayNames}
+          onUndoDecision={undoOrganizationDecision}
+          onUndoOperation={undoOrganizationOperation}
         />
       ) : filtered.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center pb-20 text-center">

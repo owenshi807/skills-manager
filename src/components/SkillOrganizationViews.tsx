@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  ArchiveRestore,
   Bot,
   CheckCircle2,
   ChevronDown,
@@ -49,10 +50,17 @@ interface IssuesProps extends SharedProps {
   refreshing: boolean;
   onRefresh: () => void;
   onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
-  onUndoDecision: (caseKey: string) => void;
   onPreviewArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<OrganizationArchivePreview>;
   onApplyArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<void>;
+}
+
+interface ProcessedProps {
+  issues: SkillIssue[];
+  resolvedIds: Set<string>;
   operations: OrganizationOperationSummary[];
+  search: string;
+  displayNames: Map<string, string>;
+  onUndoDecision: (caseKey: string) => void;
   onUndoOperation: (operationId: string) => Promise<void>;
 }
 
@@ -222,11 +230,8 @@ export function SkillIssuesView({
   refreshing,
   onRefresh,
   onDecide,
-  onUndoDecision,
   onPreviewArchive,
   onApplyArchive,
-  operations,
-  onUndoOperation,
   search,
   displayNames,
   tools,
@@ -251,7 +256,6 @@ export function SkillIssuesView({
     return () => window.removeEventListener("mousedown", close);
   }, [executionMenuOpen]);
   const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
-  const resolvedIssues = issues.filter((issue) => resolvedIds.has(issue.id));
   const searchedIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
     return matchesSearch(issue.skills, copy.title, search);
@@ -269,7 +273,7 @@ export function SkillIssuesView({
       issues: categoryIssues,
       skillCount: new Set(categoryIssues.flatMap((issue) => issue.skills.map((skill) => skill.id))).size,
     };
-  });
+  }).filter((category) => category.issues.length > 0);
   const currentCategory = categories.find((category) => category.id === selectedCategory);
   const categoryIssues = searchedIssues.filter((issue) => issueCategory(issue) === selectedCategory);
   const formatBuckets = [...new Set(
@@ -325,6 +329,16 @@ export function SkillIssuesView({
     setSelectedHealthCode(null);
     setSelectedIssueId(null);
   };
+
+  const selectedCategoryStillExists = !selectedCategory
+    || unresolvedIssues.some((issue) => issueCategory(issue) === selectedCategory);
+
+  useEffect(() => {
+    if (selectedCategoryStillExists) return;
+    setSelectedCategory(null);
+    setSelectedHealthCode(null);
+    setSelectedIssueId(null);
+  }, [selectedCategoryStillExists]);
 
   useEffect(() => {
     const recommendedId = activeIssue?.skills.some((skill) => skill.id === recommendedKeepSkillId)
@@ -388,7 +402,14 @@ export function SkillIssuesView({
     <div className="space-y-4 pb-8">
       <div className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
         <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="min-w-[54px] shrink-0 pt-0.5">
+              <div className="text-[24px] font-semibold leading-none tracking-tight text-primary">
+                {currentCategory?.issues.length ?? unresolvedIssues.length}
+              </div>
+              <div className="mt-1 text-[10px] text-muted">{t("mySkills.organization.issueDirectory.events")}</div>
+            </div>
+            <div className="min-w-0">
             {selectedCategory ? (
               <button
                 type="button"
@@ -416,12 +437,9 @@ export function SkillIssuesView({
                 ? t(`mySkills.organization.issueDirectory.categories.${currentCategory.id}.hint`)
                 : t("mySkills.organization.issueDirectory.intro")}
             </p>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <div className="rounded-lg bg-bg-secondary px-3 py-2 text-center">
-              <div className="text-[17px] font-semibold text-primary">{currentCategory?.issues.length ?? unresolvedIssues.length}</div>
-              <div className="text-[10px] text-muted">{t("mySkills.organization.issueDirectory.events")}</div>
-            </div>
             <button
               type="button"
               onClick={onRefresh}
@@ -443,8 +461,7 @@ export function SkillIssuesView({
                   key={category.id}
                   type="button"
                   onClick={() => openCategory(category.id)}
-                  disabled={category.issues.length === 0}
-                  className="group rounded-xl border border-border-faint bg-bg-secondary/55 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-border-subtle hover:shadow-sm disabled:pointer-events-none disabled:opacity-45"
+                  className="group rounded-xl border border-border-faint bg-bg-secondary/55 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-border-subtle hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <span className={cn("rounded-lg p-2", category.tone)}><Icon className="h-4 w-4" /></span>
@@ -932,15 +949,67 @@ export function SkillIssuesView({
         </div>
       ) : null}
 
+    </div>
+  );
+}
+
+export function SkillProcessedView({
+  issues,
+  resolvedIds,
+  operations,
+  search,
+  displayNames,
+  onUndoDecision,
+  onUndoOperation,
+}: ProcessedProps) {
+  const { t } = useTranslation();
+  const resolvedIssues = issues.filter((issue) =>
+    resolvedIds.has(issue.id) && matchesSearch(issue.skills, issueCopy(issue.kind, t).title, search));
+  const query = search.trim().toLocaleLowerCase();
+  const visibleOperations = operations.filter((operation) => !query || [
+    operation.keep_name,
+    operation.archive_name,
+    operation.status,
+  ].some((value) => value.toLocaleLowerCase().includes(query)));
+  const processedCount = resolvedIssues.length + visibleOperations.length;
+
+  return (
+    <div className="space-y-4 pb-8">
+      <section className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
+        <div className="flex items-start gap-3">
+          <div className="min-w-[54px] shrink-0 pt-0.5">
+            <div className="text-[24px] font-semibold leading-none tracking-tight text-primary">{processedCount}</div>
+            <div className="mt-1 text-[10px] text-muted">{t("mySkills.organization.processed.records")}</div>
+          </div>
+          <div>
+            <h2 className="text-[15px] font-semibold text-primary">{t("mySkills.organization.processed.title")}</h2>
+            <p className="mt-1 text-[12px] leading-5 text-muted">{t("mySkills.organization.processed.intro")}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-accent/20 bg-accent-bg/40 p-4 shadow-card">
+        <div className="flex items-start gap-3">
+          <span className="rounded-lg bg-accent/10 p-2 text-accent-light">
+            <ArchiveRestore className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-[13px] font-semibold text-primary">{t("mySkills.organization.processed.trashTitle")}</h3>
+            <p className="mt-1 text-[11px] leading-5 text-muted">{t("mySkills.organization.processed.trashHint")}</p>
+            <p className="mt-1 break-all font-mono text-[10px] text-faint">{t("mySkills.organization.processed.trashPath")}</p>
+          </div>
+        </div>
+      </section>
+
       {resolvedIssues.length > 0 && (
-        <section className="space-y-2 pt-2">
+        <section className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
           <div>
             <h2 className="text-[13px] font-semibold text-primary">
               {t("mySkills.organization.confirmedRelations", { count: resolvedIssues.length })}
             </h2>
             <p className="mt-0.5 text-[10.5px] text-muted">{t("mySkills.organization.confirmedRelationsHint")}</p>
           </div>
-          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-2">
             {resolvedIssues.map((issue) => (
               <article key={issue.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2.5">
                 <div className="min-w-0">
@@ -958,17 +1027,17 @@ export function SkillIssuesView({
         </section>
       )}
 
-      {operations.length > 0 && (
-        <section className="space-y-2 pt-2">
+      {visibleOperations.length > 0 && (
+        <section className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
           <div>
             <h2 className="text-[13px] font-semibold text-primary">
-              {t("mySkills.organization.operationHistory.title", { count: operations.length })}
+              {t("mySkills.organization.operationHistory.title", { count: visibleOperations.length })}
             </h2>
             <p className="mt-0.5 text-[10.5px] text-muted">{t("mySkills.organization.operationHistory.hint")}</p>
           </div>
-          <div className="space-y-2">
-            {operations.map((operation) => (
-              <article key={operation.operation_id} className="flex items-center justify-between gap-3 rounded-lg border border-border-faint bg-surface px-3 py-2.5">
+          <div className="mt-3 space-y-2">
+            {visibleOperations.map((operation) => (
+              <article key={operation.operation_id} className="flex items-center justify-between gap-3 rounded-lg border border-border-faint bg-bg-secondary/45 px-3 py-2.5">
                 <div className="min-w-0">
                   <h3 className="truncate text-[12px] font-semibold text-primary">
                     {operation.status === "undone"
@@ -996,6 +1065,13 @@ export function SkillIssuesView({
               </article>
             ))}
           </div>
+        </section>
+      )}
+
+      {processedCount === 0 && (
+        <section className="rounded-xl border border-dashed border-border-subtle bg-surface/60 py-14 text-center">
+          <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-faint" />
+          <p className="text-[13px] font-medium text-secondary">{t("mySkills.organization.processed.empty")}</p>
         </section>
       )}
     </div>

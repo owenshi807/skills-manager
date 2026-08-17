@@ -457,7 +457,8 @@
       "tabs": {
         "all": "All",
         "organize": "Organize",
-        "issues": "To review"
+        "issues": "To review",
+        "processed": "Processed"
       },
       "summary": {
         "groups": "Capability groups",
@@ -621,6 +622,15 @@
       "confirmRelated": "Confirm related purpose",
       "compareItems": "Compare these items",
       "compareAgain": "Compare again",
+      "processed": {
+        "title": "Processed",
+        "records": "records",
+        "intro": "Confirmed relationship decisions and real organization operations live here. Decisions only change classification; archiving stops a redundant Skill from being provided to Agents without permanently deleting it.",
+        "trashTitle": "Skill Card Manager trash",
+        "trashHint": "This is not the macOS Trash. It is Skill Card Manager's own recoverable area. You do not need to find files manually; use Undo in the history below to restore the Skill and its Agent projections.",
+        "trashPath": "Internal location: ~/.skills-manager/skills/.trash/organization/",
+        "empty": "No processed records yet"
+      },
       "actionPlan": {
         "title": "Skill Card Manager conclusion",
         "intro": "The AI compares content; Skill Card Manager previews and applies the final action. Choose the primary item to keep. The other item only moves to undoable trash.",
@@ -652,7 +662,7 @@
         "noSafeAction": "No safe file action is available. Ask the Agent again or add provenance and behavior evidence.",
         "previewFailed": "Could not create a safe execution preview",
         "applyFailed": "Organization was not applied",
-        "applied": "Organization complete; the redundant item is in trash",
+        "applied": "Archived “{{archive}}”; view or undo it in Skill Library → Processed",
         "undoFailed": "Could not safely undo this operation",
         "undone": "Undone; the original Skill and Agent projection were restored"
       },
