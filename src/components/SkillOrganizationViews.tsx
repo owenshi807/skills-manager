@@ -501,7 +501,7 @@ export function SkillIssuesView({
           </div>
         )}
         {semanticIssues.length > 1 && (
-          <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/20 bg-accent-bg px-3 py-2.5">
+          <div className="scm-support-section mt-4 flex items-center justify-between gap-4">
             <div>
               <div className="text-[12px] font-semibold text-secondary">
                 {hasBatchAssessments
@@ -527,7 +527,7 @@ export function SkillIssuesView({
                   type="button"
                   onClick={() => onApplyBatchConclusions(actionableSemanticIssues)}
                   disabled={processingConclusions || processingBatch}
-                  className="flex min-w-[230px] items-center gap-3 rounded-xl bg-emerald-600 px-4 py-2.5 text-left text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:opacity-60"
+                  className="flex min-w-[230px] items-center gap-3 rounded-lg bg-emerald-600 px-4 py-2.5 text-left text-white transition-colors hover:bg-emerald-500 disabled:opacity-60"
                 >
                   {processingConclusions
                     ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
@@ -550,7 +550,7 @@ export function SkillIssuesView({
               <div
                 ref={executionMenuRef}
                 className={cn(
-                  "relative flex items-stretch rounded-xl shadow-sm transition-shadow hover:shadow-md",
+                  "relative flex items-stretch rounded-lg",
                   hasBatchAssessments
                     ? "border border-border-subtle bg-surface text-secondary"
                     : "bg-emerald-600 text-white",
@@ -561,7 +561,7 @@ export function SkillIssuesView({
                 onClick={() => onExecuteBatch(semanticIssues)}
                 disabled={processingBatch || processingConclusions}
                 className={cn(
-                  "flex min-w-[210px] items-center gap-3 rounded-l-xl px-4 py-2.5 text-left transition-colors disabled:opacity-60",
+                  "flex min-w-[210px] items-center gap-3 rounded-l-lg px-4 py-2.5 text-left transition-colors disabled:opacity-60",
                   hasBatchAssessments ? "hover:bg-surface-hover" : "hover:bg-white/10",
                 )}
               >
@@ -589,7 +589,7 @@ export function SkillIssuesView({
                 onClick={() => setExecutionMenuOpen((open) => !open)}
                 disabled={processingBatch || processingConclusions}
                 className={cn(
-                  "flex w-10 items-center justify-center rounded-r-xl border-l transition-colors disabled:opacity-60",
+                  "flex w-10 items-center justify-center rounded-r-lg border-l transition-colors disabled:opacity-60",
                   hasBatchAssessments
                     ? "border-border-subtle hover:bg-surface-hover"
                     : "border-white/20 hover:bg-white/10",
@@ -788,17 +788,12 @@ export function SkillIssuesView({
                       ))}
                     </div>
                     {agentAssessment && (
-                      <div className={cn(
-                        "mt-3 rounded-lg border px-3 py-3",
-                        agentAssessment.stale
-                          ? "border-amber-500/25 bg-amber-500/5"
-                          : "border-accent/20 bg-accent-bg",
-                      )}>
+                      <div className="scm-agent-assessment">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-start gap-2">
-                            <Bot className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />
+                            <Bot className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
                             <div>
-                              <div className="text-[10px] font-semibold uppercase tracking-wide text-accent-light">
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                                 {t("mySkills.organization.agentAdviceTitle", { agent: agentAssessment.agentName })}
                               </div>
                               <div className="text-[11px] font-semibold text-secondary">
@@ -809,7 +804,7 @@ export function SkillIssuesView({
                               </p>
                             </div>
                           </div>
-                          <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[10px] text-muted">
+                          <span className="shrink-0 text-[10px] tabular-nums text-faint">
                             {Math.round(agentAssessment.assessment.confidence * 100)}%
                           </span>
                         </div>
@@ -854,7 +849,7 @@ export function SkillIssuesView({
                   <section className="border-t border-border-faint bg-surface px-4 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-wide text-accent-light">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                           {t("mySkills.organization.actionPlan.title")}
                         </div>
                         <h4 className="mt-1 text-[13px] font-semibold text-primary">
@@ -874,7 +869,7 @@ export function SkillIssuesView({
                               || t("mySkills.organization.actionPlan.legacyConclusion")}
                         </p>
                       </div>
-                      <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                      <span className="shrink-0 text-[10px] font-medium text-muted">
                         {t("mySkills.organization.actionPlan.notApplied")}
                       </span>
                     </div>
@@ -883,44 +878,51 @@ export function SkillIssuesView({
                     && actionArchiveSkill
                     && issue.skills.length === 2 ? (
                       <>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <fieldset
+                          className="scm-radio-group"
+                          aria-label={t("mySkills.organization.actionPlan.archiveConclusion", {
+                            keep: displayNames.get(actionKeepSkill.id) || actionKeepSkill.name,
+                            archive: displayNames.get(actionArchiveSkill.id) || actionArchiveSkill.name,
+                          })}
+                        >
                           {issue.skills.map((skill) => {
                             const selected = keepSkillId === skill.id;
                             return (
-                              <button
+                              <label
                                 key={skill.id}
-                                type="button"
-                                onClick={() => {
-                                  setKeepSkillId(skill.id);
-                                  setArchivePreview(null);
-                                }}
-                                className={cn(
-                                  "rounded-lg border px-3 py-3 text-left transition-colors",
-                                  selected
-                                    ? "border-accent/50 bg-accent-bg"
-                                    : "border-border-faint bg-bg-secondary/50 hover:border-border-subtle",
-                                )}
+                                className="scm-radio-option"
                               >
-                                <span className="flex items-center justify-between gap-2">
-                                  <span className="truncate text-[12px] font-semibold text-secondary">
+                                <input
+                                  type="radio"
+                                  name={`organization-keep-${issue.id}`}
+                                  value={skill.id}
+                                  checked={selected}
+                                  onChange={() => {
+                                    setKeepSkillId(skill.id);
+                                    setArchivePreview(null);
+                                  }}
+                                  className="scm-radio-control"
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[12px] font-semibold text-secondary">
                                     {displayNames.get(skill.id) || skill.name}
                                   </span>
-                                  <span className={cn(
-                                    "rounded-full px-2 py-0.5 text-[9px] font-medium",
-                                    selected ? "bg-accent text-white" : "bg-surface-hover text-muted",
-                                  )}>
+                                  <span className="mt-0.5 block truncate text-[10px] text-muted">{sourceLabel(skill)}</span>
+                                </span>
+                                <span className={cn(
+                                  "shrink-0 text-[10px] font-medium",
+                                  selected ? "text-accent-light" : "text-muted",
+                                )}>
                                     {selected
                                       ? t("mySkills.organization.actionPlan.keepThis")
                                       : t("mySkills.organization.actionPlan.archiveThis")}
-                                  </span>
                                 </span>
-                                <span className="mt-1 block truncate text-[10px] text-muted">{sourceLabel(skill)}</span>
-                              </button>
+                              </label>
                             );
                           })}
-                        </div>
+                        </fieldset>
                         {archivePreview && (
-                          <div className="mt-3 rounded-lg border border-accent/25 bg-accent-bg p-3">
+                          <div className="scm-execution-summary">
                             <div className="text-[11px] font-semibold text-secondary">
                               {t("mySkills.organization.actionPlan.previewTitle")}
                             </div>
@@ -1070,9 +1072,9 @@ export function SkillProcessedView({
         </div>
       </section>
 
-      <section className="rounded-xl border border-accent/20 bg-accent-bg/40 p-4 shadow-card">
+      <section className="rounded-xl bg-bg-secondary p-4">
         <div className="flex items-start gap-3">
-          <span className="rounded-lg bg-accent/10 p-2 text-accent-light">
+          <span className="rounded-lg bg-surface p-2 text-muted">
             <ArchiveRestore className="h-4 w-4" />
           </span>
           <div className="min-w-0">
