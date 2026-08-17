@@ -50,6 +50,19 @@ pub struct OrganizationRefreshResult {
     pub failed: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct OrganizationOperationSummaryDto {
+    pub operation_id: String,
+    pub status: String,
+    pub keep_skill_id: String,
+    pub keep_name: String,
+    pub archive_skill_id: String,
+    pub archive_name: String,
+    pub error: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct OrganizationAgentCaseTask {
     pub case_id: String,
@@ -855,6 +868,44 @@ pub async fn get_organization_decisions(
     let store = store.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         store.get_organization_decisions().map_err(AppError::db)
+    })
+    .await?
+}
+
+#[tauri::command]
+pub async fn get_organization_operations(
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<Vec<OrganizationOperationSummaryDto>, AppError> {
+    let store = store.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        store
+            .list_organization_operations(50)
+            .map_err(AppError::db)?
+            .into_iter()
+            .map(|operation| {
+                let keep_name = store
+                    .get_skill_by_id(&operation.keep_skill_id)
+                    .map_err(AppError::db)?
+                    .map(|skill| skill.name)
+                    .unwrap_or_else(|| operation.keep_skill_id.clone());
+                let archive_name = store
+                    .get_skill_by_id(&operation.archive_skill_id)
+                    .map_err(AppError::db)?
+                    .map(|skill| skill.name)
+                    .unwrap_or_else(|| operation.archive_skill_id.clone());
+                Ok(OrganizationOperationSummaryDto {
+                    operation_id: operation.operation_id,
+                    status: operation.status,
+                    keep_skill_id: operation.keep_skill_id,
+                    keep_name,
+                    archive_skill_id: operation.archive_skill_id,
+                    archive_name,
+                    error: operation.error,
+                    created_at: operation.created_at,
+                    updated_at: operation.updated_at,
+                })
+            })
+            .collect()
     })
     .await?
 }

@@ -65,6 +65,7 @@ import type {
   OrganizationAgentCapability,
   OrganizationAgentCaseTask,
   OrganizationHealthInspection,
+  OrganizationOperationSummary,
   ToolInfo,
   GitBackupStatus,
   SkillToolToggle,
@@ -183,6 +184,7 @@ export function MySkills() {
   const [organizationHealth, setOrganizationHealth] = useState<OrganizationHealthInspection[]>([]);
   const [organizationCaseEvidence, setOrganizationCaseEvidence] = useState<OrganizationCaseEvidence[]>([]);
   const [organizationDecisions, setOrganizationDecisions] = useState<OrganizationDecision[]>([]);
+  const [organizationOperations, setOrganizationOperations] = useState<OrganizationOperationSummary[]>([]);
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -391,11 +393,13 @@ export function MySkills() {
     Promise.all([
       api.getOrganizationAgentCapabilities(),
       api.getOrganizationAgentAssessments(),
+      api.getOrganizationOperations(),
       api.getSettings("organization_default_agent").catch(() => null),
-    ]).then(([capabilities, assessments, savedAgent]) => {
+    ]).then(([capabilities, assessments, operations, savedAgent]) => {
       if (cancelled) return;
       setOrganizationAgentCapabilities(capabilities);
       setOrganizationAssessmentRecords(assessments);
+      setOrganizationOperations(operations);
       const availableAgentKeys = capabilities
         .filter((capability) => capability.available)
         .map((capability) => capability.key);
@@ -1236,6 +1240,10 @@ export function MySkills() {
     setOrganizationAssessmentRecords(await api.getOrganizationAgentAssessments());
   }, []);
 
+  const reloadOrganizationOperations = useCallback(async () => {
+    setOrganizationOperations(await api.getOrganizationOperations());
+  }, []);
+
   const handOffOrganizationIssue = useCallback(async (issue: SkillIssue) => {
     if (issue.decisionTier !== "needs_semantic") {
       toast.info(t("mySkills.organization.agentNotNeeded"));
@@ -1391,14 +1399,14 @@ export function MySkills() {
     };
     try {
       const result = await api.applyOrganizationArchive(request);
-      await refreshManagedSkills();
+      await Promise.all([refreshManagedSkills(), reloadOrganizationOperations()]);
       toast.success(t("mySkills.organization.actionPlan.applied"), {
         action: {
           label: t("mySkills.organization.undo"),
           onClick: () => {
             void api.undoOrganizationArchive(result.operation_id)
               .then(async () => {
-                await refreshManagedSkills();
+                await Promise.all([refreshManagedSkills(), reloadOrganizationOperations()]);
                 toast.success(t("mySkills.organization.actionPlan.undone"));
               })
               .catch((error) => toast.error(getErrorMessage(error, t("mySkills.organization.actionPlan.undoFailed"))));
@@ -1409,7 +1417,17 @@ export function MySkills() {
       toast.error(getErrorMessage(error, t("mySkills.organization.actionPlan.applyFailed")));
       throw error;
     }
-  }, [refreshManagedSkills, t]);
+  }, [refreshManagedSkills, reloadOrganizationOperations, t]);
+
+  const undoOrganizationOperation = useCallback(async (operationId: string) => {
+    try {
+      await api.undoOrganizationArchive(operationId);
+      await Promise.all([refreshManagedSkills(), reloadOrganizationOperations()]);
+      toast.success(t("mySkills.organization.actionPlan.undone"));
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("mySkills.organization.actionPlan.undoFailed")));
+    }
+  }, [refreshManagedSkills, reloadOrganizationOperations, t]);
 
   const refreshOrganizationFacts = useCallback(async () => {
     const affectedIds = [...new Set(organizationIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)))];
@@ -1711,6 +1729,8 @@ export function MySkills() {
           onUndoDecision={undoOrganizationDecision}
           onPreviewArchive={previewOrganizationArchive}
           onApplyArchive={applyOrganizationArchive}
+          operations={organizationOperations}
+          onUndoOperation={undoOrganizationOperation}
           search={search}
           displayNames={skillDisplayNames}
           tools={tools}

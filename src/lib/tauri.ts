@@ -223,6 +223,18 @@ export interface OrganizationOperationResult {
   status: string;
 }
 
+export interface OrganizationOperationSummary {
+  operation_id: string;
+  status: "planned" | "staged" | "complete" | "needs_recovery" | "undone";
+  keep_skill_id: string;
+  keep_name: string;
+  archive_skill_id: string;
+  archive_name: string;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface SkillDocument {
   skill_id: string;
   filename: string;
@@ -430,6 +442,9 @@ export const inspectOrganizationCases = (cases: OrganizationCaseRequest[]) =>
 
 export const getOrganizationDecisions = () =>
   invoke<OrganizationDecision[]>("get_organization_decisions");
+
+export const getOrganizationOperations = () =>
+  invoke<OrganizationOperationSummary[]>("get_organization_operations");
 
 export const setOrganizationDecision = (
   caseRequest: OrganizationCaseRequest,

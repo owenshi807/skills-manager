@@ -55,6 +55,15 @@ pub fn initialize_cli_store() -> Result<Arc<SkillStore>> {
     initialize_store_inner(false).map(|(store, _)| store)
 }
 
+fn should_reindex_metadata(
+    skill_count: usize,
+    metadata_fingerprint: Option<&str>,
+    indexed_fingerprint: Option<&str>,
+) -> bool {
+    metadata_fingerprint.is_some()
+        && (skill_count == 0 || metadata_fingerprint != indexed_fingerprint)
+}
+
 fn initialize_store_inner(
     apply_startup_default: bool,
 ) -> Result<(Arc<SkillStore>, StartupTimings)> {
@@ -78,7 +87,17 @@ fn initialize_store_inner(
 
     timings.skill_count = store.get_all_skills().map(|s| s.len()).unwrap_or(0);
 
-    if sync_metadata::metadata_exists() {
+    let metadata_fingerprint = sync_metadata::metadata_snapshot_fingerprint()
+        .context("Failed to inspect sync metadata")?;
+    let indexed_fingerprint = store
+        .get_setting(sync_metadata::METADATA_FINGERPRINT_SETTING)
+        .context("Failed to read sync metadata index state")?;
+    let should_reindex = should_reindex_metadata(
+        timings.skill_count,
+        metadata_fingerprint.as_deref(),
+        indexed_fingerprint.as_deref(),
+    );
+    if should_reindex {
         let step = Instant::now();
         sync_metadata::reindex_from_metadata(&store)
             .context("Failed to reindex from sync metadata")?;
@@ -114,6 +133,19 @@ fn initialize_store_inner(
 
     timings.total_ms = total_start.elapsed().as_millis();
     Ok((store, timings))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_reindex_metadata;
+
+    #[test]
+    fn metadata_reindex_only_runs_for_missing_or_changed_index() {
+        assert!(!should_reindex_metadata(394, Some("same"), Some("same")));
+        assert!(should_reindex_metadata(394, Some("new"), Some("old")));
+        assert!(should_reindex_metadata(0, Some("same"), Some("same")));
+        assert!(!should_reindex_metadata(394, None, None));
+    }
 }
 
 impl StartupTimings {

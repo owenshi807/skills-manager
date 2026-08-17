@@ -625,6 +625,7 @@
         "title": "Skill Card Manager conclusion",
         "intro": "The AI compares content; Skill Card Manager previews and applies the final action. Choose the primary item to keep. The other item only moves to undoable trash.",
         "archiveConclusion": "Keep “{{keep}}” and archive “{{archive}}”",
+        "exactConclusion": "Strict content fingerprints prove these items are identical. Choose which one to keep; the other moves to undoable trash.",
         "keepBothConclusion": "Keep both and confirm their functional relationship",
         "moreEvidenceConclusion": "Evidence is insufficient; do not organize yet",
         "legacyConclusion": "This legacy AI result has no executable recommendation. Ask the Agent again.",
@@ -652,6 +653,13 @@
         "applied": "Organization complete; the redundant item is in trash",
         "undoFailed": "Could not safely undo this operation",
         "undone": "Undone; the original Skill and Agent projection were restored"
+      },
+      "operationHistory": {
+        "title": "Recent organization history ({{count}})",
+        "hint": "Real file operations remain here after notifications disappear. Completed archives can be undone.",
+        "archived": "Kept “{{keep}}” and archived “{{archive}}”",
+        "undone": "Restored “{{archive}}”",
+        "needsRecovery": "The operation did not finish cleanly. Further changes stopped and recovery is required"
       },
       "confirmRelation": "Confirm relation",
       "recheck": "Check again",

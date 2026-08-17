@@ -306,6 +306,37 @@ impl SkillStore {
         Ok(rows.next().and_then(|row| row.ok()))
     }
 
+    pub fn list_organization_operations(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<OrganizationOperationRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT operation_id, case_key, case_revision, kind, status, keep_skill_id,
+                    archive_skill_id, payload_json, error, created_at, updated_at
+             FROM organization_operations
+             ORDER BY created_at DESC
+             LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit.min(100) as i64], |row| {
+            Ok(OrganizationOperationRecord {
+                operation_id: row.get(0)?,
+                case_key: row.get(1)?,
+                case_revision: row.get(2)?,
+                kind: row.get(3)?,
+                status: row.get(4)?,
+                keep_skill_id: row.get(5)?,
+                archive_skill_id: row.get(6)?,
+                payload_json: row.get(7)?,
+                error: row.get(8)?,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
     pub fn skill_has_organization_dependencies(&self, skill_id: &str) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
         let count: i64 = conn.query_row(

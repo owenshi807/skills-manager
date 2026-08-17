@@ -21,6 +21,7 @@ import type {
   OrganizationAgentAssessment,
   OrganizationArchivePreview,
   OrganizationDisposition,
+  OrganizationOperationSummary,
   ToolInfo,
 } from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
@@ -51,6 +52,8 @@ interface IssuesProps extends SharedProps {
   onUndoDecision: (caseKey: string) => void;
   onPreviewArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<OrganizationArchivePreview>;
   onApplyArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<void>;
+  operations: OrganizationOperationSummary[];
+  onUndoOperation: (operationId: string) => Promise<void>;
 }
 
 export type OrganizationExecutionMode = "codex" | "claude_code" | "hermes" | "copy_prompt";
@@ -222,6 +225,8 @@ export function SkillIssuesView({
   onUndoDecision,
   onPreviewArchive,
   onApplyArchive,
+  operations,
+  onUndoOperation,
   search,
   displayNames,
   tools,
@@ -582,13 +587,23 @@ export function SkillIssuesView({
           {visibleIssues.map((issue) => {
             const copy = issueCopy(issue.kind, t);
             const agentAssessment = agentAssessments.get(issue.id);
-            const agentRecommendation = agentAssessment?.assessment.recommended_action;
-            const agentKeepSkill = issue.skills.find(
+            const deterministicArchive = issue.decisionTier === "rule_diagnosed"
+              && (issue.kind === "exact_duplicate" || issue.kind === "content_alias")
+              && issue.skills.length === 2;
+            const agentRecommendation = deterministicArchive
+              ? "archive_one"
+              : agentAssessment?.assessment.recommended_action;
+            const recommendedKeep = issue.skills.find(
               (skill) => skill.id === agentAssessment?.assessment.recommended_keep_skill_id,
             );
-            const agentArchiveSkill = agentKeepSkill
-              ? issue.skills.find((skill) => skill.id !== agentKeepSkill.id)
+            const actionKeepSkill = issue.skills.find((skill) => skill.id === keepSkillId)
+              ?? recommendedKeep
+              ?? issue.skills[0];
+            const actionArchiveSkill = actionKeepSkill
+              ? issue.skills.find((skill) => skill.id !== actionKeepSkill.id)
               : undefined;
+            const showActionPlan = deterministicArchive
+              || (issue.decisionTier === "needs_semantic" && !!agentAssessment && !agentAssessment.stale);
             return (
               <article key={issue.id} className="app-panel overflow-hidden shadow-card">
                 <div className="flex items-start gap-4 p-4">
@@ -703,7 +718,7 @@ export function SkillIssuesView({
                     <div className="mt-1 text-[12px] text-muted">{copy.impact}</div>
                   </div>
                 </div>
-                {issue.decisionTier === "needs_semantic" && agentAssessment && !agentAssessment.stale && (
+                {showActionPlan && (
                   <section className="border-t border-border-faint bg-surface px-4 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -711,18 +726,20 @@ export function SkillIssuesView({
                           {t("mySkills.organization.actionPlan.title")}
                         </div>
                         <h4 className="mt-1 text-[13px] font-semibold text-primary">
-                          {agentRecommendation === "archive_one" && agentKeepSkill && agentArchiveSkill
+                          {agentRecommendation === "archive_one" && actionKeepSkill && actionArchiveSkill
                             ? t("mySkills.organization.actionPlan.archiveConclusion", {
-                                keep: displayNames.get(agentKeepSkill.id) || agentKeepSkill.name,
-                                archive: displayNames.get(agentArchiveSkill.id) || agentArchiveSkill.name,
+                                keep: displayNames.get(actionKeepSkill.id) || actionKeepSkill.name,
+                                archive: displayNames.get(actionArchiveSkill.id) || actionArchiveSkill.name,
                               })
                             : agentRecommendation === "keep_both"
                               ? t("mySkills.organization.actionPlan.keepBothConclusion")
                               : t("mySkills.organization.actionPlan.moreEvidenceConclusion")}
                         </h4>
                         <p className="mt-1 text-[11px] leading-4 text-muted">
-                          {agentAssessment.assessment.recommendation_reason
-                            || t("mySkills.organization.actionPlan.legacyConclusion")}
+                          {deterministicArchive
+                            ? t("mySkills.organization.actionPlan.exactConclusion")
+                            : agentAssessment?.assessment.recommendation_reason
+                              || t("mySkills.organization.actionPlan.legacyConclusion")}
                         </p>
                       </div>
                       <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
@@ -730,8 +747,8 @@ export function SkillIssuesView({
                       </span>
                     </div>
                     {agentRecommendation === "archive_one"
-                    && agentKeepSkill
-                    && agentArchiveSkill
+                    && actionKeepSkill
+                    && actionArchiveSkill
                     && issue.skills.length === 2 ? (
                       <>
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -859,7 +876,7 @@ export function SkillIssuesView({
                         : t("mySkills.organization.compareItems")}
                     </button>
                   )}
-                  {issue.decisionTier === "rule_diagnosed" && issue.caseRevision && (
+                  {issue.decisionTier === "rule_diagnosed" && issue.caseRevision && !deterministicArchive && (
                     <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-primary">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       {t("mySkills.organization.confirmRelation")}
@@ -900,6 +917,47 @@ export function SkillIssuesView({
                 <button type="button" onClick={() => onUndoDecision(issue.id)} className="app-button-secondary shrink-0">
                   {t("mySkills.organization.undoDecision")}
                 </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {operations.length > 0 && (
+        <section className="space-y-2 pt-2">
+          <div>
+            <h2 className="text-[13px] font-semibold text-primary">
+              {t("mySkills.organization.operationHistory.title", { count: operations.length })}
+            </h2>
+            <p className="mt-0.5 text-[10.5px] text-muted">{t("mySkills.organization.operationHistory.hint")}</p>
+          </div>
+          <div className="space-y-2">
+            {operations.map((operation) => (
+              <article key={operation.operation_id} className="flex items-center justify-between gap-3 rounded-lg border border-border-faint bg-surface px-3 py-2.5">
+                <div className="min-w-0">
+                  <h3 className="truncate text-[12px] font-semibold text-primary">
+                    {operation.status === "undone"
+                      ? t("mySkills.organization.operationHistory.undone", { archive: operation.archive_name })
+                      : t("mySkills.organization.operationHistory.archived", {
+                          keep: operation.keep_name,
+                          archive: operation.archive_name,
+                        })}
+                  </h3>
+                  <p className="mt-0.5 text-[10.5px] text-muted">
+                    {operation.status === "needs_recovery"
+                      ? t("mySkills.organization.operationHistory.needsRecovery")
+                      : new Date(operation.updated_at).toLocaleString()}
+                  </p>
+                </div>
+                {operation.status === "complete" && (
+                  <button
+                    type="button"
+                    onClick={() => void onUndoOperation(operation.operation_id)}
+                    className="app-button-secondary shrink-0"
+                  >
+                    {t("mySkills.organization.undo")}
+                  </button>
+                )}
               </article>
             ))}
           </div>

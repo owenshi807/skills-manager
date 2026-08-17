@@ -971,6 +971,7 @@ pub fn run() {
             commands::skills::inspect_organization_health,
             commands::skills::inspect_organization_cases,
             commands::skills::get_organization_decisions,
+            commands::skills::get_organization_operations,
             commands::skills::set_organization_decision,
             commands::skills::clear_organization_decision,
             commands::skills::preview_organization_archive,

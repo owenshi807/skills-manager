@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::Write;
@@ -14,6 +15,7 @@ use super::skill_store::{ScenarioRecord, SkillRecord, SkillStore};
 
 const SCHEMA_VERSION: u32 = 1;
 const APP_MIN_VERSION: &str = "2.0.0";
+pub const METADATA_FINGERPRINT_SETTING: &str = "sync_metadata_fingerprint_v1";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SchemaFile {
@@ -101,6 +103,39 @@ pub(crate) fn write_all_from_db_unlocked(store: &SkillStore) -> Result<()> {
     write_skill_records_from_db(store)?;
     write_scenario_records_from_db(store)?;
     remove_stale_metadata_files(store)?;
+    remember_metadata_fingerprint(store)?;
+    Ok(())
+}
+
+pub fn metadata_snapshot_fingerprint() -> Result<Option<String>> {
+    let root = metadata_dir();
+    if !root.exists() {
+        return Ok(None);
+    }
+    let mut files = WalkDir::new(&root)
+        .into_iter()
+        .collect::<std::result::Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| !entry.file_name().to_string_lossy().contains(".tmp."))
+        .map(|entry| entry.into_path())
+        .collect::<Vec<_>>();
+    files.sort();
+    let mut hasher = Sha256::new();
+    for path in files {
+        let relative = path.strip_prefix(&root)?;
+        hasher.update(relative.to_string_lossy().as_bytes());
+        hasher.update([0]);
+        hasher.update(fs::read(&path)?);
+        hasher.update([0xff]);
+    }
+    Ok(Some(format!("{:x}", hasher.finalize())))
+}
+
+fn remember_metadata_fingerprint(store: &SkillStore) -> Result<()> {
+    if let Some(fingerprint) = metadata_snapshot_fingerprint()? {
+        store.set_setting(METADATA_FINGERPRINT_SETTING, &fingerprint)?;
+    }
     Ok(())
 }
 
@@ -221,6 +256,7 @@ pub(crate) fn reindex_from_metadata_unlocked(store: &SkillStore) -> Result<()> {
         store.replace_scenarios_from_metadata(&scenarios)?;
         store.replace_scenario_memberships_from_metadata(&memberships)?;
     }
+    remember_metadata_fingerprint(store)?;
     Ok(())
 }
 
@@ -238,7 +274,8 @@ pub(crate) fn ensure_skill_metadata_unlocked(store: &SkillStore, skill_id: &str)
         .get_skill_by_id(skill_id)?
         .ok_or_else(|| anyhow!("skill not found: {skill_id}"))?;
     let tags = store.get_tags_map()?.remove(skill_id).unwrap_or_default();
-    write_skill_file(&skill, &tags)
+    write_skill_file(&skill, &tags)?;
+    remember_metadata_fingerprint(store)
 }
 
 pub fn cleanup_temporary_files() -> Result<()> {
@@ -740,6 +777,29 @@ mod tests {
         let err = reindex_from_metadata_unlocked(&repo.store).unwrap_err();
         assert!(err.to_string().contains("contains no skills"));
         assert!(repo.store.get_skill_by_id("skill-1").unwrap().is_some());
+    }
+
+    #[test]
+    fn metadata_fingerprint_marks_current_snapshot_and_detects_external_change() {
+        let repo = test_repo();
+        let skill_dir = write_skill_dir("fingerprinted-skill");
+        repo.store
+            .insert_skill(&sample_skill("skill-fingerprint", &skill_dir))
+            .unwrap();
+
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        let current = metadata_snapshot_fingerprint().unwrap().unwrap();
+        assert_eq!(
+            repo.store
+                .get_setting(METADATA_FINGERPRINT_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some(current.as_str())
+        );
+
+        let metadata_file = metadata_dir().join("skills/skill-fingerprint.json");
+        fs::write(&metadata_file, fs::read_to_string(&metadata_file).unwrap() + "\n").unwrap();
+        assert_ne!(metadata_snapshot_fingerprint().unwrap().unwrap(), current);
     }
 
     #[test]

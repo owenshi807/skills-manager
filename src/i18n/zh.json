@@ -633,6 +633,7 @@
         "title": "Skill Card Manager 结论",
         "intro": "AI 负责比较，最终动作由 Skill Card Manager 明确预览并执行。选择要保留的主项；另一项只会进入可撤销回收区。",
         "archiveConclusion": "建议保留「{{keep}}」，归档「{{archive}}」",
+        "exactConclusion": "系统已用严格内容指纹确认两项内容相同。你只需选择保留哪一项；另一项会进入可撤销回收区。",
         "keepBothConclusion": "建议两项都保留，并确认它们的用途关系",
         "moreEvidenceConclusion": "证据不足，暂不执行整理",
         "legacyConclusion": "这是一条旧版 AI 结论，尚未给出可执行建议。请重新询问 Agent。",
@@ -660,6 +661,13 @@
         "applied": "整理完成；冗余项已进入回收区",
         "undoFailed": "无法安全撤销这次整理",
         "undone": "已撤销，原 Skill 和 Agent 投放已恢复"
+      },
+      "operationHistory": {
+        "title": "最近整理记录（{{count}}）",
+        "hint": "这里保存真实文件操作，不依赖短暂提示；已完成的归档可随时撤销。",
+        "archived": "保留「{{keep}}」，已归档「{{archive}}」",
+        "undone": "已恢复「{{archive}}」",
+        "needsRecovery": "操作未完整结束，已停止后续变更；需要恢复处理"
       },
       "confirmRelation": "确认这个关系",
       "recheck": "重新检查",
