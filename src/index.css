@@ -159,11 +159,11 @@
   }
 
   .scm-radio-group {
-    @apply mt-3 overflow-hidden rounded-lg bg-bg-secondary divide-y divide-border-faint;
+    @apply mt-3 rounded-lg bg-bg-secondary divide-y divide-border-faint;
   }
 
   .scm-radio-option {
-    @apply flex min-h-14 cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover;
+    @apply relative flex min-h-14 cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-surface-hover;
   }
 
   .scm-radio-control {

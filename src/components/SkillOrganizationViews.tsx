@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  CircleHelp,
   Copy,
   FileWarning,
   GitCompareArrows,
@@ -136,6 +137,42 @@ function MemberRow({
       </span>
       <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint transition-transform group-hover/member:translate-x-0.5" />
     </button>
+  );
+}
+
+function RecommendationTag({
+  label,
+  reason,
+  helpLabel,
+  emphasized,
+}: {
+  label: string;
+  reason: string;
+  helpLabel: string;
+  emphasized: boolean;
+}) {
+  return (
+    <span className={cn(
+      "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold",
+      emphasized ? "bg-accent-bg text-accent-light" : "bg-surface text-muted",
+    )}>
+      {label}
+      <span
+        className="group/reason relative inline-flex"
+        tabIndex={0}
+        aria-label={`${helpLabel}：${reason}`}
+        title={reason}
+        onClick={(event) => event.preventDefault()}
+      >
+        <CircleHelp className="h-3 w-3" aria-hidden="true" />
+        <span
+          role="tooltip"
+          className="pointer-events-none invisible absolute bottom-full right-0 z-20 mb-2 w-72 rounded-lg border border-border-subtle bg-surface px-3 py-2 text-left text-[10px] font-normal leading-4 text-secondary opacity-0 shadow-lg transition-opacity group-hover/reason:visible group-hover/reason:opacity-100 group-focus/reason:visible group-focus/reason:opacity-100"
+        >
+          {reason}
+        </span>
+      </span>
+    </span>
   );
 }
 
@@ -736,6 +773,13 @@ export function SkillIssuesView({
               : undefined;
             const showActionPlan = deterministicArchive
               || (issue.decisionTier === "needs_semantic" && !!agentAssessment && !agentAssessment.stale);
+            const archiveRecommendationReason = deterministicArchive
+              ? t("mySkills.organization.actionPlan.exactConclusion")
+              : agentAssessment?.assessment.recommendation_reason
+                || t("mySkills.organization.actionPlan.legacyConclusion");
+            const hasAgentArchiveRecommendation = !deterministicArchive
+              && agentRecommendation === "archive_one"
+              && !!recommendedKeep;
             return (
               <article key={issue.id} className="overflow-hidden">
                 <div className="flex items-start gap-4 p-4">
@@ -852,22 +896,19 @@ export function SkillIssuesView({
                         <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                           {t("mySkills.organization.actionPlan.title")}
                         </div>
-                        <h4 className="mt-1 text-[13px] font-semibold text-primary">
-                          {agentRecommendation === "archive_one" && actionKeepSkill && actionArchiveSkill
-                            ? t("mySkills.organization.actionPlan.archiveConclusion", {
-                                keep: displayNames.get(actionKeepSkill.id) || actionKeepSkill.name,
-                                archive: displayNames.get(actionArchiveSkill.id) || actionArchiveSkill.name,
-                              })
-                            : agentRecommendation === "keep_both"
+                        {agentRecommendation !== "archive_one" && (
+                          <>
+                            <h4 className="mt-1 text-[13px] font-semibold text-primary">
+                              {agentRecommendation === "keep_both"
                               ? t("mySkills.organization.actionPlan.keepBothConclusion")
                               : t("mySkills.organization.actionPlan.moreEvidenceConclusion")}
-                        </h4>
-                        <p className="mt-1 text-[11px] leading-4 text-muted">
-                          {deterministicArchive
-                            ? t("mySkills.organization.actionPlan.exactConclusion")
-                            : agentAssessment?.assessment.recommendation_reason
-                              || t("mySkills.organization.actionPlan.legacyConclusion")}
-                        </p>
+                            </h4>
+                            <p className="mt-1 text-[11px] leading-4 text-muted">
+                              {agentAssessment?.assessment.recommendation_reason
+                                || t("mySkills.organization.actionPlan.legacyConclusion")}
+                            </p>
+                          </>
+                        )}
                       </div>
                       <span className="shrink-0 text-[10px] font-medium text-muted">
                         {t("mySkills.organization.actionPlan.notApplied")}
@@ -887,6 +928,15 @@ export function SkillIssuesView({
                         >
                           {issue.skills.map((skill) => {
                             const selected = keepSkillId === skill.id;
+                            const agentRecommendsKeeping = hasAgentArchiveRecommendation
+                              && skill.id === recommendedKeep.id;
+                            const recommendationLabel = hasAgentArchiveRecommendation
+                              ? agentRecommendsKeeping
+                                ? t("mySkills.organization.actionPlan.agentKeepThis", { agent: agentAssessment?.agentName })
+                                : t("mySkills.organization.actionPlan.agentArchiveThis", { agent: agentAssessment?.agentName })
+                              : selected
+                                ? t("mySkills.organization.actionPlan.keepThis")
+                                : t("mySkills.organization.actionPlan.archiveThis");
                             return (
                               <label
                                 key={skill.id}
@@ -909,14 +959,12 @@ export function SkillIssuesView({
                                   </span>
                                   <span className="mt-0.5 block truncate text-[10px] text-muted">{sourceLabel(skill)}</span>
                                 </span>
-                                <span className={cn(
-                                  "shrink-0 text-[10px] font-medium",
-                                  selected ? "text-accent-light" : "text-muted",
-                                )}>
-                                    {selected
-                                      ? t("mySkills.organization.actionPlan.keepThis")
-                                      : t("mySkills.organization.actionPlan.archiveThis")}
-                                </span>
+                                <RecommendationTag
+                                  label={recommendationLabel}
+                                  reason={archiveRecommendationReason}
+                                  helpLabel={t("mySkills.organization.actionPlan.whyRecommended")}
+                                  emphasized={hasAgentArchiveRecommendation || selected}
+                                />
                               </label>
                             );
                           })}
