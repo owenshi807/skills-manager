@@ -628,7 +628,7 @@
         "intro": "Confirmed relationship decisions and real organization operations live here. Decisions only change classification; archiving stops a redundant Skill from being provided to Agents without permanently deleting it.",
         "trashTitle": "Skill Card Manager trash",
         "trashHint": "This is not the macOS Trash. It is Skill Card Manager's own recoverable area. You do not need to find files manually; use Undo in the history below to restore the Skill and its Agent projections.",
-        "trashPath": "Internal location: ~/.skills-manager/skills/.trash/organization/",
+        "trashPath": "Internal location: ~/.skills-manager/.trash/organization/",
         "empty": "No processed records yet"
       },
       "actionPlan": {

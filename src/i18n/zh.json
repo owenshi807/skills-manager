@@ -636,7 +636,7 @@
         "intro": "已做的关系判断和真实整理操作都保存在这里。判断只改变分类；归档会让冗余 Skill 停止提供给 Agent，但不会永久删除。",
         "trashTitle": "Skill Card Manager 回收区",
         "trashHint": "这里不是 macOS 废纸篓，而是 Skill Card Manager 自己的可恢复区域。你不需要手动寻找文件；在下方整理记录中点击“撤销”，即可恢复 Skill 和原有 Agent 投放。",
-        "trashPath": "内部位置：~/.skills-manager/skills/.trash/organization/",
+        "trashPath": "内部位置：~/.skills-manager/.trash/organization/",
         "empty": "还没有已处理记录"
       },
       "actionPlan": {
