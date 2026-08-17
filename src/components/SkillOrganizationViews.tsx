@@ -751,6 +751,9 @@ export function SkillIssuesView({
           {visibleIssues.map((issue) => {
             const copy = issueCopy(issue.kind, t);
             const agentAssessment = agentAssessments.get(issue.id);
+            const currentAgentAssessment = agentAssessment && !agentAssessment.stale
+              ? agentAssessment
+              : undefined;
             const deterministicArchive = issue.decisionTier === "rule_diagnosed"
               && (issue.kind === "exact_duplicate" || issue.kind === "content_alias")
               && issue.skills.length === 2;
@@ -826,62 +829,52 @@ export function SkillIssuesView({
                         />
                       ))}
                     </div>
-                    {agentAssessment && (
-                      <div className="scm-agent-assessment">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-start gap-2">
-                            <Bot className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-                            <div>
-                              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                                {t("mySkills.organization.agentAdviceTitle", { agent: agentAssessment.agentName })}
-                              </div>
-                              <div className="text-[11px] font-semibold text-secondary">
-                                {t(`mySkills.organization.agentRelations.${agentAssessment.assessment.relation_hypothesis}`)}
-                              </div>
-                              <p className="mt-1 text-[12px] leading-5 text-secondary">
-                                {agentAssessment.assessment.difference_summary}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="shrink-0 text-[10px] tabular-nums text-faint">
-                            {Math.round(agentAssessment.assessment.confidence * 100)}%
-                          </span>
-                        </div>
-                        {agentAssessment.stale ? (
-                          <p className="mt-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                            {t("mySkills.organization.agentResultStale")}
-                          </p>
-                        ) : (
-                          <>
-                            <ul className="mt-2 space-y-1 text-[11px] leading-4 text-muted">
-                              {agentAssessment.assessment.evidence.slice(0, 3).map((item, index) => (
-                                <li key={`${item.strength}-${index}`}>· {item.claim}</li>
-                              ))}
-                            </ul>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {agentAssessment.assessment.suggested_actions.map((action) => (
-                                <span key={action} className="rounded-full bg-surface px-2 py-1 text-[10px] font-medium text-secondary">
-                                  {t(`mySkills.organization.agentActions.${action}`)}
-                                </span>
-                              ))}
-                            </div>
-                            <p className="mt-2 text-[10px] text-faint">
-                              {t("mySkills.organization.agentAssessmentHint")}
-                            </p>
-                          </>
-                        )}
+                    {agentAssessment?.stale && (
+                      <div className="scm-agent-assessment flex items-start gap-2">
+                        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+                        <p className="text-[11px] font-medium leading-4 text-amber-700 dark:text-amber-300">
+                          {t("mySkills.organization.agentResultStale")}
+                        </p>
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="grid border-t border-border-faint bg-bg-secondary/40 md:grid-cols-2">
                   <div className="border-b border-border-faint px-4 py-3 md:border-b-0 md:border-r">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">{t("mySkills.organization.recommendation")}</div>
-                    <div className="mt-1 text-[12px] font-medium text-secondary">{copy.recommendation}</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+                        {currentAgentAssessment
+                          ? t("mySkills.organization.agentReviewedOpinion", { agent: currentAgentAssessment.agentName })
+                          : t("mySkills.organization.recommendation")}
+                      </div>
+                      {currentAgentAssessment && (
+                        <span className="shrink-0 text-[10px] tabular-nums text-faint">
+                          {Math.round(currentAgentAssessment.assessment.confidence * 100)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">
+                      {currentAgentAssessment
+                        ? currentAgentAssessment.assessment.difference_summary
+                        : copy.recommendation}
+                    </div>
+                    {currentAgentAssessment && (
+                      <div className="mt-1 text-[10px] text-faint">
+                        {t(`mySkills.organization.agentRelations.${currentAgentAssessment.assessment.relation_hypothesis}`)}
+                      </div>
+                    )}
                   </div>
                   <div className="px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">{t("mySkills.organization.impact")}</div>
-                    <div className="mt-1 text-[12px] text-muted">{copy.impact}</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+                      {currentAgentAssessment
+                        ? t("mySkills.organization.agentReviewedRecommendation", { agent: currentAgentAssessment.agentName })
+                        : t("mySkills.organization.impact")}
+                    </div>
+                    <div className="mt-1 text-[12px] leading-5 text-muted">
+                      {currentAgentAssessment
+                        ? currentAgentAssessment.assessment.recommendation_reason
+                        : copy.impact}
+                    </div>
                   </div>
                 </div>
                 {showActionPlan && (

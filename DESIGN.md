@@ -55,6 +55,10 @@ themed later.
   analysis.
 - It uses spacing and typography, not an accent card, to distinguish itself.
 - Confidence is a quiet neutral value. Only stale/error text uses semantic color.
+- Rules own the diagnosis facts. Once a current Agent assessment exists, its
+  opinion and recommendation replace the rule-generated guidance in place; the
+  interface never stacks both sets of advice. A stale Agent assessment cannot
+  override the current rule guidance.
 
 ### Keep/archive choice
 

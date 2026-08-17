@@ -605,6 +605,8 @@
       "agentResultHint": "这是 Agent 根据内容与来源生成的建议，不是 Skill Card Manager 的硬编码结论，也尚未执行文件操作。",
       "agentAssessmentReady": "{{agent}} 已完成比较，结论已写回对应事件",
       "agentAdviceTitle": "询问 {{agent}}",
+      "agentReviewedOpinion": "{{agent}} 审核意见",
+      "agentReviewedRecommendation": "{{agent}} 建议",
       "agentAssessmentHint": "Agent 只完成比较；Skill Card Manager 尚未修改、归档或删除任何 Skill。",
       "agentResultStale": "Skill 或证据已变化，这个结论已过期。请重新比较。",
       "agentRelations": {
