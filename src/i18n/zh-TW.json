@@ -554,8 +554,8 @@
       "agentResultHint": "這是 Agent 根據內容與來源生成的建議，不是 Skill Card Manager 的硬編碼結論，也尚未執行檔案操作。",
       "agentAssessmentReady": "{{agent}} 已完成比較，結論已寫回對應事件",
       "agentAdviceTitle": "詢問 {{agent}}",
-      "agentReviewedOpinion": "{{agent}} 審核意見",
-      "agentReviewedRecommendation": "{{agent}} 建議",
+      "agentReviewedConclusion": "{{agent}} 審核結論",
+      "agentRecommendationPrefix": "建議：",
       "agentAssessmentHint": "Agent 只完成比較；Skill Card Manager 尚未修改、封存或刪除任何 Skill。",
       "agentResultStale": "Skill 或證據已變化，這個結論已過期。請重新比較。",
       "agentRelations": {

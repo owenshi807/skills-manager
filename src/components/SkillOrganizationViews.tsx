@@ -839,44 +839,44 @@ export function SkillIssuesView({
                     )}
                   </div>
                 </div>
-                <div className="grid border-t border-border-faint bg-bg-secondary/40 md:grid-cols-2">
-                  <div className="border-b border-border-faint px-4 py-3 md:border-b-0 md:border-r">
-                    <div className="flex items-center justify-between gap-3">
+                {currentAgentAssessment ? (
+                  <section className="border-t border-border-faint bg-bg-secondary/40 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-                        {currentAgentAssessment
-                          ? t("mySkills.organization.agentReviewedOpinion", { agent: currentAgentAssessment.agentName })
-                          : t("mySkills.organization.recommendation")}
+                        {t("mySkills.organization.agentReviewedConclusion", { agent: currentAgentAssessment.agentName })}
                       </div>
-                      {currentAgentAssessment && (
-                        <span className="shrink-0 text-[10px] tabular-nums text-faint">
-                          {Math.round(currentAgentAssessment.assessment.confidence * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">
-                      {currentAgentAssessment
-                        ? currentAgentAssessment.assessment.difference_summary
-                        : copy.recommendation}
-                    </div>
-                    {currentAgentAssessment && (
-                      <div className="mt-1 text-[10px] text-faint">
+                      <span className="text-[10px] text-faint">·</span>
+                      <div className="text-[10px] text-faint">
                         {t(`mySkills.organization.agentRelations.${currentAgentAssessment.assessment.relation_hypothesis}`)}
                       </div>
-                    )}
-                  </div>
-                  <div className="px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-                      {currentAgentAssessment
-                        ? t("mySkills.organization.agentReviewedRecommendation", { agent: currentAgentAssessment.agentName })
-                        : t("mySkills.organization.impact")}
+                      <span className="ml-auto shrink-0 text-[10px] tabular-nums text-faint">
+                        {Math.round(currentAgentAssessment.assessment.confidence * 100)}%
+                      </span>
                     </div>
-                    <div className="mt-1 text-[12px] leading-5 text-muted">
-                      {currentAgentAssessment
-                        ? currentAgentAssessment.assessment.recommendation_reason
-                        : copy.impact}
+                    <p className="mt-1.5 text-[12px] font-medium leading-5 text-secondary">
+                      {currentAgentAssessment.assessment.difference_summary}
+                    </p>
+                    <p className="mt-1 text-[12px] leading-5 text-muted">
+                      <span className="font-medium text-secondary">{t("mySkills.organization.agentRecommendationPrefix")}</span>
+                      {currentAgentAssessment.assessment.recommendation_reason}
+                    </p>
+                  </section>
+                ) : (
+                  <div className="grid border-t border-border-faint bg-bg-secondary/40 md:grid-cols-2">
+                    <div className="border-b border-border-faint px-4 py-3 md:border-b-0 md:border-r">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+                        {t("mySkills.organization.recommendation")}
+                      </div>
+                      <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">{copy.recommendation}</div>
+                    </div>
+                    <div className="px-4 py-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+                        {t("mySkills.organization.impact")}
+                      </div>
+                      <div className="mt-1 text-[12px] leading-5 text-muted">{copy.impact}</div>
                     </div>
                   </div>
-                </div>
+                )}
                 {showActionPlan && (
                   <section className="border-t border-border-faint bg-surface px-4 py-4">
                     <div className="flex items-start justify-between gap-4">

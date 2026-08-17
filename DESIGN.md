@@ -59,6 +59,9 @@ themed later.
   opinion and recommendation replace the rule-generated guidance in place; the
   interface never stacks both sets of advice. A stale Agent assessment cannot
   override the current rule guidance.
+- One Agent run produces one conclusion surface. Its relation, reasoning, and
+  recommendation read as a continuous block instead of separate peer panels;
+  the choice and execution controls below remain a distinct action layer.
 
 ### Keep/archive choice
 
