@@ -297,6 +297,16 @@ export function SkillIssuesView({
   const recommendedKeepSkillId = activeAgentAssessment?.assessment.recommended_action === "archive_one"
     ? activeAgentAssessment.assessment.recommended_keep_skill_id
     : null;
+  const activeDeterministicArchive = !!activeIssue
+    && activeIssue.decisionTier === "rule_diagnosed"
+    && (activeIssue.kind === "exact_duplicate" || activeIssue.kind === "content_alias")
+    && activeIssue.skills.length === 2;
+  const activeArchiveRecommended = activeDeterministicArchive
+    || (!!activeIssue
+      && activeIssue.decisionTier === "needs_semantic"
+      && !!activeAgentAssessment
+      && !activeAgentAssessment.stale
+      && activeAgentAssessment.assessment.recommended_action === "archive_one");
 
   const openCategory = (category: IssueCategory) => {
     const first = unresolvedIssues.find((issue) => issueCategory(issue) === category);
@@ -323,6 +333,29 @@ export function SkillIssuesView({
     setKeepSkillId(recommendedId ?? activeIssue?.skills[0]?.id ?? null);
     setArchivePreview(null);
   }, [activeIssue?.id, activeIssue?.skills, recommendedKeepSkillId]);
+
+  useEffect(() => {
+    if (!activeIssue || !activeArchiveRecommended || !keepSkillId) return;
+    if (!activeIssue.skills.some((skill) => skill.id === keepSkillId)) return;
+    const archiveId = activeIssue.skills.find((skill) => skill.id !== keepSkillId)?.id;
+    if (!archiveId) return;
+    let cancelled = false;
+    setPreviewingArchive(true);
+    setArchivePreview(null);
+    onPreviewArchive(activeIssue, keepSkillId, archiveId)
+      .then((preview) => {
+        if (!cancelled) setArchivePreview(preview);
+      })
+      .catch(() => {
+        // The parent owns the user-facing error toast. A retry action remains visible.
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewingArchive(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeArchiveRecommended, activeIssue, keepSkillId, onPreviewArchive]);
 
   const previewArchivePlan = async (issue: SkillIssue) => {
     const keepId = keepSkillId ?? issue.skills[0]?.id;
@@ -831,7 +864,9 @@ export function SkillIssuesView({
                               className="app-button-primary"
                             >
                               {previewingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                              {t("mySkills.organization.actionPlan.previewRecommendation")}
+                              {previewingArchive
+                                ? t("mySkills.organization.actionPlan.checkingImpact")
+                                : t("mySkills.organization.actionPlan.retryImpactCheck")}
                             </button>
                           ) : (
                             <button

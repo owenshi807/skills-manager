@@ -1339,7 +1339,21 @@ export function MySkills() {
         decision,
         ...current.filter((item) => item.case_key !== decision.case_key),
       ]);
-      toast.success(t("mySkills.organization.decisionSaved"));
+      toast.success(t("mySkills.organization.decisionSaved"), {
+        action: {
+          label: t("mySkills.organization.undo"),
+          onClick: () => {
+            void api.clearOrganizationDecision(decision.case_key)
+              .then(() => {
+                setOrganizationDecisions((current) => current.filter(
+                  (item) => item.case_key !== decision.case_key,
+                ));
+                toast.success(t("mySkills.organization.decisionUndone"));
+              })
+              .catch((error) => toast.error(getErrorMessage(error, t("mySkills.organization.decisionFailed"))));
+          },
+        },
+      });
     } catch (error) {
       toast.error(getErrorMessage(error, t("mySkills.organization.decisionFailed")));
     }
