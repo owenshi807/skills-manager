@@ -530,10 +530,10 @@ export function SkillIssuesView({
   };
 
   return (
-    <div className={cn("pb-8", selectedCategory ? "space-y-0" : "space-y-6")}>
+    <div className={cn("pb-8", selectedCategory ? "space-y-4" : "space-y-6")}>
       {!selectedCategory ? (
         <>
-          <section className="flex items-end justify-between gap-6 border-b border-border-faint pb-5">
+          <section className="flex flex-col items-start justify-between gap-4 border-b border-border-faint pb-5 sm:flex-row sm:items-end sm:gap-6">
             <div className="min-w-0">
               <div className="inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-500">
                 <ShieldCheck className="h-4 w-4" />
@@ -610,7 +610,7 @@ export function SkillIssuesView({
           )}
         </>
       ) : (
-        <header className="flex min-h-16 items-center justify-between gap-4 border-b border-border-subtle pb-4">
+        <header className="flex min-h-16 flex-wrap items-center justify-between gap-4 border-b border-border-subtle pb-4">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -648,7 +648,7 @@ export function SkillIssuesView({
       {selectedCategory && (
         <>
         {semanticIssues.length > 1 && (
-          <div className="scm-support-section my-4 flex items-center justify-between gap-4">
+          <div className="scm-support-section flex flex-col items-stretch justify-between gap-4 xl:flex-row xl:items-center">
             <div>
               <div className="text-[12px] font-semibold text-secondary">
                 {hasBatchAssessments
@@ -668,7 +668,7 @@ export function SkillIssuesView({
                   : t("mySkills.organization.batchHint")}
               </div>
             </div>
-            <div className="flex shrink-0 items-stretch gap-2">
+            <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row">
               {actionableSemanticIssues.length > 0 && (
                 <button
                   type="button"
@@ -842,11 +842,11 @@ export function SkillIssuesView({
         <div className={cn(
           "app-panel grid items-start overflow-hidden shadow-card",
           selectedCategory === "format"
-            ? "lg:grid-cols-[220px_280px_minmax(0,1fr)]"
+            ? "xl:grid-cols-[220px_280px_minmax(0,1fr)]"
             : "lg:grid-cols-[300px_minmax(0,1fr)]",
         )}>
           {selectedCategory === "format" && (
-            <aside className="max-h-[720px] overflow-y-auto border-b border-border-faint bg-bg-secondary/55 p-2 lg:sticky lg:top-4 lg:border-b-0 lg:border-r">
+            <aside className="max-h-[720px] overflow-y-auto border-b border-border-faint bg-bg-secondary/55 p-2 xl:sticky xl:top-4 xl:border-b-0 xl:border-r">
               <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
                 {t("mySkills.organization.issueDirectory.formatCauses")}
               </div>
@@ -877,7 +877,12 @@ export function SkillIssuesView({
               </div>
             </aside>
           )}
-          <aside className="max-h-[680px] overflow-y-auto border-b border-border-faint bg-bg-secondary/35 p-2 lg:sticky lg:top-4 lg:border-b-0 lg:border-r">
+          <aside className={cn(
+            "max-h-[680px] overflow-y-auto border-b border-border-faint bg-bg-secondary/35 p-2",
+            selectedCategory === "format"
+              ? "xl:sticky xl:top-4 xl:border-b-0 xl:border-r"
+              : "lg:sticky lg:top-4 lg:border-b-0 lg:border-r",
+          )}>
             <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
               {t("mySkills.organization.issueDirectory.caseList", { count: narrowedIssues.length })}
             </div>
@@ -1176,7 +1181,7 @@ export function SkillIssuesView({
                             )}
                           </div>
                         )}
-                        <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                        <div className="mt-3 flex min-h-10 flex-wrap items-center justify-between gap-3">
                           {issue.decisionTier === "needs_semantic" ? (
                             <button
                               type="button"
@@ -1186,7 +1191,7 @@ export function SkillIssuesView({
                               {t("mySkills.organization.compareAgain")}
                             </button>
                           ) : <span />}
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => onDecide(issue, "related")}
@@ -1223,7 +1228,7 @@ export function SkillIssuesView({
                         </div>
                       </>
                     ) : agentRecommendation === "keep_both" ? (
-                      <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                      <div className="mt-3 flex min-h-10 flex-wrap items-center justify-between gap-3">
                         <button
                           type="button"
                           onClick={() => onHandOff(issue)}
@@ -1286,7 +1291,7 @@ export function SkillIssuesView({
                             files: formatRepairPreview.changed_paths.join("、"),
                           })}
                         </div>
-                        <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                        <div className="mt-3 flex min-h-10 flex-wrap items-center justify-between gap-3">
                           <button
                             type="button"
                             onClick={() => setFormatRepairPreview(null)}
@@ -1306,7 +1311,7 @@ export function SkillIssuesView({
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                      <div className="mt-3 flex min-h-10 flex-wrap items-center justify-between gap-3">
                         <button
                           type="button"
                           onClick={() => {
@@ -1394,7 +1399,7 @@ export function SkillIssuesView({
                   </section>
                 )}
                 {issue.kind !== "format_health" && (
-                <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
                   {issue.decisionTier === "needs_semantic" && !showActionPlan && (
                     <button type="button" onClick={() => onHandOff(issue)} className={agentAssessment ? "app-button-secondary" : "app-button-primary"}>
                       <Bot className="h-3.5 w-3.5" />

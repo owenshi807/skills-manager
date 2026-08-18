@@ -59,6 +59,10 @@ themed later.
 - CleanMyMac is the interaction reference for progressive disclosure and focused
   review, not a visual skin. Skill Card Manager keeps its dark, restrained
   developer-tool theme and does not copy purple gradients or 3D decoration.
+- Independent Review blocks always keep a 16px vertical gap. Only cause, case,
+  evidence, and action regions inside the same master-detail panel may touch; in
+  that case a shared container and faint divider must make the grouping explicit.
+  A toolbar or split button must never visually merge with the following panel.
 
 ### Batch result toolbar
 
