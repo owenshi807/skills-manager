@@ -518,6 +518,13 @@
       "issueDirectory": {
         "title": "Review directory",
         "intro": "Start with an issue type, then open a relationship case. Counts represent events, not duplicated skill rows.",
+        "scanComplete": "Skill library scan complete",
+        "scanResult": "{{count}} issues need attention",
+        "scanHint": "Scanned {{skills}} skills and grouped the findings into {{categories}} categories. Review a category before opening its causes and actions.",
+        "scanAgain": "Scan again",
+        "categoriesFound": "{{count}} issue categories found",
+        "review": "Review",
+        "backToScan": "Back to scan results",
         "events": "cases to review",
         "affectedSkills": "Affects {{count}} skills",
         "allCategories": "All issue types",

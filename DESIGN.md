@@ -42,6 +42,24 @@ themed later.
 
 ## Organization Components
 
+### Scan → Review hierarchy
+
+- The Pending landing view is a scan result, not an inventory dashboard. It shows
+  the scan state, total findings, and no more than the few top-level issue
+  categories. Individual skills, evidence, and execution controls stay out of
+  this level.
+- Each category has one quiet `Review` action. Entering Review temporarily removes
+  the library KPI cards, search, and top-level tabs so the user is not forced to
+  hold two navigation hierarchies at once.
+- The Review workspace reads left to right: cause (when a category has causes) →
+  affected case → selected case evidence and action. These columns share one
+  structural panel; they are not separate cards.
+- The selected case must answer, in order: what was found, why it matters, what
+  Skill Card Manager recommends, and exactly what the next action changes.
+- CleanMyMac is the interaction reference for progressive disclosure and focused
+  review, not a visual skin. Skill Card Manager keeps its dark, restrained
+  developer-tool theme and does not copy purple gradients or 3D decoration.
+
 ### Batch result toolbar
 
 - The comparison result is ordinary title + description text.

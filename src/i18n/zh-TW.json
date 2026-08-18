@@ -475,6 +475,13 @@
       "issueDirectory": {
         "title": "待處理問題目錄",
         "intro": "先按問題類型歸類，再進入具體關係組。這裡統計的是事件，不是把相關 Skill 重複計數。",
+        "scanComplete": "技能庫檢查完成",
+        "scanResult": "發現 {{count}} 件需要處理的問題",
+        "scanHint": "已檢查 {{skills}} 個 Skill，並歸為 {{categories}} 類問題。先檢視大類，再進入具體原因和處理動作。",
+        "scanAgain": "重新檢查",
+        "categoriesFound": "發現 {{count}} 類問題",
+        "review": "檢視並處理",
+        "backToScan": "返回檢查結果",
         "events": "件待處理",
         "affectedSkills": "涉及 {{count}} 個 Skill",
         "allCategories": "全部問題類型",

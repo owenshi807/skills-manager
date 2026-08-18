@@ -199,6 +199,7 @@ export function MySkills() {
     const view = new URLSearchParams(window.location.search).get("view");
     return view === "issues" || view === "processed" ? view : "all";
   });
+  const [organizationReviewMode, setOrganizationReviewMode] = useState(false);
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
   const organizationModeInitializedRef = useRef(false);
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
@@ -1659,7 +1660,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
 
   return (
     <div className="app-page">
-      <div className="app-page-header pr-2 pb-1 flex items-center justify-between gap-3">
+      {!organizationReviewMode && <div className="app-page-header pr-2 pb-1 flex items-center justify-between gap-3">
         <div>
           <h1 className="app-page-title flex items-center gap-2">
             {t("mySkills.title")}
@@ -1670,9 +1671,9 @@ Edit only this managed Skill directory. Do not modify its external source, other
           </p>
         </div>
 
-      </div>
+      </div>}
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      {libraryView === "all" && <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {[
           { label: t("mySkills.foundation.managed"), value: skills.length, detail: t("mySkills.foundation.managedHint"), icon: Library },
           { label: t("mySkills.foundation.visible"), value: projectedSkillCount, detail: t("mySkills.foundation.visibleHint", { count: projectionCount }), icon: Link2 },
@@ -1699,9 +1700,9 @@ Edit only this managed Skill directory. Do not modify its external source, other
             </div>
           );
         })}
-      </div>
+      </div>}
 
-      <div className="app-toolbar">
+      {libraryView !== "issues" && !organizationReviewMode && <div className="app-toolbar">
         <div className="flex flex-1 gap-3">
           <div className="relative w-full max-w-[280px]">
             <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
@@ -1719,9 +1720,9 @@ Edit only this managed Skill directory. Do not modify its external source, other
 
         </div>
 
-      </div>
+      </div>}
 
-      <div className="flex items-center gap-1 border-b border-border-subtle">
+      {!organizationReviewMode && <div className="flex items-center gap-1 border-b border-border-subtle">
         {([
           { id: "all", icon: LayoutGrid, count: skills.length },
           { id: "issues", icon: CircleAlert, count: unresolvedOrganizationCount },
@@ -1734,6 +1735,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
               type="button"
               onClick={() => {
                 setLibraryView(item.id);
+                if (item.id === "issues") setSearch("");
                 exitMultiSelect();
               }}
               className={cn(
@@ -1751,7 +1753,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {libraryView === "all" && <div className="flex items-center justify-end">
         <div className="app-segmented">
@@ -1943,6 +1945,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
           displayNames={skillDisplayNames}
           tools={tools}
           onOpenSkill={openSkillDetailById}
+          onReviewModeChange={setOrganizationReviewMode}
         />
       ) : libraryView === "processed" ? (
         <SkillProcessedView
