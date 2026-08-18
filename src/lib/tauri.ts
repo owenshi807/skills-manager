@@ -78,6 +78,7 @@ export interface OrganizationAgentCaseTask {
   case_revision: string;
   issue_kind: string;
   member_ids: string[];
+  evidence_scope?: "skill_md_snapshot" | "managed_directory_diff";
 }
 
 export interface OrganizationAssessmentEvidence {
@@ -99,6 +100,7 @@ export interface OrganizationAgentAssessment {
   recommended_keep_skill_id: string | null;
   recommendation_reason: string;
   confidence: number;
+  evidence_scope: "skill_md_snapshot" | "managed_directory_diff";
 }
 
 export interface OrganizationAgentTaskResult {

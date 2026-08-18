@@ -41,6 +41,12 @@ pub struct OrganizationAgentAssessment {
     pub recommended_keep_skill_id: Option<String>,
     pub recommendation_reason: String,
     pub confidence: f64,
+    #[serde(default = "default_evidence_scope")]
+    pub evidence_scope: String,
+}
+
+fn default_evidence_scope() -> String {
+    "skill_md_snapshot".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -335,6 +341,10 @@ pub fn parse_assessments(
                 .iter()
                 .any(|action| !allowed_actions.contains(&action.as_str()))
             || !(0.0..=1.0).contains(&assessment.confidence)
+            || !matches!(
+                assessment.evidence_scope.as_str(),
+                "skill_md_snapshot" | "managed_directory_diff"
+            )
             || !bounded_nonempty(&assessment.difference_summary, 600)
             || !matches!(
                 assessment.recommended_action.as_str(),

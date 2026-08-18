@@ -84,6 +84,19 @@ themed later.
 - One Agent run produces one conclusion surface. Its relation, reasoning, and
   recommendation read as a continuous block instead of separate peer panels;
   the choice and execution controls below remain a distinct action layer.
+- A same-name case has exactly three user-facing layers: **Problem** (deterministic
+  fact), **Judgment** (the current combined interpretation), and **Next step**
+  (one executable path). “Agent conclusion” and “Manager conclusion” must never
+  appear as peer opinions that the user has to reconcile.
+- If the bounded SKILL.md snapshot cannot close the judgment, the next step is
+  “Check complete differences,” not another identical comparison. Card Manager
+  produces a complete, read-only managed-directory manifest and bounded text
+  evidence; the Agent interprets that evidence without receiving filesystem
+  access. If provenance still blocks archival, the safe exit is to keep both and
+  record the unresolved source relationship.
+- Side-by-side Skill summaries use equal-height rows with the same identity,
+  description, and Agent-visibility slots. Unequal copy length must not move
+  corresponding fields out of alignment.
 
 ### Keep/archive choice
 

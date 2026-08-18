@@ -122,24 +122,24 @@ function MemberRow({
     <button
       type="button"
       onClick={onOpen}
-      className="group/member flex w-full items-start gap-3 rounded-lg border border-border-faint bg-bg-secondary/60 px-3 py-2.5 text-left transition-colors hover:border-border-subtle hover:bg-surface-hover"
+      className="group/member grid min-h-[104px] w-full grid-rows-[auto_1fr_auto] rounded-lg border border-border-faint bg-bg-secondary/60 px-3 py-3 text-left transition-colors hover:border-border-subtle hover:bg-surface-hover"
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[13px] font-semibold text-secondary group-hover/member:text-primary">
             {displayName}
           </span>
-          <span className="shrink-0 text-[10px] text-faint">{sourceLabel(skill)}</span>
+          <span className="truncate text-[10px] text-faint">{sourceLabel(skill)}</span>
         </div>
-        <p className="mt-0.5 line-clamp-1 text-[12px] leading-4 text-muted">
-          {skill.description || "—"}
-        </p>
+        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-faint transition-transform group-hover/member:translate-x-0.5" />
       </div>
-      <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-[10px] text-faint">
+      <p className="mt-2 line-clamp-2 min-h-8 text-[11px] leading-4 text-muted">
+        {skill.description || "—"}
+      </p>
+      <span className="mt-2 inline-flex items-center gap-1 border-t border-border-faint pt-2 text-[10px] text-faint">
         <Link2 className="h-3 w-3" />
         {agents.length > 0 ? agents.join(" · ") : "—"}
       </span>
-      <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint transition-transform group-hover/member:translate-x-0.5" />
     </button>
   );
 }
@@ -1023,11 +1023,16 @@ export function SkillIssuesView({
                   <section className="border-t border-border-faint bg-bg-secondary/40 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-                        {t("mySkills.organization.agentReviewedConclusion", { agent: currentAgentAssessment.agentName })}
+                        {t("mySkills.organization.judgmentTitle")}
                       </div>
                       <span className="text-[10px] text-faint">·</span>
                       <div className="text-[10px] text-faint">
-                        {t(`mySkills.organization.agentRelations.${currentAgentAssessment.assessment.relation_hypothesis}`)}
+                        {t("mySkills.organization.judgmentBy", {
+                          agent: currentAgentAssessment.agentName,
+                          scope: currentAgentAssessment.assessment.evidence_scope === "managed_directory_diff"
+                            ? t("mySkills.organization.evidenceScopes.managed_directory_diff")
+                            : t("mySkills.organization.evidenceScopes.skill_md_snapshot"),
+                        })}
                       </div>
                       <span className="ml-auto shrink-0 text-[10px] tabular-nums text-faint">
                         {Math.round(currentAgentAssessment.assessment.confidence * 100)}%
@@ -1068,19 +1073,23 @@ export function SkillIssuesView({
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                          {t("mySkills.organization.actionPlan.title")}
+                          {t("mySkills.organization.nextStepTitle")}
                         </div>
                         {agentRecommendation !== "archive_one" && (
                           <>
                             <h4 className="mt-1 text-[13px] font-semibold text-primary">
                               {agentRecommendation === "keep_both"
                               ? t("mySkills.organization.actionPlan.keepBothConclusion")
-                              : t("mySkills.organization.actionPlan.moreEvidenceConclusion")}
+                              : currentAgentAssessment?.assessment.evidence_scope === "managed_directory_diff"
+                                ? t("mySkills.organization.actionPlan.sourceEvidenceConclusion")
+                                : t("mySkills.organization.actionPlan.fullDiffConclusion")}
                             </h4>
-                            <p className="mt-1 text-[11px] leading-4 text-muted">
-                              {agentAssessment?.assessment.recommendation_reason
-                                || t("mySkills.organization.actionPlan.legacyConclusion")}
-                            </p>
+                            {agentRecommendation === "keep_both" && (
+                              <p className="mt-1 text-[11px] leading-4 text-muted">
+                                {agentAssessment?.assessment.recommendation_reason
+                                  || t("mySkills.organization.actionPlan.legacyConclusion")}
+                              </p>
+                            )}
                           </>
                         )}
                       </div>
@@ -1246,9 +1255,26 @@ export function SkillIssuesView({
                         </button>
                       </div>
                     ) : (
-                      <p className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
-                        {t("mySkills.organization.actionPlan.noSafeAction")}
-                      </p>
+                      <div className="mt-3 flex min-h-10 flex-wrap items-center justify-between gap-3">
+                        <p className="max-w-2xl text-[11px] leading-4 text-muted">
+                          {currentAgentAssessment?.assessment.evidence_scope === "managed_directory_diff"
+                            ? t("mySkills.organization.actionPlan.deepCheckStillBlocked")
+                            : t("mySkills.organization.actionPlan.deepCheckRequired")}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {currentAgentAssessment?.assessment.evidence_scope === "managed_directory_diff" && (
+                            <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-secondary h-10">
+                              {t("mySkills.organization.actionPlan.keepPendingSource")}
+                            </button>
+                          )}
+                          <button type="button" onClick={() => onHandOff(issue)} className="app-button-primary h-10">
+                            <GitCompareArrows className="h-3.5 w-3.5" />
+                            {currentAgentAssessment?.assessment.evidence_scope === "managed_directory_diff"
+                              ? t("mySkills.organization.actionPlan.recheckFullDiff")
+                              : t("mySkills.organization.actionPlan.checkFullDiff")}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </section>
                 )}

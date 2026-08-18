@@ -1253,15 +1253,25 @@ export function MySkills() {
     }
   }, []);
 
-  const organizationCaseTask = useCallback((issue: SkillIssue): OrganizationAgentCaseTask => {
+  const organizationCaseTask = useCallback((
+    issue: SkillIssue,
+    evidenceScope?: OrganizationAgentCaseTask["evidence_scope"],
+  ): OrganizationAgentCaseTask => {
     if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    const previousAssessment = organizationAgentAssessments.get(issue.id)?.assessment;
+    const effectiveScope = evidenceScope ?? (
+      previousAssessment?.recommended_action === "needs_more_evidence"
+        ? "managed_directory_diff"
+        : "skill_md_snapshot"
+    );
     return {
       case_id: issue.id,
       case_revision: issue.caseRevision,
       issue_kind: issue.kind,
       member_ids: issue.skills.map((skill) => skill.id),
+      evidence_scope: effectiveScope,
     };
-  }, [t]);
+  }, [organizationAgentAssessments, t]);
 
   const selectedOrganizationAgentName = useMemo(
     () => organizationExecutionOptions.find((option) => option.id === organizationAgent)?.label ?? organizationAgent,
@@ -1281,9 +1291,14 @@ export function MySkills() {
       toast.info(t("mySkills.organization.agentNotNeeded"));
       return;
     }
+    const previousAssessment = organizationAgentAssessments.get(issue.id)?.assessment;
+    const evidenceScope = previousAssessment?.recommended_action === "needs_more_evidence"
+      ? "managed_directory_diff"
+      : "skill_md_snapshot";
+    const task = organizationCaseTask(issue, evidenceScope);
     if (organizationAgent === "copy_prompt") {
       try {
-        const { prompt } = await api.prepareOrganizationAgentPrompt([organizationCaseTask(issue)]);
+        const { prompt } = await api.prepareOrganizationAgentPrompt([task]);
         await writeOrganizationClipboard(prompt);
         toast.success(t("mySkills.organization.promptCopied"));
       } catch (error) {
@@ -1296,14 +1311,14 @@ export function MySkills() {
     const toastId = toast.loading(t("mySkills.organization.agentRunning", { agent: agentName }));
     setOrganizationAgentError(null);
     try {
-      await api.runOrganizationAgentTask(organizationAgent, [organizationCaseTask(issue)]);
+      await api.runOrganizationAgentTask(organizationAgent, [task]);
       await reloadOrganizationAssessments();
       toast.success(t("mySkills.organization.agentAssessmentReady", { agent: agentName }), { id: toastId });
     } catch (error) {
       setOrganizationAgentError(getErrorMessage(error, t("mySkills.organization.agentFailed")));
       toast.error(t("mySkills.organization.agentFailed"), { id: toastId });
     }
-  }, [organizationAgent, organizationCaseTask, reloadOrganizationAssessments, selectedOrganizationAgentName, t, writeOrganizationClipboard]);
+  }, [organizationAgent, organizationAgentAssessments, organizationCaseTask, reloadOrganizationAssessments, selectedOrganizationAgentName, t, writeOrganizationClipboard]);
 
   const prepareFormatRepair = useCallback(async (
     issue: SkillIssue,
@@ -1381,7 +1396,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
         const prompts: string[] = [];
         for (let index = 0; index < semanticIssues.length; index += 8) {
           const { prompt } = await api.prepareOrganizationAgentPrompt(
-            semanticIssues.slice(index, index + 8).map(organizationCaseTask),
+            semanticIssues.slice(index, index + 8).map((issue) => organizationCaseTask(issue)),
           );
           prompts.push(prompt);
         }
@@ -1404,7 +1419,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
       for (let index = 0; index < semanticIssues.length; index += 8) {
         await api.runOrganizationAgentTask(
           organizationAgent,
-          semanticIssues.slice(index, index + 8).map(organizationCaseTask),
+          semanticIssues.slice(index, index + 8).map((issue) => organizationCaseTask(issue)),
         );
       }
       await reloadOrganizationAssessments();
