@@ -530,6 +530,19 @@
         "allCategories": "All issue types",
         "allFormatCauses": "All format causes",
         "caseList": "{{count}} relationship cases",
+        "eventStates": {
+          "archiveOne": "Archive redundant item",
+          "keepBoth": "Keep both items",
+          "needsEvidence": "More evidence needed",
+          "ready": "Ready to organize",
+          "waiting": "Awaiting judgment",
+          "blocked": "Cannot process yet",
+          "stale": "Judgment expired"
+        },
+        "eventSummaries": {
+          "waiting": "Comparing these Skills across content, provenance, versions, and Agent projections.",
+          "stale": "The Skill or evidence changed and must be judged again from current content."
+        },
         "formatCauses": "Browse by specific cause",
         "formatCausesHint": "One skill may have multiple format issues, so cause groups can overlap.",
         "categories": {

@@ -487,6 +487,19 @@
         "allCategories": "全部問題類型",
         "allFormatCauses": "全部格式原因",
         "caseList": "{{count}} 個關係事件",
+        "eventStates": {
+          "archiveOne": "建議歸檔冗餘項",
+          "keepBoth": "建議兩項都保留",
+          "needsEvidence": "需要補充證據",
+          "ready": "可以安全處理",
+          "waiting": "等待判斷",
+          "blocked": "目前無法處理",
+          "stale": "判斷已過期"
+        },
+        "eventSummaries": {
+          "waiting": "正在核對這兩個 Skill 的內容、來源、版本與 Agent 投放差異。",
+          "stale": "Skill 或證據已經變化，需要基於目前內容重新判斷。"
+        },
         "formatCauses": "先按具體原因檢視",
         "formatCausesHint": "一個 Skill 可能同時命中多個格式問題，因此原因分組的數量可以重疊。",
         "categories": {

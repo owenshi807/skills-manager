@@ -54,6 +54,13 @@ themed later.
 - The Review workspace reads left to right: cause (when a category has causes) →
   affected case → selected case evidence and action. These columns share one
   structural panel; they are not separate cards.
+- Category identity belongs to the Review header: category icon, category name,
+  count, and category-level explanation appear once. A selected event never
+  repeats the category title or icon. Its header names the concrete Skill pair,
+  shows the current treatment state, and summarizes the pair-specific finding.
+- Case-list subtitles communicate progress or disposition (awaiting judgment,
+  archive redundant item, keep both, needs evidence), not the already-known
+  category name.
 - The selected case must answer, in order: what was found, why it matters, what
   Skill Card Manager recommends, and exactly what the next action changes.
 - CleanMyMac is the interaction reference for progressive disclosure and focused

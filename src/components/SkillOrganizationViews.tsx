@@ -254,6 +254,30 @@ function issueMemberNames(issue: SkillIssue, displayNames: Map<string, string>) 
   return issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ");
 }
 
+function issueEventState(
+  issue: SkillIssue,
+  assessment: OrganizationAgentDisplayAssessment | undefined,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  if (assessment?.stale) return t("mySkills.organization.issueDirectory.eventStates.stale");
+  if (assessment?.assessment.recommended_action === "archive_one") {
+    return t("mySkills.organization.issueDirectory.eventStates.archiveOne");
+  }
+  if (assessment?.assessment.recommended_action === "keep_both") {
+    return t("mySkills.organization.issueDirectory.eventStates.keepBoth");
+  }
+  if (assessment?.assessment.recommended_action === "needs_more_evidence") {
+    return t("mySkills.organization.issueDirectory.eventStates.needsEvidence");
+  }
+  if (issue.decisionTier === "rule_diagnosed") {
+    return t("mySkills.organization.issueDirectory.eventStates.ready");
+  }
+  if (issue.decisionTier === "blocked") {
+    return t("mySkills.organization.issueDirectory.eventStates.blocked");
+  }
+  return t("mySkills.organization.issueDirectory.eventStates.waiting");
+}
+
 type FormatRepairMode = "agent" | "dependency" | "manual";
 
 function formatRepairMode(code: string): FormatRepairMode {
@@ -356,6 +380,7 @@ export function SkillIssuesView({
     };
   }).filter((category) => category.issues.length > 0);
   const currentCategory = categories.find((category) => category.id === selectedCategory);
+  const CurrentCategoryIcon = currentCategory?.icon;
   const categoryIssues = searchedIssues.filter((issue) => issueCategory(issue) === selectedCategory);
   const formatBuckets = [...new Set(
     searchedIssues
@@ -621,6 +646,11 @@ export function SkillIssuesView({
               {t("mySkills.organization.issueDirectory.backToScan")}
             </button>
             <div className="h-8 w-px bg-border-faint" />
+            {CurrentCategoryIcon && currentCategory && (
+              <span className={cn("rounded-lg p-2", currentCategory.tone)}>
+                <CurrentCategoryIcon className="h-4 w-4" />
+              </span>
+            )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 className="truncate text-[15px] font-semibold text-primary">
@@ -887,7 +917,9 @@ export function SkillIssuesView({
               {t("mySkills.organization.issueDirectory.caseList", { count: narrowedIssues.length })}
             </div>
             <div className="space-y-1">
-              {narrowedIssues.map((issue, index) => (
+              {narrowedIssues.map((issue, index) => {
+                const assessment = agentAssessments.get(issue.id);
+                return (
                 <button
                   key={issue.id}
                   type="button"
@@ -900,11 +932,16 @@ export function SkillIssuesView({
                   <span className="w-6 shrink-0 text-[10px] tabular-nums text-faint">{index + 1}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[11px] font-semibold">{issueMemberNames(issue, displayNames)}</span>
-                    <span className="mt-0.5 block truncate text-[10px] text-muted">{issueCopy(issue.kind, t).title}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-muted">
+                      {selectedCategory === "same_name"
+                        ? issueEventState(issue, assessment, t)
+                        : issueCopy(issue.kind, t).title}
+                    </span>
                   </span>
                   <ChevronRight className="h-3.5 w-3.5 shrink-0 text-faint" />
                 </button>
-              ))}
+                );
+              })}
             </div>
           </aside>
           {visibleIssues.length === 0 ? (
@@ -958,10 +995,16 @@ export function SkillIssuesView({
               && executionMode !== "codex"
               ? "external"
               : activeFormatGuidance?.mode;
+            const isSameNameReview = selectedCategory === "same_name" && issue.kind === "name_collision";
+            const eventState = issueEventState(issue, agentAssessment, t);
+            const eventSummary = currentAgentAssessment?.assessment.difference_summary
+              ?? (agentAssessment?.stale
+                ? t("mySkills.organization.issueDirectory.eventSummaries.stale")
+                : t("mySkills.organization.issueDirectory.eventSummaries.waiting"));
             return (
               <article key={issue.id} className="overflow-hidden">
-                <div className="flex items-start gap-4 p-4">
-                  <div className={cn(
+                <div className={cn("flex items-start p-4", isSameNameReview ? "gap-0" : "gap-4")}>
+                  {!isSameNameReview && <div className={cn(
                     "mt-0.5 rounded-lg p-2",
                     issue.decisionTier === "rule_diagnosed"
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
@@ -974,25 +1017,35 @@ export function SkillIssuesView({
                       : issue.decisionTier === "blocked"
                         ? <CircleAlert className="h-4 w-4" />
                         : <GitCompareArrows className="h-4 w-4" />}
-                  </div>
+                  </div>}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-[14px] font-semibold text-primary">{copy.title}</h3>
-                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
-                        {t("mySkills.organization.skillCount", { count: issue.skills.length })}
-                      </span>
+                      <h3 className="text-[14px] font-semibold text-primary">
+                        {isSameNameReview ? issueMemberNames(issue, displayNames) : copy.title}
+                      </h3>
+                      {!isSameNameReview && (
+                        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-muted">
+                          {t("mySkills.organization.skillCount", { count: issue.skills.length })}
+                        </span>
+                      )}
                       <span className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                        issue.decisionTier === "rule_diagnosed"
+                        isSameNameReview && agentRecommendation === "archive_one"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                          : isSameNameReview && agentRecommendation === "keep_both"
+                            ? "bg-surface-hover text-secondary"
+                            : issue.decisionTier === "rule_diagnosed"
                           ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                           : issue.decisionTier === "blocked"
                             ? "bg-red-500/10 text-red-700 dark:text-red-300"
                             : "bg-amber-500/10 text-amber-700 dark:text-amber-300",
                       )}>
-                        {t(`mySkills.organization.tiers.${issue.decisionTier}`)}
+                        {isSameNameReview ? eventState : t(`mySkills.organization.tiers.${issue.decisionTier}`)}
                       </span>
                     </div>
-                    <p className="mt-1 text-[12px] leading-5 text-muted">{copy.fact}</p>
+                    <p className="mt-1 text-[12px] leading-5 text-muted">
+                      {isSameNameReview ? eventSummary : copy.fact}
+                    </p>
                     {issue.details && issue.details.length > 0 && (
                       <ul className="mt-2 space-y-1 text-[11px] leading-4 text-amber-700 dark:text-amber-200">
                         {issue.details.map((detail) => <li key={detail}>· {detail}</li>)}
@@ -1038,9 +1091,11 @@ export function SkillIssuesView({
                         {Math.round(currentAgentAssessment.assessment.confidence * 100)}%
                       </span>
                     </div>
-                    <p className="mt-1.5 text-[12px] font-medium leading-5 text-secondary">
-                      {currentAgentAssessment.assessment.difference_summary}
-                    </p>
+                    {!isSameNameReview && (
+                      <p className="mt-1.5 text-[12px] font-medium leading-5 text-secondary">
+                        {currentAgentAssessment.assessment.difference_summary}
+                      </p>
+                    )}
                     <p className="mt-1 text-[12px] leading-5 text-muted">
                       <span className="font-medium text-secondary">{t("mySkills.organization.agentRecommendationPrefix")}</span>
                       {currentAgentAssessment.assessment.recommendation_reason}
