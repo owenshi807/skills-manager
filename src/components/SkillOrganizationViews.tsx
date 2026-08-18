@@ -23,6 +23,7 @@ import type {
   OrganizationAgentAssessment,
   OrganizationArchivePreview,
   OrganizationDisposition,
+  FormatRepairPreview,
   OrganizationOperationSummary,
   ToolInfo,
 } from "../lib/tauri";
@@ -46,6 +47,8 @@ interface IssuesProps extends SharedProps {
   onExecuteBatch: (issues: SkillIssue[]) => void;
   onApplyBatchConclusions: (issues: SkillIssue[]) => void;
   onHandOff: (issue: SkillIssue) => void;
+  onPrepareFormatRepair: (issue: SkillIssue, issueCodes: string[]) => Promise<FormatRepairPreview | null>;
+  onApplyFormatRepair: (preview: FormatRepairPreview) => Promise<void>;
   agentAssessments: Map<string, OrganizationAgentDisplayAssessment>;
   agentError: string | null;
   processingBatch: boolean;
@@ -250,6 +253,25 @@ function issueMemberNames(issue: SkillIssue, displayNames: Map<string, string>) 
   return issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ");
 }
 
+type FormatRepairMode = "agent" | "dependency" | "manual";
+
+function formatRepairMode(code: string): FormatRepairMode {
+  if (code === "target_name_mismatch") return "dependency";
+  if (code === "skill_md_missing" || code === "skill_md_unreadable") return "manual";
+  return "agent";
+}
+
+function formatRepairGuidance(code: string, t: ReturnType<typeof useTranslation>["t"]) {
+  const mode = formatRepairMode(code);
+  return {
+    mode,
+    recommendation: t(`mySkills.organization.formatRepair.recommendations.${code}`, {
+      defaultValue: t("mySkills.organization.formatRepair.recommendations.unknown"),
+    }),
+    method: t(`mySkills.organization.formatRepair.methods.${mode}`),
+  };
+}
+
 export function SkillIssuesView({
   issues,
   resolvedIds,
@@ -259,6 +281,8 @@ export function SkillIssuesView({
   onExecuteBatch,
   onApplyBatchConclusions,
   onHandOff,
+  onPrepareFormatRepair,
+  onApplyFormatRepair,
   agentAssessments,
   agentError,
   processingBatch,
@@ -282,7 +306,12 @@ export function SkillIssuesView({
   const [archivePreview, setArchivePreview] = useState<OrganizationArchivePreview | null>(null);
   const [previewingArchive, setPreviewingArchive] = useState(false);
   const [applyingArchive, setApplyingArchive] = useState(false);
+  const [formatRepairPreview, setFormatRepairPreview] = useState<FormatRepairPreview | null>(null);
+  const [preparingFormatRepair, setPreparingFormatRepair] = useState(false);
+  const [applyingFormatRepair, setApplyingFormatRepair] = useState(false);
   const executionMenuRef = useRef<HTMLDivElement>(null);
+  const formatExecutionMenuRef = useRef<HTMLDivElement>(null);
+  const [formatExecutionMenuOpen, setFormatExecutionMenuOpen] = useState(false);
   useEffect(() => {
     if (!executionMenuOpen) return;
     const close = (event: MouseEvent) => {
@@ -291,6 +320,16 @@ export function SkillIssuesView({
     window.addEventListener("mousedown", close);
     return () => window.removeEventListener("mousedown", close);
   }, [executionMenuOpen]);
+  useEffect(() => {
+    if (!formatExecutionMenuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!formatExecutionMenuRef.current?.contains(event.target as Node)) {
+        setFormatExecutionMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [formatExecutionMenuOpen]);
   const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
   const searchedIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
@@ -328,6 +367,9 @@ export function SkillIssuesView({
   const narrowedIssues = categoryIssues.filter((issue) =>
     selectedCategory !== "format" || !selectedHealthCode || (issue.healthCodes ?? ["unknown"]).includes(selectedHealthCode));
   const activeIssue = narrowedIssues.find((issue) => issue.id === selectedIssueId) ?? narrowedIssues[0];
+  useEffect(() => {
+    setFormatRepairPreview(null);
+  }, [activeIssue?.id, selectedHealthCode]);
   const visibleIssues = activeIssue ? [activeIssue] : [];
   const semanticIssues = selectedCategory === "same_name"
     ? categoryIssues.filter((issue) => issue.decisionTier === "needs_semantic")
@@ -448,6 +490,31 @@ export function SkillIssuesView({
       // The parent owns the user-facing error toast.
     } finally {
       setApplyingArchive(false);
+    }
+  };
+
+  const prepareFormatRepairPlan = async (issue: SkillIssue, issueCodes: string[]) => {
+    setPreparingFormatRepair(true);
+    try {
+      const preview = await onPrepareFormatRepair(issue, issueCodes);
+      if (preview) setFormatRepairPreview(preview);
+    } catch {
+      // The parent owns the user-facing error toast.
+    } finally {
+      setPreparingFormatRepair(false);
+    }
+  };
+
+  const applyFormatRepairPlan = async () => {
+    if (!formatRepairPreview) return;
+    setApplyingFormatRepair(true);
+    try {
+      await onApplyFormatRepair(formatRepairPreview);
+      setFormatRepairPreview(null);
+    } catch {
+      // The parent owns the user-facing error toast.
+    } finally {
+      setApplyingFormatRepair(false);
     }
   };
 
@@ -699,12 +766,20 @@ export function SkillIssuesView({
                 className="group flex items-center justify-between gap-3 rounded-xl border border-border-faint bg-surface p-3.5 text-left shadow-card transition-colors hover:border-border-subtle hover:bg-surface-hover"
               >
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-secondary">
-                    {t(`mySkills.organization.issueDirectory.healthCodes.${bucket.code}`, { defaultValue: bucket.code })}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-[13px] font-semibold text-secondary">
+                      {t(`mySkills.organization.issueDirectory.healthCodes.${bucket.code}`, { defaultValue: bucket.code })}
+                    </div>
+                    <span className="rounded-full bg-bg-secondary px-2 py-0.5 text-[9px] font-medium text-muted">
+                      {formatRepairGuidance(bucket.code, t).method}
+                    </span>
                   </div>
                   <div className="mt-1 text-[11px] text-muted">
                     {t("mySkills.organization.issueDirectory.affectedSkills", { count: bucket.skillCount })}
                   </div>
+                  <p className="mt-1.5 line-clamp-2 text-[10.5px] leading-4 text-faint">
+                    {formatRepairGuidance(bucket.code, t).recommendation}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-[18px] font-semibold text-primary">{bucket.issues.length}</span>
@@ -778,6 +853,20 @@ export function SkillIssuesView({
             const hasAgentArchiveRecommendation = !deterministicArchive
               && agentRecommendation === "archive_one"
               && !!recommendedKeep;
+            const activeFormatCode = issue.kind === "format_health"
+              ? selectedHealthCode ?? issue.healthCodes?.[0] ?? "unknown"
+              : null;
+            const activeFormatGuidance = activeFormatCode
+              ? formatRepairGuidance(activeFormatCode, t)
+              : null;
+            const activeFormatRepairCodes = activeFormatCode
+              && activeFormatGuidance?.mode === "agent"
+              ? [activeFormatCode]
+              : [];
+            const activeFormatImpactMode = activeFormatGuidance?.mode === "agent"
+              && executionMode !== "codex"
+              ? "external"
+              : activeFormatGuidance?.mode;
             return (
               <article key={issue.id} className="overflow-hidden">
                 <div className="flex items-start gap-4 p-4">
@@ -867,13 +956,19 @@ export function SkillIssuesView({
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
                         {t("mySkills.organization.recommendation")}
                       </div>
-                      <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">{copy.recommendation}</div>
+                      <div className="mt-1 text-[12px] font-medium leading-5 text-secondary">
+                        {activeFormatGuidance?.recommendation ?? copy.recommendation}
+                      </div>
                     </div>
                     <div className="px-4 py-3">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
                         {t("mySkills.organization.impact")}
                       </div>
-                      <div className="mt-1 text-[12px] leading-5 text-muted">{copy.impact}</div>
+                      <div className="mt-1 text-[12px] leading-5 text-muted">
+                        {activeFormatGuidance
+                          ? t(`mySkills.organization.formatRepair.impacts.${activeFormatImpactMode}`)
+                          : copy.impact}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1066,6 +1161,153 @@ export function SkillIssuesView({
                     )}
                   </section>
                 )}
+                {issue.kind === "format_health" && activeFormatGuidance && (
+                  <section className="border-t border-border-faint bg-surface px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                          {t("mySkills.organization.formatRepair.title")}
+                        </div>
+                        <h4 className="mt-1 text-[13px] font-semibold text-primary">
+                          {activeFormatGuidance.method}
+                        </h4>
+                        <p className="mt-1 text-[11px] leading-4 text-muted">
+                          {activeFormatGuidance.recommendation}
+                        </p>
+                      </div>
+                      {!formatRepairPreview && activeFormatGuidance.mode === "agent" && (
+                        <span className="shrink-0 text-[10px] text-faint">
+                          {t("mySkills.organization.formatRepair.managedCopyOnly")}
+                        </span>
+                      )}
+                    </div>
+
+                    {formatRepairPreview && activeFormatGuidance.mode === "agent" ? (
+                      <div className="mt-3 rounded-lg bg-bg-secondary/60 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[11px] font-semibold text-secondary">
+                            {t("mySkills.organization.formatRepair.previewTitle")}
+                          </div>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-300">
+                            {t("mySkills.organization.formatRepair.notApplied")}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-4 text-muted">
+                          {formatRepairPreview.summary}
+                        </p>
+                        <div className="mt-2 text-[10px] text-faint">
+                          {t("mySkills.organization.formatRepair.changedFiles", {
+                            files: formatRepairPreview.changed_paths.join("、"),
+                          })}
+                        </div>
+                        <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setFormatRepairPreview(null)}
+                            className="scm-button-tertiary h-10"
+                          >
+                            {t("common.cancel")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void applyFormatRepairPlan()}
+                            disabled={applyingFormatRepair}
+                            className="app-button-primary h-10"
+                          >
+                            {applyingFormatRepair && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                            {t("mySkills.organization.formatRepair.apply")}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex min-h-10 items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const skillId = issue.skills[0]?.id;
+                            if (skillId) onOpenSkill(skillId);
+                          }}
+                          disabled={!issue.skills[0]}
+                          className="scm-button-tertiary h-10"
+                        >
+                          {t("mySkills.organization.formatRepair.openSkill")}
+                        </button>
+                        {activeFormatGuidance.mode === "agent" ? (
+                          <div
+                            ref={formatExecutionMenuRef}
+                            className="relative flex h-10 items-stretch rounded-lg bg-emerald-600 text-white"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => void prepareFormatRepairPlan(issue, activeFormatRepairCodes)}
+                              disabled={preparingFormatRepair}
+                              className="flex h-10 items-center gap-2 rounded-l-lg px-3 text-[12px] font-semibold transition-colors hover:bg-white/10 disabled:opacity-60"
+                            >
+                              {preparingFormatRepair
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <Bot className="h-3.5 w-3.5" />}
+                              {preparingFormatRepair
+                                ? t("mySkills.organization.formatRepair.preparing")
+                                : executionMode === "codex"
+                                  ? t("mySkills.organization.formatRepair.askAgent", { agent: selectedExecution?.label })
+                                  : t("mySkills.organization.formatRepair.copyPrompt")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormatExecutionMenuOpen((open) => !open)}
+                              disabled={preparingFormatRepair}
+                              className="flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-white/20 transition-colors hover:bg-white/10 disabled:opacity-60"
+                              aria-label={t("mySkills.organization.chooseAgent")}
+                              aria-expanded={formatExecutionMenuOpen}
+                            >
+                              <ChevronDown className={cn("h-4 w-4 transition-transform", formatExecutionMenuOpen && "rotate-180")} />
+                            </button>
+                            {formatExecutionMenuOpen && (
+                              <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[260px] overflow-hidden rounded-xl border border-border bg-surface p-1.5 text-primary shadow-2xl">
+                                {executionOptions.map((option) => (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    onClick={() => {
+                                      onExecutionModeChange(option.id);
+                                      setFormatExecutionMenuOpen(false);
+                                    }}
+                                    className={cn(
+                                      "flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover",
+                                      option.id === executionMode && "bg-accent-bg",
+                                    )}
+                                  >
+                                    <span className="mt-0.5 flex h-4 w-4 items-center justify-center">
+                                      {option.id === executionMode && <CheckCircle2 className="h-4 w-4 text-accent-light" />}
+                                    </span>
+                                    <span className="min-w-0">
+                                      <span className="block text-[12px] font-semibold text-secondary">{option.label}</span>
+                                      <span className="mt-0.5 block text-[10px] leading-4 text-muted">{option.description}</span>
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : activeFormatGuidance.mode === "dependency" ? (
+                          <button
+                            type="button"
+                            onClick={() => openCategory("same_name")}
+                            className="app-button-primary h-10"
+                          >
+                            {t("mySkills.organization.formatRepair.resolveIdentityFirst")}
+                          </button>
+                        ) : (
+                          <button type="button" onClick={onRefresh} className="app-button-secondary h-10">
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            {t("mySkills.organization.recheck")}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )}
+                {issue.kind !== "format_health" && (
                 <div className="flex items-center justify-end gap-2 border-t border-border-faint px-4 py-3">
                   {issue.decisionTier === "needs_semantic" && !showActionPlan && (
                     <button type="button" onClick={() => onHandOff(issue)} className={agentAssessment ? "app-button-secondary" : "app-button-primary"}>
@@ -1088,6 +1330,7 @@ export function SkillIssuesView({
                     </button>
                   )}
                 </div>
+                )}
               </article>
             );
           })}
@@ -1187,12 +1430,16 @@ export function SkillProcessedView({
               <article key={operation.operation_id} className="flex items-center justify-between gap-3 rounded-lg border border-border-faint bg-bg-secondary/45 px-3 py-2.5">
                 <div className="min-w-0">
                   <h3 className="truncate text-[12px] font-semibold text-primary">
-                    {operation.status === "undone"
-                      ? t("mySkills.organization.operationHistory.undone", { archive: operation.archive_name })
-                      : t("mySkills.organization.operationHistory.archived", {
-                          keep: operation.keep_name,
-                          archive: operation.archive_name,
-                        })}
+                    {operation.kind === "format_repair"
+                      ? operation.status === "undone"
+                        ? t("mySkills.organization.operationHistory.formatRepairUndone", { skill: operation.keep_name })
+                        : t("mySkills.organization.operationHistory.formatRepaired", { skill: operation.keep_name })
+                      : operation.status === "undone"
+                        ? t("mySkills.organization.operationHistory.undone", { archive: operation.archive_name })
+                        : t("mySkills.organization.operationHistory.archived", {
+                            keep: operation.keep_name,
+                            archive: operation.archive_name,
+                          })}
                   </h3>
                   <p className="mt-0.5 text-[10.5px] text-muted">
                     {operation.status === "needs_recovery"

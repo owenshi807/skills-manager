@@ -140,6 +140,22 @@ export interface OrganizationHealthInspection {
   issues: OrganizationHealthIssue[];
 }
 
+export interface FormatRepairAgentRequest {
+  skill_id: string;
+  issue_codes: string[];
+}
+
+export interface FormatRepairPreview {
+  plan_id: string;
+  skill_id: string;
+  skill_name: string;
+  agent_key: "codex" | "claude_code";
+  summary: string;
+  changed_paths: string[];
+  resolved_codes: string[];
+  remaining_codes: string[];
+}
+
 export type OrganizationDecisionTier = "rule_diagnosed" | "needs_semantic" | "blocked";
 
 export interface OrganizationCaseRequest {
@@ -225,6 +241,7 @@ export interface OrganizationOperationResult {
 
 export interface OrganizationOperationSummary {
   operation_id: string;
+  kind: "archive_redundant" | "format_repair";
   status: "planned" | "staged" | "complete" | "needs_recovery" | "undone";
   keep_skill_id: string;
   keep_name: string;
@@ -436,6 +453,19 @@ export const refreshOrganizationFacts = (skillIds: string[]) =>
 
 export const inspectOrganizationHealth = (skillIds: string[]) =>
   invoke<OrganizationHealthInspection[]>("inspect_organization_health", { skillIds });
+
+export const runFormatRepairAgentTask = (
+  agentKey: "codex",
+  request: FormatRepairAgentRequest,
+) => invoke<FormatRepairPreview>("run_format_repair_agent_task", { agentKey, request });
+
+export const applyFormatRepair = (planId: string, skillId: string) =>
+  invoke<OrganizationOperationResult>("apply_format_repair", {
+    request: { plan_id: planId, skill_id: skillId },
+  });
+
+export const undoFormatRepair = (operationId: string) =>
+  invoke<OrganizationOperationResult>("undo_format_repair", { operationId });
 
 export const inspectOrganizationCases = (cases: OrganizationCaseRequest[]) =>
   invoke<OrganizationCaseEvidence[]>("inspect_organization_cases", { cases });

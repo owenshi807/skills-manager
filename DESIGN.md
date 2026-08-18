@@ -84,6 +84,20 @@ themed later.
   area, what happens to Agent projections, whether external sources remain, and
   that the operation is undoable.
 
+### Format-health repair
+
+- A detected format fact must end in one concrete path: Agent repair, identity
+  dependency resolution, or source/readability recovery. A diagnosis without an
+  action is not a complete task.
+- Managed Agent repair never starts in the real Skill. Codex edits an isolated
+  copy under an enforced workspace sandbox; Skill Card Manager validates the
+  result, shows changed files, and requires an explicit Apply action.
+- Applying a validated repair is journaled and undoable from Processed. Claude,
+  Hermes, a copied prompt, or another external Agent is labelled as an external
+  path and does not claim Manager-controlled apply or undo.
+- Agent-visible name mismatches are identity problems, not metadata typos. Route
+  them through same-name version resolution before rebuilding projections.
+
 ## Shape, Type, and Spacing
 
 - 4px base grid; common gaps are 8, 12, 16, and 24px.

@@ -138,6 +138,23 @@ Agent 调用合同：
 
 当前 Adapter：Codex 使用 read-only sandbox 与 ephemeral session；Claude Code 使用 print mode、plan permission 与 no session persistence；Hermes 使用官方 scripted one-shot `hermes -z` 并关闭 rules 注入。
 
+### 6.1 格式健康修复合同
+
+格式健康不止报告事实。每一种 health code 必须收敛到一个明确出口：
+
+- **Agent 内容修复**：frontmatter、description、allowed-tools、过长 SKILL.md 等可在不改变 Skill 身份的前提下修复；
+- **身份依赖**：Agent-visible 目录名与 `name` 不一致时，先处理同名版本与唯一身份，再重建投放，禁止让 Agent 随意改名；
+- **来源/可读性恢复**：SKILL.md 缺失或不可读时，从来源、备份或权限层恢复，禁止模型凭空发明能力。
+
+Agent 内容修复使用不同于“关系判断”的写入合同：
+
+1. Manager 把一个受管 Skill 复制到 `~/.skills-manager/.staging/format-repair/<plan-id>/candidate`；不跟随 symlink，不复制 `.git`，总量不超过 64 MB；
+2. Codex 通过 workspace-write sandbox 只在隔离副本内编辑，真实 central Skill、source 和 Agent 投放保持不变；
+3. Manager 再次运行确定性格式检查，拒绝未解决目标问题、引入新问题、没有真实 diff 或超出安全边界的结果；
+4. UI 展示 Agent 摘要与具体改动文件，用户点击“应用”后，确定性引擎才替换 central 副本并更新受管 copy 投放；
+5. 原版本进入 Skill Card Manager 回收区，operation journal 保存 before/after hash；“已处理”可撤销，若内容已再次变化则停止覆盖；
+6. Claude Code、Hermes 或“复制 Prompt”暂走外部 Agent 路径，必须明确提示不由 Manager 自动应用或撤销，完成后通过“刷新结果”复检。
+
 ## 7. 行业依据
 
 - Agent Skills format 与 progressive disclosure：<https://agentskills.io/specification>

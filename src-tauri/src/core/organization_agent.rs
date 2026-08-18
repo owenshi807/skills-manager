@@ -199,6 +199,53 @@ pub async fn execute(agent_key: &str, prompt: &str, cwd: &Path) -> Result<String
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// Run an Agent against a disposable copy of one managed Skill.
+///
+/// Unlike [`execute`], this adapter permits file edits, but the caller must
+/// provide an isolated staging directory. The real managed Skill is never the
+/// Agent's working directory; Card Master validates the staged result before a
+/// separate user-confirmed apply step.
+pub async fn execute_format_repair(
+    agent_key: &str,
+    prompt: &str,
+    staging_dir: &Path,
+) -> Result<String, AppError> {
+    if agent_key != "codex" {
+        return Err(AppError::invalid_input(
+            "This Agent does not have an isolated format-repair adapter; copy the repair prompt instead",
+        ));
+    }
+
+    let mut command = tokio::process::Command::new("codex");
+    command.args([
+        "exec",
+        "--sandbox",
+        "workspace-write",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "-C",
+    ]);
+    command.arg(staging_dir).arg(prompt);
+    command
+        .current_dir(staging_dir)
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+
+    let output = tokio::time::timeout(Duration::from_secs(600), command.output())
+        .await
+        .map_err(|_| AppError::internal("Format repair Agent timed out after 10 minutes"))?
+        .map_err(AppError::io)?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AppError::internal(if stderr.is_empty() {
+            "Format repair Agent exited without a result".to_string()
+        } else {
+            stderr
+        }));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 fn json_body(raw: &str) -> &str {
     let trimmed = raw.trim();
     if let Some(rest) = trimmed.strip_prefix("```json") {

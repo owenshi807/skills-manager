@@ -644,6 +644,59 @@
         "trashPath": "Internal location: ~/.skills-manager/.trash/organization/",
         "empty": "No processed records yet"
       },
+      "formatRepair": {
+        "title": "Repair method",
+        "methods": {
+          "agent": "Have an Agent prepare the repair",
+          "dependency": "Resolve identity and projection dependencies first",
+          "manual": "Restore file readability first"
+        },
+        "recommendations": {
+          "nonstandard_marker_case": "Rename skill.md to SKILL.md without changing the capability content.",
+          "skill_md_missing": "Restore SKILL.md from the original source or a backup. Do not ask an Agent to invent a capability without trustworthy content.",
+          "skill_md_unreadable": "Repair permissions, corruption, or sync contention, then check again.",
+          "skill_md_too_long": "Have an Agent apply progressive disclosure: keep the core workflow in SKILL.md, move detail to references, and preserve behavior.",
+          "frontmatter_missing": "Have an Agent add valid YAML frontmatter while preserving the existing body.",
+          "frontmatter_unclosed": "Have an Agent repair the YAML boundary and verify that body content is not swallowed into metadata.",
+          "frontmatter_invalid": "Have an Agent repair YAML syntax while preserving field meaning and body content.",
+          "name_missing": "Have an Agent derive a valid name from the existing identity, then verify it creates no name collision.",
+          "name_invalid": "Have an Agent create a compliant name while preserving the capability meaning.",
+          "target_name_mismatch": "This is usually caused by adding a -2 suffix to a same-name version. Choose the one identity to keep first, then let Manager rebuild a consistent projection path.",
+          "description_missing": "Have an Agent add a discoverable description based on the real capability and trigger conditions.",
+          "description_empty": "Have an Agent state what the Skill does and when to use it so Agents can discover it.",
+          "description_too_long": "Have an Agent reduce the description to discovery-critical information and keep detail in the body.",
+          "compatibility_too_long": "Have an Agent retain only real runtime constraints and shorten them to the specification limit.",
+          "compatibility_invalid_type": "Have an Agent convert compatibility to a string while preserving every constraint.",
+          "allowed_tools_invalid_type": "Convert allowed-tools from a YAML list to one space-separated string, preserving every tool expression.",
+          "unknown": "Open the Skill and verify the fact before choosing Agent repair or source restoration."
+        },
+        "impacts": {
+          "agent": "The Agent edits an isolated copy only. Manager validates it and shows a preview; the real Skill stays unchanged until you apply.",
+          "dependency": "This does not rewrite name or delete a Skill. Resolve the same-name identity first, then repair the projection path.",
+          "manual": "No file is written, preventing fabricated capability content when the file is missing or unreadable.",
+          "external": "The prompt is handed to an external Agent. Refresh afterward to verify the result. Manager cannot automatically apply or undo this path."
+        },
+        "managedCopyOnly": "Isolated copy only",
+        "previewTitle": "Agent repair preview",
+        "notApplied": "Not applied",
+        "changedFiles": "Will change: {{files}}",
+        "openSkill": "Open Skill",
+        "askAgent": "Ask {{agent}} to repair",
+        "copyPrompt": "Copy repair prompt",
+        "resolveIdentityFirst": "Resolve same-name relationship first",
+        "preparing": "Preparing repair…",
+        "apply": "Apply this repair",
+        "noRepairableFinding": "The Agent produced no effective change that passed validation",
+        "promptCopied": "Repair prompt copied. Give it to your Agent, then refresh results",
+        "agentRunning": "The Agent is repairing an isolated copy…",
+        "previewReady": "The repair passed validation and has not been applied",
+        "agentFailed": "The Agent did not produce a safely applicable repair",
+        "applying": "Applying repair…",
+        "applied": "Format repair applied; undo it from Processed",
+        "applyFailed": "Could not safely apply this format repair",
+        "undone": "Format repair undone",
+        "undoFailed": "Could not safely undo this format repair"
+      },
       "actionPlan": {
         "title": "Skill Card Manager conclusion",
         "intro": "The AI compares content; Skill Card Manager previews and applies the final action. Choose the primary item to keep. The other item only moves to undoable trash.",
@@ -685,6 +738,8 @@
         "hint": "Real file operations remain here after notifications disappear. Completed archives can be undone.",
         "archived": "Kept “{{keep}}” and archived “{{archive}}”",
         "undone": "Restored “{{archive}}”",
+        "formatRepaired": "Repaired format health for “{{skill}}”",
+        "formatRepairUndone": "Undid the format repair for “{{skill}}”",
         "needsRecovery": "The operation did not finish cleanly. Further changes stopped and recovery is required"
       },
       "confirmRelation": "Confirm relation",
@@ -705,8 +760,8 @@
         "formatHealth": {
           "title": "Skill format does not meet the specification",
           "fact": "Deterministic checks found a problem in SKILL.md structure, metadata, or an Agent-visible target name.",
-          "recommendation": "Fix format health before deciding revision, duplicate, or behavior relationships.",
-          "impact": "This only reports the issue. Invalid format can prevent an Agent from discovering or triggering the Skill."
+          "recommendation": "Use the issue-specific path: Agent repair, source restoration, or same-name identity resolution.",
+          "impact": "Content edits happen in an isolated copy and are validated first; the real Skill does not change until you apply."
         },
         "sourceMissing": {
           "title": "Original skill source is missing",

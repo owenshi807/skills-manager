@@ -652,6 +652,59 @@
         "trashPath": "内部位置：~/.skills-manager/.trash/organization/",
         "empty": "还没有已处理记录"
       },
+      "formatRepair": {
+        "title": "修复方式",
+        "methods": {
+          "agent": "由 Agent 生成修复方案",
+          "dependency": "先解决身份与投放依赖",
+          "manual": "先恢复文件可读性"
+        },
+        "recommendations": {
+          "nonstandard_marker_case": "将 skill.md 规范为 SKILL.md，不改动其中的能力内容。",
+          "skill_md_missing": "从原始来源或备份恢复 SKILL.md；没有可靠内容时不要让 Agent 凭空重建能力。",
+          "skill_md_unreadable": "先修复文件权限、损坏或同步占用，再重新检查。",
+          "skill_md_too_long": "让 Agent 按渐进披露重构：主流程保留在 SKILL.md，细节移入 references，并保持行为不变。",
+          "frontmatter_missing": "让 Agent 补齐有效 YAML frontmatter，同时保留现有正文。",
+          "frontmatter_unclosed": "让 Agent 修复 YAML 边界并验证正文没有被吞入 metadata。",
+          "frontmatter_invalid": "让 Agent 修复 YAML 语法，保持原字段含义和正文不变。",
+          "name_missing": "让 Agent 从现有身份补齐规范 name；应用前确认不会制造同名冲突。",
+          "name_invalid": "让 Agent 生成合规 name，并保留原有能力含义。",
+          "target_name_mismatch": "这通常是同名版本被加上 -2 后缀造成的。先确定唯一保留版本，再由 Manager 重建一致的投放目录。",
+          "description_missing": "让 Agent 根据真实能力与触发场景补写可发现的 description。",
+          "description_empty": "让 Agent 补写“做什么 + 何时使用”，避免 Agent 无法发现该 Skill。",
+          "description_too_long": "让 Agent 压缩 description 到发现所需信息，细节留在正文。",
+          "compatibility_too_long": "让 Agent 只保留真实运行约束，并压缩到规范长度。",
+          "compatibility_invalid_type": "让 Agent 将 compatibility 规范为字符串，保留全部约束。",
+          "allowed_tools_invalid_type": "将 allowed-tools 从 YAML 列表规范为一个空格分隔字符串，完整保留每个工具表达式。",
+          "unknown": "先打开 Skill 核对事实，再选择 Agent 修复或恢复来源。"
+        },
+        "impacts": {
+          "agent": "Agent 只编辑隔离副本；Manager 复检通过后才展示方案，点击应用前不会改变真实 Skill。",
+          "dependency": "不会改写 name 或删除 Skill；先回到同名关系确定身份，再处理投放目录。",
+          "manual": "当前不写文件，避免在缺少或不可读内容上生成虚假能力。",
+          "external": "Prompt 会交给外部 Agent；完成后请刷新复检。此路径不由 Manager 自动应用或撤销。"
+        },
+        "managedCopyOnly": "只修改隔离副本",
+        "previewTitle": "Agent 修复预览",
+        "notApplied": "尚未应用",
+        "changedFiles": "将修改：{{files}}",
+        "openSkill": "打开 Skill",
+        "askAgent": "让 {{agent}} 修复",
+        "copyPrompt": "复制修复 Prompt",
+        "resolveIdentityFirst": "先处理同名关系",
+        "preparing": "正在生成修复方案…",
+        "apply": "应用这项修复",
+        "noRepairableFinding": "Agent 没有产生通过复检的有效修改",
+        "promptCopied": "修复 Prompt 已复制；交给你的 Agent 后请刷新结果",
+        "agentRunning": "Agent 正在隔离副本中修复…",
+        "previewReady": "修复方案已通过复检，尚未应用",
+        "agentFailed": "Agent 修复没有产生可安全应用的结果",
+        "applying": "正在应用修复…",
+        "applied": "格式修复已应用；可在“已处理”中撤销",
+        "applyFailed": "无法安全应用这项格式修复",
+        "undone": "格式修复已撤销",
+        "undoFailed": "无法安全撤销这项格式修复"
+      },
       "actionPlan": {
         "title": "Skill Card Manager 结论",
         "intro": "AI 负责比较，最终动作由 Skill Card Manager 明确预览并执行。选择要保留的主项；另一项只会进入可撤销回收区。",
@@ -693,6 +746,8 @@
         "hint": "这里保存真实文件操作，不依赖短暂提示；已完成的归档可随时撤销。",
         "archived": "保留「{{keep}}」，已归档「{{archive}}」",
         "undone": "已恢复「{{archive}}」",
+        "formatRepaired": "已修复「{{skill}}」的格式健康",
+        "formatRepairUndone": "已撤销「{{skill}}」的格式修复",
         "needsRecovery": "操作未完整结束，已停止后续变更；需要恢复处理"
       },
       "confirmRelation": "确认这个关系",
@@ -713,8 +768,8 @@
         "formatHealth": {
           "title": "Skill 格式不符合规范",
           "fact": "固定格式检查发现 SKILL.md 的结构、字段或 Agent 投放名称存在问题。",
-          "recommendation": "先修复格式健康，再进行版本、重复或行为关系判断。",
-          "impact": "当前只报告问题，不修改 Skill；格式异常可能导致 Agent 无法发现或正确触发它。"
+          "recommendation": "按具体原因选择 Agent 修复、恢复来源，或先解决同名身份依赖。",
+          "impact": "所有内容改写都先在隔离副本完成并复检；用户应用前不改变真实 Skill。"
         },
         "sourceMissing": {
           "title": "Skill 的原始来源已失效",
