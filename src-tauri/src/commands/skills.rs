@@ -65,7 +65,7 @@ pub struct OrganizationOperationSummaryDto {
     pub updated_at: i64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OrganizationAgentCaseTask {
     pub case_id: String,
     pub case_revision: String,
@@ -84,6 +84,11 @@ pub struct OrganizationAgentTaskResult {
 #[derive(Debug, Serialize)]
 pub struct OrganizationAgentPromptResult {
     pub prompt: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrganizationFinalizedAssessmentResult {
+    pub assessment: Option<crate::core::organization_agent::OrganizationAgentAssessment>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2151,7 +2156,11 @@ pub async fn undo_organization_archive(
 fn prepare_organization_agent_prompt(
     tasks: &[OrganizationAgentCaseTask],
     store: &SkillStore,
-) -> Result<(String, Vec<(String, String, Vec<String>)>), AppError> {
+) -> Result<(
+    String,
+    Vec<(String, String, Vec<String>)>,
+    HashMap<String, ManagedDirectorySafeActionEvidence>,
+), AppError> {
     if tasks.is_empty() || tasks.len() > 10 {
         return Err(AppError::invalid_input(
             "Organization agent tasks must contain 1 to 10 cases",
@@ -2171,6 +2180,7 @@ fn prepare_organization_agent_prompt(
     )?;
 
     let mut expected = Vec::with_capacity(tasks.len());
+    let mut safe_actions = HashMap::new();
     let mut case_sections = Vec::with_capacity(tasks.len());
     let mut total_content_bytes = 0usize;
     for (task, case_evidence) in tasks.iter().zip(evidence.iter()) {
@@ -2243,9 +2253,13 @@ fn prepare_organization_agent_prompt(
             ));
         }
         let directory_evidence = if task.evidence_scope.as_deref() == Some("managed_directory_diff") {
+            let comparison = build_managed_directory_comparison(&task.member_ids, store)?;
+            if let Some(safe_action) = comparison.safe_action.clone() {
+                safe_actions.insert(task.case_id.clone(), safe_action);
+            }
             format!(
                 "\n\n### Complete managed-directory comparison\nCard Master read every regular file without following symlinks. The manifest is complete; text bodies are included only when bounded and UTF-8. Binary files are represented by exact SHA-256 and size.\n<UNTRUSTED_DIRECTORY_EVIDENCE>\n{}\n</UNTRUSTED_DIRECTORY_EVIDENCE>",
-                serde_json::to_string_pretty(&build_managed_directory_comparison(&task.member_ids, store)?)
+                serde_json::to_string_pretty(&comparison)
                     .map_err(|error| AppError::internal(error.to_string()))?,
             )
         } else {
@@ -2333,7 +2347,7 @@ Return every case exactly once. Suggested actions are plans for later user confi
         case_sections.join("\n\n"),
         crate::core::organization_agent::METHOD_VERSION,
     );
-    Ok((prompt, expected))
+    Ok((prompt, expected, safe_actions))
 }
 
 #[derive(Debug, Serialize)]
@@ -2354,6 +2368,15 @@ struct ManagedDirectoryMemberEvidence {
 struct ManagedDirectoryComparisonEvidence {
     completeness: &'static str,
     members: Vec<ManagedDirectoryMemberEvidence>,
+    safe_action: Option<ManagedDirectorySafeActionEvidence>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ManagedDirectorySafeActionEvidence {
+    recommended_action: &'static str,
+    keep_skill_id: String,
+    archive_skill_id: String,
+    reason: String,
 }
 
 fn build_managed_directory_comparison(
@@ -2445,10 +2468,108 @@ fn build_managed_directory_comparison(
             files,
         });
     }
+    let safe_action = derive_packaging_only_safe_action(&members);
     Ok(ManagedDirectoryComparisonEvidence {
         completeness: "complete_file_manifest_with_bounded_utf8_content",
         members,
+        safe_action,
     })
+}
+
+fn derive_packaging_only_safe_action(
+    members: &[ManagedDirectoryMemberEvidence],
+) -> Option<ManagedDirectorySafeActionEvidence> {
+    if members.len() != 2 {
+        return None;
+    }
+    let functional_map = |member: &ManagedDirectoryMemberEvidence| {
+        let mut map = std::collections::BTreeMap::new();
+        for file in &member.files {
+            if is_generated_comparison_artifact(&file.path)
+                || is_provenance_packaging_marker(&file.path)
+            {
+                continue;
+            }
+            let digest = if file.path == "SKILL.md" {
+                let text = file.text.as_deref()?;
+                let normalized = strip_frontmatter_version(text);
+                format!("{:x}", Sha256::digest(normalized.as_bytes()))
+            } else {
+                file.sha256.clone()
+            };
+            map.insert(file.path.clone(), digest);
+        }
+        Some(map)
+    };
+    if functional_map(&members[0])? != functional_map(&members[1])? {
+        return None;
+    }
+    let marker_members = members
+        .iter()
+        .filter(|member| member.files.iter().any(|file| is_provenance_packaging_marker(&file.path)))
+        .collect::<Vec<_>>();
+    if marker_members.len() != 1 {
+        return None;
+    }
+    let keep = marker_members[0];
+    let archive = members.iter().find(|member| member.skill_id != keep.skill_id)?;
+    Some(ManagedDirectorySafeActionEvidence {
+        recommended_action: "archive_one",
+        keep_skill_id: keep.skill_id.clone(),
+        archive_skill_id: archive.skill_id.clone(),
+        reason: "All behavior-bearing files are identical after ignoring a frontmatter-only version field and generated caches. Keep the item that preserves the ecosystem packaging/provenance marker; archive the redundant member and rewire its Agent projection to the retained Skill.".to_string(),
+    })
+}
+
+fn strip_frontmatter_version(text: &str) -> String {
+    let mut in_frontmatter = false;
+    let mut frontmatter_closed = false;
+    text.lines()
+        .filter(|line| {
+            if !frontmatter_closed && line.trim() == "---" {
+                if in_frontmatter {
+                    frontmatter_closed = true;
+                } else {
+                    in_frontmatter = true;
+                }
+                return true;
+            }
+            !(in_frontmatter && !frontmatter_closed && line.trim_start().starts_with("version:"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn is_provenance_packaging_marker(path: &str) -> bool {
+    path == ".clawx-preinstalled.json"
+}
+
+fn is_generated_comparison_artifact(path: &str) -> bool {
+    path == ".DS_Store"
+        || path.ends_with(".pyc")
+        || path.split('/').any(|segment| segment == "__pycache__")
+}
+
+fn apply_managed_safe_action(
+    assessment: &mut crate::core::organization_agent::OrganizationAgentAssessment,
+    safe_action: &ManagedDirectorySafeActionEvidence,
+) {
+    assessment.relation_hypothesis = "exact_artifact_multi_source".to_string();
+    assessment.difference_summary = "The behavior-bearing artifacts are identical. Differences are limited to ecosystem packaging/provenance metadata, a frontmatter-only version field, or generated cache files.".to_string();
+    assessment.evidence.truncate(19);
+    assessment.evidence.push(crate::core::organization_agent::AssessmentEvidence {
+        strength: "strong".to_string(),
+        claim: "Card Master's complete managed-directory comparison proved functional equivalence and identified a single provenance-preserving packaging superset.".to_string(),
+    });
+    assessment.counter_evidence.clear();
+    assessment.unresolved_questions.clear();
+    assessment.behavior_eval_required = false;
+    assessment.suggested_actions = vec!["prefer_more_complete_archive_redundant".to_string()];
+    assessment.recommended_action = safe_action.recommended_action.to_string();
+    assessment.recommended_keep_skill_id = Some(safe_action.keep_skill_id.clone());
+    assessment.recommendation_reason = safe_action.reason.clone();
+    assessment.confidence = 1.0;
+    assessment.evidence_scope = "managed_directory_diff".to_string();
 }
 
 fn is_safe_agent_diff_text(path: &str) -> bool {
@@ -2656,7 +2777,7 @@ mod organization_health_tests {
             &store,
         )
         .unwrap();
-        let (prompt, expected) = prepare_organization_agent_prompt(
+        let (prompt, expected, _) = prepare_organization_agent_prompt(
             &[OrganizationAgentCaseTask {
                 case_id: "name:compare".to_string(),
                 case_revision: evidence[0].case_revision.clone(),
@@ -2686,7 +2807,7 @@ mod organization_health_tests {
             &store,
         )
         .unwrap();
-        let (deep_prompt, _) = prepare_organization_agent_prompt(
+        let (deep_prompt, _, safe_actions) = prepare_organization_agent_prompt(
             &[OrganizationAgentCaseTask {
                 case_id: "name:compare".to_string(),
                 case_revision: refreshed[0].case_revision.clone(),
@@ -2701,6 +2822,7 @@ mod organization_health_tests {
         assert!(deep_prompt.contains("helper.ts"));
         assert!(deep_prompt.contains("export const value = 1"));
         assert!(!deep_prompt.contains(first_dir.to_string_lossy().as_ref()));
+        assert!(safe_actions.is_empty());
 
         std::fs::write(
             second_dir.join("SKILL.md"),
@@ -2718,6 +2840,62 @@ mod organization_health_tests {
             &store,
         )
         .is_err());
+    }
+
+    #[test]
+    fn packaging_marker_superset_closes_functionally_identical_case() {
+        let members = vec![
+            ManagedDirectoryMemberEvidence {
+                skill_id: "openclaw-copy".to_string(),
+                files: vec![
+                    ManagedDirectoryFileEvidence {
+                        path: "SKILL.md".to_string(),
+                        bytes: 32,
+                        sha256: "old-metadata-hash".to_string(),
+                        text: Some("---\nname: pdf\n---\n# Guide\n".to_string()),
+                    },
+                    ManagedDirectoryFileEvidence {
+                        path: "scripts/run.py".to_string(),
+                        bytes: 10,
+                        sha256: "same-script".to_string(),
+                        text: Some("print('ok')".to_string()),
+                    },
+                    ManagedDirectoryFileEvidence {
+                        path: ".clawx-preinstalled.json".to_string(),
+                        bytes: 20,
+                        sha256: "provenance".to_string(),
+                        text: None,
+                    },
+                ],
+            },
+            ManagedDirectoryMemberEvidence {
+                skill_id: "codex-copy".to_string(),
+                files: vec![
+                    ManagedDirectoryFileEvidence {
+                        path: "SKILL.md".to_string(),
+                        bytes: 49,
+                        sha256: "version-metadata-hash".to_string(),
+                        text: Some("---\nname: pdf\nversion: \"1.0.1\"\n---\n# Guide\n".to_string()),
+                    },
+                    ManagedDirectoryFileEvidence {
+                        path: "scripts/run.py".to_string(),
+                        bytes: 10,
+                        sha256: "same-script".to_string(),
+                        text: Some("print('ok')".to_string()),
+                    },
+                    ManagedDirectoryFileEvidence {
+                        path: "scripts/__pycache__/run.pyc".to_string(),
+                        bytes: 9,
+                        sha256: "generated".to_string(),
+                        text: None,
+                    },
+                ],
+            },
+        ];
+        let action = derive_packaging_only_safe_action(&members).unwrap();
+        assert_eq!(action.recommended_action, "archive_one");
+        assert_eq!(action.keep_skill_id, "openclaw-copy");
+        assert_eq!(action.archive_skill_id, "codex-copy");
     }
 
     #[cfg(unix)]
@@ -2891,7 +3069,7 @@ pub async fn prepare_organization_agent_prompt_cmd(
     store: State<'_, Arc<SkillStore>>,
 ) -> Result<OrganizationAgentPromptResult, AppError> {
     let store = store.inner().clone();
-    let (prompt, _) = tauri::async_runtime::spawn_blocking(move || {
+    let (prompt, _, _) = tauri::async_runtime::spawn_blocking(move || {
         prepare_organization_agent_prompt(&cases, &store)
     })
     .await??;
@@ -2913,19 +3091,24 @@ pub async fn run_organization_agent_task(
         ))
         .collect::<HashMap<_, _>>();
     let store_for_prompt = store.clone();
-    let (prompt, expected) = tauri::async_runtime::spawn_blocking(move || {
+    let (prompt, expected, safe_actions) = tauri::async_runtime::spawn_blocking(move || {
         prepare_organization_agent_prompt(&cases, &store_for_prompt)
     })
     .await??;
     let temp = tempfile::tempdir().map_err(AppError::io)?;
     let raw = crate::core::organization_agent::execute(&agent_key, &prompt, temp.path()).await?;
-    let assessments = crate::core::organization_agent::parse_assessments(&raw, &expected)?;
+    let mut assessments = crate::core::organization_agent::parse_assessments(&raw, &expected)?;
     if assessments.iter().any(|assessment| {
         expected_scopes.get(&assessment.case_id) != Some(&assessment.evidence_scope)
     }) {
         return Err(AppError::invalid_input(
             "Agent returned an assessment for the wrong evidence scope",
         ));
+    }
+    for assessment in &mut assessments {
+        if let Some(safe_action) = safe_actions.get(&assessment.case_id) {
+            apply_managed_safe_action(assessment, safe_action);
+        }
     }
 
     let assessments_to_store = assessments.clone();
@@ -2951,6 +3134,55 @@ pub async fn run_organization_agent_task(
     Ok(OrganizationAgentTaskResult {
         agent_key,
         assessments,
+    })
+}
+
+#[tauri::command]
+pub async fn finalize_organization_deep_comparison(
+    mut case: OrganizationAgentCaseTask,
+    store: State<'_, Arc<SkillStore>>,
+) -> Result<OrganizationFinalizedAssessmentResult, AppError> {
+    case.evidence_scope = Some("managed_directory_diff".to_string());
+    let case_revision = case.case_revision.clone();
+    let store = store.inner().clone();
+    let store_for_analysis = store.clone();
+    let (_, _, safe_actions) = tauri::async_runtime::spawn_blocking(move || {
+        prepare_organization_agent_prompt(&[case], &store_for_analysis)
+    })
+    .await??;
+    let Some((case_id, safe_action)) = safe_actions.into_iter().next() else {
+        return Ok(OrganizationFinalizedAssessmentResult { assessment: None });
+    };
+    let mut assessment = crate::core::organization_agent::OrganizationAgentAssessment {
+        case_id,
+        case_revision,
+        relation_hypothesis: "needs_manual_compare".to_string(),
+        difference_summary: String::new(),
+        evidence: Vec::new(),
+        counter_evidence: Vec::new(),
+        unresolved_questions: Vec::new(),
+        behavior_eval_required: false,
+        suggested_actions: vec!["manual_review".to_string()],
+        recommended_action: "needs_more_evidence".to_string(),
+        recommended_keep_skill_id: None,
+        recommendation_reason: String::new(),
+        confidence: 0.0,
+        evidence_scope: "managed_directory_diff".to_string(),
+    };
+    apply_managed_safe_action(&mut assessment, &safe_action);
+    let payload = serde_json::to_string(&assessment)
+        .map_err(|error| AppError::internal(error.to_string()))?;
+    store
+        .upsert_organization_agent_assessment(
+            &assessment.case_id,
+            &assessment.case_revision,
+            crate::core::organization_agent::METHOD_VERSION,
+            "card_manager_rule",
+            &payload,
+        )
+        .map_err(AppError::db)?;
+    Ok(OrganizationFinalizedAssessmentResult {
+        assessment: Some(assessment),
     })
 }
 

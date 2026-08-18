@@ -202,6 +202,7 @@ export function MySkills() {
   const [organizationReviewMode, setOrganizationReviewMode] = useState(false);
   const [organizationAgent, setOrganizationAgent] = useState<OrganizationExecutionMode>("copy_prompt");
   const organizationModeInitializedRef = useRef(false);
+  const finalizedDeepComparisonRef = useRef(new Set<string>());
   const [processingOrganizationBatch, setProcessingOrganizationBatch] = useState(false);
   const [processingOrganizationConclusions, setProcessingOrganizationConclusions] = useState(false);
   const [refreshingOrganization, setRefreshingOrganization] = useState(false);
@@ -459,12 +460,32 @@ export function MySkills() {
     const capabilityNames = new Map<string, string>(
       organizationAgentCapabilities.map((item) => [item.key, item.display_name]),
     );
+    capabilityNames.set("card_manager_rule", "Skill Card Manager");
     for (const issue of organizationIssues) {
-      const records = organizationAssessmentRecords.filter((record) => record.case_key === issue.id);
-      const record = records.find((item) => item.case_revision === issue.caseRevision) ?? records[0];
-      if (!record) continue;
+      const parsedRecords = organizationAssessmentRecords
+        .filter((record) => record.case_key === issue.id)
+        .flatMap((record) => {
+          try {
+            return [{ record, assessment: JSON.parse(record.payload_json) as OrganizationAgentAssessment }];
+          } catch {
+            return [];
+          }
+        });
+      const currentRecords = parsedRecords.filter(({ record }) => record.case_revision === issue.caseRevision);
+      const candidates = currentRecords.length > 0 ? currentRecords : parsedRecords;
+      candidates.sort((left, right) => {
+        const managerRuleRank = Number(right.record.agent_key === "card_manager_rule")
+          - Number(left.record.agent_key === "card_manager_rule");
+        if (managerRuleRank !== 0) return managerRuleRank;
+        const evidenceRank = Number(right.assessment.evidence_scope === "managed_directory_diff")
+          - Number(left.assessment.evidence_scope === "managed_directory_diff");
+        if (evidenceRank !== 0) return evidenceRank;
+        return right.record.created_at - left.record.created_at;
+      });
+      const selected = candidates[0];
+      if (!selected) continue;
+      const { record, assessment } = selected;
       try {
-        const assessment = JSON.parse(record.payload_json) as OrganizationAgentAssessment;
         result.set(issue.id, {
           agentName: capabilityNames.get(record.agent_key) ?? record.agent_key,
           assessment,
@@ -1281,6 +1302,43 @@ export function MySkills() {
   const reloadOrganizationAssessments = useCallback(async () => {
     setOrganizationAssessmentRecords(await api.getOrganizationAgentAssessments());
   }, []);
+
+  useEffect(() => {
+    if (libraryView !== "issues") return;
+    const candidates = organizationIssues.filter((issue) => {
+      const display = organizationAgentAssessments.get(issue.id);
+      return issue.caseRevision
+        && display
+        && !display.stale
+        && display.assessment.evidence_scope === "managed_directory_diff"
+        && display.assessment.recommended_action !== "archive_one";
+    });
+    if (candidates.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      let finalized = false;
+      for (const issue of candidates) {
+        const key = `${issue.id}:${issue.caseRevision}`;
+        if (finalizedDeepComparisonRef.current.has(key)) continue;
+        finalizedDeepComparisonRef.current.add(key);
+        try {
+          const result = await api.finalizeOrganizationDeepComparison({
+            case_id: issue.id,
+            case_revision: issue.caseRevision!,
+            issue_kind: issue.kind,
+            member_ids: issue.skills.map((skill) => skill.id),
+            evidence_scope: "managed_directory_diff",
+          });
+          finalized ||= !!result.assessment;
+        } catch {
+          // The existing safe keep-both exit remains available when no
+          // deterministic packaging-only conclusion can be established.
+        }
+      }
+      if (finalized && !cancelled) await reloadOrganizationAssessments();
+    })();
+    return () => { cancelled = true; };
+  }, [libraryView, organizationAgentAssessments, organizationIssues, reloadOrganizationAssessments]);
 
   const reloadOrganizationOperations = useCallback(async () => {
     setOrganizationOperations(await api.getOrganizationOperations());

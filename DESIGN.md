@@ -94,6 +94,15 @@ themed later.
   evidence; the Agent interprets that evidence without receiving filesystem
   access. If provenance still blocks archival, the safe exit is to keep both and
   record the unresolved source relationship.
+- A completed deep comparison must terminate in a typed action, never another
+  comparison loop. The Agent supplies the semantic judgment; Skill Card Manager
+  validates it and owns execution, journaling, recovery, and Undo. The primary
+  button names the concrete outcome, for example “Keep pdf, archive pdf-2.”
+- When every behavior-bearing file is identical and differences are limited to
+  a frontmatter-only version field, generated cache files, and one ecosystem
+  packaging/provenance marker, retain the provenance-bearing superset, archive
+  the redundant member, and rewire its managed Agent projection. This is a
+  deterministic terminal rule; the Agent does not need to re-judge it.
 - Side-by-side Skill summaries use equal-height rows with the same identity,
   description, and Agent-visibility slots. Unequal copy length must not move
   corresponding fields out of alignment.

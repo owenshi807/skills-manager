@@ -108,6 +108,10 @@ export interface OrganizationAgentTaskResult {
   assessments: OrganizationAgentAssessment[];
 }
 
+export interface OrganizationFinalizedAssessmentResult {
+  assessment: OrganizationAgentAssessment | null;
+}
+
 export interface DeckSuggestionCard {
   skill_id: string;
   stage: string;
@@ -510,6 +514,11 @@ export const runOrganizationAgentTask = (
   agentKey: "codex" | "claude_code" | "hermes",
   cases: OrganizationAgentCaseTask[],
 ) => invoke<OrganizationAgentTaskResult>("run_organization_agent_task", { agentKey, cases });
+
+export const finalizeOrganizationDeepComparison = (caseTask: OrganizationAgentCaseTask) =>
+  invoke<OrganizationFinalizedAssessmentResult>("finalize_organization_deep_comparison", {
+    case: caseTask,
+  });
 
 export const getOrganizationAgentAssessments = () =>
   invoke<OrganizationAgentAssessmentRecord[]>("get_organization_agent_assessments");

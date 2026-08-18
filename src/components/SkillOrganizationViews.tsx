@@ -1230,6 +1230,7 @@ export function SkillIssuesView({
                                 {applyingArchive && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                                 {t("mySkills.organization.actionPlan.executeKeepNamed", {
                                   keep: archivePreview.keep_name,
+                                  archive: archivePreview.archive_name,
                                 })}
                               </button>
                             )}
@@ -1263,16 +1264,21 @@ export function SkillIssuesView({
                         </p>
                         <div className="flex flex-wrap items-center gap-2">
                           {currentAgentAssessment?.assessment.evidence_scope === "managed_directory_diff" && (
-                            <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-secondary h-10">
-                              {t("mySkills.organization.actionPlan.keepPendingSource")}
+                            <button type="button" onClick={() => onHandOff(issue)} className="scm-button-tertiary h-10">
+                              {t("mySkills.organization.actionPlan.regenerateFinalPlan")}
                             </button>
                           )}
-                          <button type="button" onClick={() => onHandOff(issue)} className="app-button-primary h-10">
-                            <GitCompareArrows className="h-3.5 w-3.5" />
-                            {currentAgentAssessment?.assessment.evidence_scope === "managed_directory_diff"
-                              ? t("mySkills.organization.actionPlan.recheckFullDiff")
-                              : t("mySkills.organization.actionPlan.checkFullDiff")}
-                          </button>
+                          {currentAgentAssessment?.assessment.evidence_scope === "managed_directory_diff" ? (
+                            <button type="button" onClick={() => onDecide(issue, "related")} className="app-button-primary h-10">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              {t("mySkills.organization.actionPlan.finishKeepPendingSource")}
+                            </button>
+                          ) : (
+                            <button type="button" onClick={() => onHandOff(issue)} className="app-button-primary h-10">
+                              <GitCompareArrows className="h-3.5 w-3.5" />
+                              {t("mySkills.organization.actionPlan.checkFullDiff")}
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
