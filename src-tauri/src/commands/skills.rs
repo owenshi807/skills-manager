@@ -2988,6 +2988,27 @@ mod organization_health_tests {
         assert!(derive_packaging_only_safe_action(&members).is_none());
     }
 
+    #[test]
+    fn deck_suggestion_rejects_member_removed_during_agent_execution() {
+        let suggestion = crate::core::organization_agent::DeckSuggestion {
+            title: "Review deck".to_string(),
+            summary: "A focused review workflow".to_string(),
+            cards: vec![crate::core::organization_agent::DeckSuggestionCard {
+                skill_id: "removed-skill".to_string(),
+                stage: "Review".to_string(),
+                role: "Inspect changes".to_string(),
+                reason: "Find regressions".to_string(),
+            }],
+            gaps: Vec::new(),
+        };
+
+        let error = ensure_deck_suggestion_members_active(&suggestion, &HashSet::new())
+            .expect_err("a stale deck member must be rejected");
+        assert!(error
+            .to_string()
+            .contains("managed Skill library changed"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn archive_preview_revalidates_case_and_owned_projection() {
@@ -3302,8 +3323,9 @@ pub async fn suggest_deck_from_library(
     }
 
     let store = store.inner().clone();
+    let inventory_store = store.clone();
     let (inventory, allowed_ids) = tauri::async_runtime::spawn_blocking(move || {
-        let skills = store.get_all_skills().map_err(AppError::db)?;
+        let skills = inventory_store.get_all_skills().map_err(AppError::db)?;
         let allowed_ids = skills
             .iter()
             .map(|skill| skill.id.clone())
@@ -3360,7 +3382,32 @@ Output exactly:
     );
     let raw =
         crate::core::organization_agent::execute(&request.agent_key, &prompt, temp.path()).await?;
-    crate::core::organization_agent::parse_deck_suggestion(&raw, &allowed_ids)
+    let suggestion = crate::core::organization_agent::parse_deck_suggestion(&raw, &allowed_ids)?;
+    let active_ids = tauri::async_runtime::spawn_blocking(move || {
+        store
+            .get_all_skills()
+            .map_err(AppError::db)
+            .map(|skills| skills.into_iter().map(|skill| skill.id).collect())
+    })
+    .await??;
+    ensure_deck_suggestion_members_active(&suggestion, &active_ids)?;
+    Ok(suggestion)
+}
+
+fn ensure_deck_suggestion_members_active(
+    suggestion: &crate::core::organization_agent::DeckSuggestion,
+    active_skill_ids: &HashSet<String>,
+) -> Result<(), AppError> {
+    if suggestion
+        .cards
+        .iter()
+        .any(|card| !active_skill_ids.contains(&card.skill_id))
+    {
+        return Err(AppError::invalid_input(
+            "The managed Skill library changed while the Agent was building this deck; review the refreshed library and try again",
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -2104,10 +2104,13 @@ fn merge_skill_relationship_states(
 
     let mut scenario_tools = keep.scenario_tools.clone();
     for relationship in &archive.scenario_tools {
-        if !scenario_tools.iter().any(|existing| {
+        if let Some(existing) = scenario_tools.iter_mut().find(|existing| {
             existing.scenario_id == relationship.scenario_id
                 && existing.tool == relationship.tool
         }) {
+            existing.enabled |= relationship.enabled;
+            existing.updated_at = existing.updated_at.max(relationship.updated_at);
+        } else {
             scenario_tools.push(relationship.clone());
         }
     }
@@ -2994,6 +2997,35 @@ mod organization_operation_tests {
         assert!(store
             .skill_has_organization_dependencies(&override_card.id)
             .unwrap());
+    }
+
+    #[test]
+    fn relationship_merge_preserves_enabled_tool_assignment() {
+        let keep = OrganizationSkillRelationshipState {
+            scenarios: Vec::new(),
+            scenario_tools: vec![OrganizationScenarioToolRelationship {
+                scenario_id: "legacy-preset".to_string(),
+                tool: "codex".to_string(),
+                enabled: false,
+                updated_at: 10,
+            }],
+            tags: Vec::new(),
+        };
+        let archive = OrganizationSkillRelationshipState {
+            scenarios: Vec::new(),
+            scenario_tools: vec![OrganizationScenarioToolRelationship {
+                scenario_id: "legacy-preset".to_string(),
+                tool: "codex".to_string(),
+                enabled: true,
+                updated_at: 20,
+            }],
+            tags: Vec::new(),
+        };
+
+        let merged = merge_skill_relationship_states(&keep, &archive);
+        assert_eq!(merged.scenario_tools.len(), 1);
+        assert!(merged.scenario_tools[0].enabled);
+        assert_eq!(merged.scenario_tools[0].updated_at, 20);
     }
 
     fn insert_planned_archive_operation(
