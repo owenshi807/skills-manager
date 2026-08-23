@@ -202,6 +202,14 @@ pub fn install_skill_dir_to_destination(
 
     copy_skill_dir(source, destination)?;
 
+    // A collision-safe storage suffix is also the Agent projection identity.
+    // Keep the copied artifact self-consistent without modifying its original
+    // source: database name, central basename, projected basename, and
+    // frontmatter name must agree.
+    if meta.name.as_deref().is_some_and(|declared| declared != name) {
+        rewrite_copied_skill_name(destination, name)?;
+    }
+
     let hash = content_hash::hash_directory(destination)?;
 
     Ok(InstallResult {
@@ -210,6 +218,51 @@ pub fn install_skill_dir_to_destination(
         central_path: destination.to_path_buf(),
         content_hash: hash,
     })
+}
+
+fn rewrite_copied_skill_name(destination: &Path, name: &str) -> Result<()> {
+    let marker = ["SKILL.md", "skill.md"]
+        .into_iter()
+        .map(|candidate| destination.join(candidate))
+        .find(|candidate| candidate.is_file())
+        .context("Copied Skill metadata file disappeared")?;
+    let content = std::fs::read_to_string(&marker)
+        .with_context(|| format!("Failed to read copied Skill metadata {}", marker.display()))?;
+
+    let mut lines = content.split_inclusive('\n');
+    let first = lines.next().context("Copied Skill metadata is empty")?;
+    if first.trim() != "---" {
+        bail!("Copied Skill metadata has no YAML frontmatter");
+    }
+
+    let yaml_start = first.len();
+    let mut cursor = yaml_start;
+    let mut yaml_end = None;
+    let mut body_start = None;
+    for line in lines {
+        if line.trim() == "---" {
+            yaml_end = Some(cursor);
+            body_start = Some(cursor + line.len());
+            break;
+        }
+        cursor += line.len();
+    }
+    let yaml_end = yaml_end.context("Copied Skill YAML frontmatter is not closed")?;
+    let body_start = body_start.context("Copied Skill YAML frontmatter is not closed")?;
+    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&content[yaml_start..yaml_end])
+        .context("Copied Skill YAML frontmatter cannot be parsed")?;
+    let mapping = yaml
+        .as_mapping_mut()
+        .context("Copied Skill YAML frontmatter must be a mapping")?;
+    mapping.insert(
+        serde_yaml::Value::String("name".to_string()),
+        serde_yaml::Value::String(name.to_string()),
+    );
+    let rewritten = serde_yaml::to_string(&yaml).context("Failed to serialize Skill metadata")?;
+    let body = &content[body_start..];
+    std::fs::write(&marker, format!("---\n{rewritten}---\n{body}"))
+        .with_context(|| format!("Failed to update copied Skill metadata {}", marker.display()))?;
+    Ok(())
 }
 
 /// Extract a ZIP archive into `dest`, skipping any entry whose path would
@@ -376,6 +429,18 @@ mod tests {
         central_repo::set_test_base_dir_override(None);
 
         assert_eq!(result.central_path, expected_destination);
+        assert_eq!(result.name, "same-2");
+        assert_eq!(
+            skill_metadata::parse_skill_md(&result.central_path)
+                .name
+                .as_deref(),
+            Some("same-2")
+        );
+        assert_eq!(
+            skill_metadata::parse_skill_md(&source).name.as_deref(),
+            Some("same"),
+            "normalizing the managed copy must not modify the original source"
+        );
         assert_eq!(preserved_hash, original_hash);
     }
 
