@@ -1693,6 +1693,14 @@ fn organization_archive_preview_sync(
         .get_targets_for_skill(&keep.id)
         .map_err(AppError::db)?;
     let archive_central = Path::new(&archive.central_path);
+    // The stored content hash describes the last indexed state and may be
+    // stale when the managed copy is edited outside Card Master. Re-hash the
+    // live managed tree before deciding that an original source or copied
+    // projection is redundant; otherwise an older matching source could be
+    // archived and rewired even though it is now distinct from the managed
+    // copy being organized.
+    let archive_live_hash = crate::core::content_hash::hash_directory(archive_central)
+        .map_err(AppError::db)?;
     let source_effect = archive
         .source_ref_resolved
         .as_deref()
@@ -1708,7 +1716,7 @@ fn organization_archive_preview_sync(
                 return None;
             }
             let source_hash = crate::core::content_hash::hash_directory(source_path).ok()?;
-            if Some(source_hash) != archive.content_hash {
+            if source_hash != archive_live_hash {
                 return None;
             }
             let target = archive_targets.iter().find(|target| {
@@ -1735,7 +1743,7 @@ fn organization_archive_preview_sync(
             }
             sync_engine::SyncMode::Copy => {
                 let target_hash = crate::core::content_hash::hash_directory(target_path).ok();
-                target_hash.is_some() && target_hash == archive.content_hash
+                target_hash.as_deref() == Some(archive_live_hash.as_str())
             }
         };
         if !owned {
@@ -3165,6 +3173,95 @@ mod organization_health_tests {
         assert_eq!(source_effect.tool, "codex");
         assert_eq!(source_effect.source_path, source_dir.to_string_lossy());
         assert!(!preview.source_preserved);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn archive_preview_preserves_source_when_managed_copy_changed_since_index() {
+        let tmp = tempdir().unwrap();
+        let keep_dir = tmp.path().join("skills/keep");
+        let archive_dir = tmp.path().join("skills/archive");
+        let agent_root = tmp.path().join("agent");
+        let source_dir = agent_root.join("find-skills");
+        let target_dir = agent_root.join("find-skills-2");
+        for path in [&keep_dir, &archive_dir, &source_dir] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        std::fs::write(
+            keep_dir.join("SKILL.md"),
+            "---\nname: find-skills\ndescription: richer\n---\n# Keep\n",
+        )
+        .unwrap();
+        let indexed_content =
+            "---\nname: find-skills\ndescription: older\n---\n# Archive\n";
+        std::fs::write(archive_dir.join("SKILL.md"), indexed_content).unwrap();
+        std::fs::write(source_dir.join("SKILL.md"), indexed_content).unwrap();
+        std::os::unix::fs::symlink(&archive_dir, &target_dir).unwrap();
+
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut keep = skill(&keep_dir);
+        keep.id = "keep".to_string();
+        keep.name = "find-skills".to_string();
+        keep.content_hash = Some(crate::core::content_hash::hash_directory(&keep_dir).unwrap());
+        let mut archive = skill(&archive_dir);
+        archive.id = "archive".to_string();
+        archive.name = "find-skills".to_string();
+        archive.source_ref = Some(source_dir.to_string_lossy().to_string());
+        archive.content_hash =
+            Some(crate::core::content_hash::hash_directory(&archive_dir).unwrap());
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        let mut projection = target(&target_dir);
+        projection.id = "archive-target".to_string();
+        projection.skill_id = "archive".to_string();
+        store.insert_target(&projection).unwrap();
+
+        // Simulate an out-of-band edit after the database hash was recorded.
+        // The original source still matches the stale hash, but no longer
+        // matches the managed artifact that the archive case is inspecting.
+        std::fs::write(
+            archive_dir.join("SKILL.md"),
+            "---\nname: find-skills\ndescription: managed edit\n---\n# Archive changed\n",
+        )
+        .unwrap();
+        assert_eq!(
+            crate::core::content_hash::hash_directory(&source_dir).unwrap(),
+            archive.content_hash.clone().unwrap()
+        );
+        assert_ne!(
+            crate::core::content_hash::hash_directory(&archive_dir).unwrap(),
+            archive.content_hash.clone().unwrap()
+        );
+
+        let case = OrganizationCaseRequest {
+            case_id: "name:find-skills".to_string(),
+            issue_kind: "name_collision".to_string(),
+            member_ids: vec!["keep".to_string(), "archive".to_string()],
+            verify_strict_artifact: true,
+        };
+        let evidence = inspect_organization_cases_sync(
+            vec![OrganizationCaseRequest {
+                case_id: case.case_id.clone(),
+                issue_kind: case.issue_kind.clone(),
+                member_ids: case.member_ids.clone(),
+                verify_strict_artifact: true,
+            }],
+            &store,
+        )
+        .unwrap();
+        let preview = organization_archive_preview_sync(
+            &OrganizationArchiveRequest {
+                case,
+                evidence_fingerprint: evidence[0].case_revision.clone(),
+                keep_skill_id: "keep".to_string(),
+                archive_skill_id: "archive".to_string(),
+            },
+            &store,
+        )
+        .unwrap();
+
+        assert!(preview.source_effect.is_none());
+        assert!(preview.source_preserved);
     }
 }
 
