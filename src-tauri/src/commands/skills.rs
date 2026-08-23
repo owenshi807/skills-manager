@@ -2292,7 +2292,7 @@ fn prepare_organization_agent_prompt(
                 safe_actions.insert(task.case_id.clone(), safe_action);
             }
             format!(
-                "\n\n### Complete managed-directory comparison\nCard Master read every regular file without following symlinks. The manifest is complete and records executable permission; text bodies are included only when bounded and UTF-8. Binary files are represented by exact SHA-256, size, and executable state.\n<UNTRUSTED_DIRECTORY_EVIDENCE>\n{}\n</UNTRUSTED_DIRECTORY_EVIDENCE>",
+                "\n\n### Complete managed-directory comparison\nCard Master read every regular file without following symlinks. The manifest is complete and records masked Unix execute bits; text bodies are included only when bounded and UTF-8. Binary files are represented by exact SHA-256, size, and execute-bit state.\n<UNTRUSTED_DIRECTORY_EVIDENCE>\n{}\n</UNTRUSTED_DIRECTORY_EVIDENCE>",
                 serde_json::to_string_pretty(&comparison)
                     .map_err(|error| AppError::internal(error.to_string()))?,
             )
@@ -2389,7 +2389,7 @@ struct ManagedDirectoryFileEvidence {
     path: String,
     bytes: u64,
     sha256: String,
-    executable: bool,
+    unix_exec_bits: u32,
     text: Option<String>,
 }
 
@@ -2495,7 +2495,7 @@ fn build_managed_directory_comparison(
                 path,
                 bytes: metadata.len(),
                 sha256: format!("{:x}", hasher.finalize()),
-                executable: metadata_is_executable(&metadata),
+                unix_exec_bits: metadata_exec_bits(&metadata),
                 text,
             });
         }
@@ -2506,7 +2506,7 @@ fn build_managed_directory_comparison(
     }
     let safe_action = derive_packaging_only_safe_action(&members);
     Ok(ManagedDirectoryComparisonEvidence {
-        completeness: "complete_file_manifest_with_executable_bits_and_bounded_utf8_content",
+        completeness: "complete_file_manifest_with_unix_exec_bits_and_bounded_utf8_content",
         members,
         safe_action,
     })
@@ -2533,7 +2533,7 @@ fn derive_packaging_only_safe_action(
             } else {
                 file.sha256.clone()
             };
-            map.insert(file.path.clone(), (digest, file.executable));
+            map.insert(file.path.clone(), (digest, file.unix_exec_bits));
         }
         Some(map)
     };
@@ -2558,14 +2558,14 @@ fn derive_packaging_only_safe_action(
 }
 
 #[cfg(unix)]
-fn metadata_is_executable(metadata: &std::fs::Metadata) -> bool {
+fn metadata_exec_bits(metadata: &std::fs::Metadata) -> u32 {
     use std::os::unix::fs::PermissionsExt;
-    metadata.permissions().mode() & 0o111 != 0
+    metadata.permissions().mode() & 0o111
 }
 
 #[cfg(not(unix))]
-fn metadata_is_executable(_metadata: &std::fs::Metadata) -> bool {
-    false
+fn metadata_exec_bits(_metadata: &std::fs::Metadata) -> u32 {
+    0
 }
 
 fn strip_frontmatter_version(text: &str) -> String {
@@ -2899,21 +2899,21 @@ mod organization_health_tests {
                         path: "SKILL.md".to_string(),
                         bytes: 32,
                         sha256: "old-metadata-hash".to_string(),
-                        executable: false,
+                        unix_exec_bits: 0,
                         text: Some("---\nname: pdf\n---\n# Guide\n".to_string()),
                     },
                     ManagedDirectoryFileEvidence {
                         path: "scripts/run.py".to_string(),
                         bytes: 10,
                         sha256: "same-script".to_string(),
-                        executable: false,
+                        unix_exec_bits: 0,
                         text: Some("print('ok')".to_string()),
                     },
                     ManagedDirectoryFileEvidence {
                         path: ".clawx-preinstalled.json".to_string(),
                         bytes: 20,
                         sha256: "provenance".to_string(),
-                        executable: false,
+                        unix_exec_bits: 0,
                         text: None,
                     },
                 ],
@@ -2925,21 +2925,21 @@ mod organization_health_tests {
                         path: "SKILL.md".to_string(),
                         bytes: 49,
                         sha256: "version-metadata-hash".to_string(),
-                        executable: false,
+                        unix_exec_bits: 0,
                         text: Some("---\nname: pdf\nversion: \"1.0.1\"\n---\n# Guide\n".to_string()),
                     },
                     ManagedDirectoryFileEvidence {
                         path: "scripts/run.py".to_string(),
                         bytes: 10,
                         sha256: "same-script".to_string(),
-                        executable: false,
+                        unix_exec_bits: 0,
                         text: Some("print('ok')".to_string()),
                     },
                     ManagedDirectoryFileEvidence {
                         path: "scripts/__pycache__/run.pyc".to_string(),
                         bytes: 9,
                         sha256: "generated".to_string(),
-                        executable: false,
+                        unix_exec_bits: 0,
                         text: None,
                     },
                 ],
@@ -2952,7 +2952,7 @@ mod organization_health_tests {
     }
 
     #[test]
-    fn packaging_marker_does_not_override_executable_permission_difference() {
+    fn packaging_marker_does_not_override_unix_execute_class_difference() {
         let members = vec![
             ManagedDirectoryMemberEvidence {
                 skill_id: "packaged".to_string(),
@@ -2961,14 +2961,14 @@ mod organization_health_tests {
                         path: "scripts/run.sh".to_string(),
                         bytes: 8,
                         sha256: "same-script".to_string(),
-                        executable: true,
+                        unix_exec_bits: 0o100,
                         text: Some("echo ok\n".to_string()),
                     },
                     ManagedDirectoryFileEvidence {
                         path: ".clawx-preinstalled.json".to_string(),
                         bytes: 2,
                         sha256: "marker".to_string(),
-                        executable: false,
+                        unix_exec_bits: 0,
                         text: Some("{}".to_string()),
                     },
                 ],
@@ -2979,7 +2979,7 @@ mod organization_health_tests {
                     path: "scripts/run.sh".to_string(),
                     bytes: 8,
                     sha256: "same-script".to_string(),
-                    executable: false,
+                    unix_exec_bits: 0o001,
                     text: Some("echo ok\n".to_string()),
                 }],
             },
