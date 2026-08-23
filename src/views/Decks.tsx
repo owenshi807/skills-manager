@@ -25,6 +25,7 @@ import { DEFAULT_DECKS, type DeckDefinition, type DeckStageDefinition } from "..
 import * as api from "../lib/tauri";
 import type { DeckSuggestionCard, ManagedSkill, OrganizationAgentCapability } from "../lib/tauri";
 import { getErrorMessage } from "../lib/error";
+import { deckSkillSearchText, normalizeDeckMatchText } from "../lib/deckMatching";
 import { cn } from "../utils";
 
 const CUSTOM_DECKS_KEY = "card_master_custom_decks_v1";
@@ -52,25 +53,21 @@ interface ResolvedSkill {
   score: number;
 }
 
-function normalized(value: string) {
-  return value.normalize("NFKC").toLocaleLowerCase();
-}
-
 function skillText(skill: ManagedSkill) {
-  return normalized([skill.name, skill.description ?? "", ...skill.tags].join(" "));
+  return deckSkillSearchText(skill);
 }
 
 function scoreSkill(skill: ManagedSkill, stage: DeckStageDefinition) {
-  const name = normalized(skill.name);
+  const name = normalizeDeckMatchText(skill.name);
   const text = skillText(skill);
   let score = 0;
   for (const preferred of stage.preferredSkills) {
-    const target = normalized(preferred);
+    const target = normalizeDeckMatchText(preferred);
     if (name === target) score = Math.max(score, 100);
     else if (name.includes(target) || target.includes(name)) score = Math.max(score, 45);
   }
   for (const keyword of stage.keywords) {
-    const target = normalized(keyword);
+    const target = normalizeDeckMatchText(keyword);
     if (name.includes(target)) score += 12;
     else if (text.includes(target)) score += 3;
   }
@@ -98,11 +95,11 @@ function discoverDeck(deck: DeckDefinition, skills: ManagedSkill[], override?: D
   // earlier stage that happens to contain the generic word "design".
   for (const stage of deck.stages) {
     for (const preferred of stage.preferredSkills) {
-      const preferredName = normalized(preferred);
+      const preferredName = normalizeDeckMatchText(preferred);
       const skill = skills.find((candidate) =>
         !removed.has(candidate.id)
         && !used.has(candidate.id)
-        && normalized(candidate.name) === preferredName);
+        && normalizeDeckMatchText(candidate.name) === preferredName);
       if (!skill) continue;
       used.add(skill.id);
       result.push({ skill, stage, source: "scan", score: 100 });
@@ -287,7 +284,7 @@ export function Decks() {
   const covered = new Set(resolved.map((item) => item.stage.id)).size;
   const gaps = selectedDefinition.stages.length - covered;
   const currentOverride = overrides[selectedDefinition.id] ?? { removedSkillIds: [], addedSkills: [] };
-  const availableToAdd = managedSkills.filter((skill) => !resolved.some((item) => item.skill.id === skill.id) && skillText(skill).includes(normalized(skillSearch))).slice(0, 8);
+  const availableToAdd = managedSkills.filter((skill) => !resolved.some((item) => item.skill.id === skill.id) && skillText(skill).includes(normalizeDeckMatchText(skillSearch))).slice(0, 8);
 
   const updateOverride = async (next: DeckOverride) => saveOverrides({ ...overrides, [selectedDefinition.id]: next });
   const removeSkill = (skillId: string) => void updateOverride({ ...currentOverride, removedSkillIds: [...new Set([...currentOverride.removedSkillIds, skillId])], addedSkills: currentOverride.addedSkills.filter((item) => item.skillId !== skillId) });
