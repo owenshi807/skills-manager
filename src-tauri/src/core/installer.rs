@@ -195,22 +195,122 @@ pub fn install_skill_dir_to_destination(
 
     sync_engine::ensure_dst_not_inside_src(source, destination)?;
 
-    if destination.exists() {
-        std::fs::remove_dir_all(destination)
-            .with_context(|| format!("Failed to remove existing {:?}", destination))?;
+    let parent = destination.parent().with_context(|| {
+        format!(
+            "Install destination has no parent directory: {}",
+            destination.display()
+        )
+    })?;
+    std::fs::create_dir_all(parent).with_context(|| {
+        format!(
+            "Failed to create install destination parent {}",
+            parent.display()
+        )
+    })?;
+    let destination_name = destination
+        .file_name()
+        .context("Install destination has no file name")?
+        .to_string_lossy();
+    let operation_id = uuid::Uuid::new_v4();
+    let staging = parent.join(format!(
+        ".{destination_name}.installing-{operation_id}"
+    ));
+    let backup = parent.join(format!(
+        ".{destination_name}.install-backup-{operation_id}"
+    ));
+
+    // Build and validate the complete replacement beside the destination.
+    // Nothing under the currently-managed path is touched until every
+    // fallible preparation step (copy, metadata normalization, hash) passes.
+    let prepared = (|| -> Result<String> {
+        copy_skill_dir(source, &staging)?;
+
+        // A collision-safe storage suffix is also the Agent projection identity.
+        // Keep the copied artifact self-consistent without modifying its original
+        // source: database name, central basename, projected basename, and
+        // frontmatter name must agree.
+        if meta.name.as_deref().is_some_and(|declared| declared != name) {
+            rewrite_copied_skill_name(&staging, name)?;
+        }
+
+        content_hash::hash_directory(&staging)
+    })();
+    let hash = match prepared {
+        Ok(hash) => hash,
+        Err(error) => {
+            if let Err(cleanup_error) = std::fs::remove_dir_all(&staging) {
+                if cleanup_error.kind() != std::io::ErrorKind::NotFound {
+                    log::warn!(
+                        "Failed to remove incomplete install staging tree {}: {cleanup_error}",
+                        staging.display()
+                    );
+                }
+            }
+            return Err(error);
+        }
+    };
+
+    // Commit with a same-filesystem rename. When replacing an existing Skill,
+    // retain it as a sibling backup until the prepared tree is in place so a
+    // failed rename can restore the exact previous directory.
+    let had_existing = destination.exists();
+    if had_existing {
+        if let Err(error) = std::fs::rename(destination, &backup) {
+            if let Err(cleanup_error) = std::fs::remove_dir_all(&staging) {
+                if cleanup_error.kind() != std::io::ErrorKind::NotFound {
+                    log::warn!(
+                        "Failed to remove prepared install tree {} after backup failure: {cleanup_error}",
+                        staging.display()
+                    );
+                }
+            }
+            return Err(error).with_context(|| {
+                format!(
+                    "Failed to preserve existing install {} before replacement",
+                    destination.display()
+                )
+            });
+        }
     }
 
-    copy_skill_dir(source, destination)?;
-
-    // A collision-safe storage suffix is also the Agent projection identity.
-    // Keep the copied artifact self-consistent without modifying its original
-    // source: database name, central basename, projected basename, and
-    // frontmatter name must agree.
-    if meta.name.as_deref().is_some_and(|declared| declared != name) {
-        rewrite_copied_skill_name(destination, name)?;
+    if let Err(commit_error) = std::fs::rename(&staging, destination) {
+        let restore_result = if had_existing {
+            std::fs::rename(&backup, destination)
+        } else {
+            Ok(())
+        };
+        if let Err(cleanup_error) = std::fs::remove_dir_all(&staging) {
+            if cleanup_error.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "Failed to remove uncommitted install staging tree {}: {cleanup_error}",
+                    staging.display()
+                );
+            }
+        }
+        if let Err(restore_error) = restore_result {
+            bail!(
+                "Failed to install {} ({commit_error}) and failed to restore its previous contents from {} ({restore_error})",
+                destination.display(),
+                backup.display()
+            );
+        }
+        return Err(commit_error).with_context(|| {
+            format!(
+                "Failed to commit prepared install {}; previous contents were restored",
+                destination.display()
+            )
+        });
     }
 
-    let hash = content_hash::hash_directory(destination)?;
+    if had_existing {
+        if let Err(error) = std::fs::remove_dir_all(&backup) {
+            log::warn!(
+                "Installed {} but failed to remove recovery backup {}: {error}",
+                destination.display(),
+                backup.display()
+            );
+        }
+    }
 
     Ok(InstallResult {
         name: name.to_string(),
@@ -260,6 +360,24 @@ fn rewrite_copied_skill_name(destination: &Path, name: &str) -> Result<()> {
     );
     let rewritten = serde_yaml::to_string(&yaml).context("Failed to serialize Skill metadata")?;
     let body = &content[body_start..];
+    // Copying preserves a read-only source marker. The managed staging copy is
+    // allowed to become owner-writable; the original source remains untouched.
+    let mut permissions = std::fs::metadata(&marker)?.permissions();
+    if permissions.readonly() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(permissions.mode() | 0o200);
+        }
+        #[cfg(not(unix))]
+        permissions.set_readonly(false);
+        std::fs::set_permissions(&marker, permissions).with_context(|| {
+            format!(
+                "Failed to make copied Skill metadata writable {}",
+                marker.display()
+            )
+        })?;
+    }
     std::fs::write(&marker, format!("---\n{rewritten}---\n{body}"))
         .with_context(|| format!("Failed to update copied Skill metadata {}", marker.display()))?;
     Ok(())
@@ -442,6 +560,85 @@ mod tests {
             "normalizing the managed copy must not modify the original source"
         );
         assert_eq!(preserved_hash, original_hash);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn collision_normalization_handles_read_only_source_without_mutating_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempdir().unwrap();
+        let source = make_skill_dir(tmp.path(), "source", Some("same"));
+        let source_marker = source.join("SKILL.md");
+        let mut source_permissions = std::fs::metadata(&source_marker).unwrap().permissions();
+        source_permissions.set_mode(0o444);
+        std::fs::set_permissions(&source_marker, source_permissions).unwrap();
+
+        let destination = tmp.path().join("same-2");
+        std::fs::create_dir_all(&destination).unwrap();
+        std::fs::write(destination.join("sentinel.txt"), "old managed copy").unwrap();
+
+        let result = install_skill_dir_to_destination(&source, "same-2", &destination).unwrap();
+
+        assert_eq!(result.central_path, destination);
+        assert_eq!(
+            skill_metadata::parse_skill_md(&result.central_path)
+                .name
+                .as_deref(),
+            Some("same-2")
+        );
+        assert_eq!(
+            skill_metadata::parse_skill_md(&source).name.as_deref(),
+            Some("same")
+        );
+        assert_eq!(
+            std::fs::metadata(&source_marker).unwrap().permissions().mode() & 0o222,
+            0,
+            "normalizing the staging copy must not change source permissions"
+        );
+        assert!(!result.central_path.join("sentinel.txt").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn staging_copy_failure_preserves_existing_destination() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempdir().unwrap();
+        let source = make_skill_dir(tmp.path(), "source", Some("source"));
+        let unreadable = source.join("private.txt");
+        std::fs::write(&unreadable, "cannot copy this").unwrap();
+        let mut unreadable_permissions = std::fs::metadata(&unreadable).unwrap().permissions();
+        unreadable_permissions.set_mode(0o000);
+        std::fs::set_permissions(&unreadable, unreadable_permissions).unwrap();
+
+        let destination = tmp.path().join("destination");
+        std::fs::create_dir_all(&destination).unwrap();
+        std::fs::write(destination.join("sentinel.txt"), "keep me").unwrap();
+
+        let error = install_skill_dir_to_destination(&source, "source", &destination)
+            .err()
+            .expect("expected staging copy failure");
+
+        // Restore permissions so TempDir cleanup remains portable.
+        let mut cleanup_permissions = std::fs::metadata(&unreadable).unwrap().permissions();
+        cleanup_permissions.set_mode(0o600);
+        std::fs::set_permissions(&unreadable, cleanup_permissions).unwrap();
+
+        assert!(
+            error.to_string().contains("Permission denied")
+                || error.to_string().contains("permission denied"),
+            "unexpected error: {error:#}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(destination.join("sentinel.txt")).unwrap(),
+            "keep me"
+        );
+        let leaked_staging = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|entry| entry.file_name().to_string_lossy().contains(".installing-"));
+        assert!(!leaked_staging, "failed staging tree must be cleaned up");
     }
 
     #[test]

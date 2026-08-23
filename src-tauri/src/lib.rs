@@ -23,6 +23,10 @@ static TRAY_PRESET_APPLY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 static TRAY_CHECK_UPDATES_RUNNING: AtomicBool = AtomicBool::new(false);
 
 const MAIN_TRAY_ID: &str = "main-tray";
+// Keep the native shell aligned with `src/lib/productSurface.ts`. Preset data
+// remains in the backend for upstream compatibility and future migration, but
+// the validated Card Master Foundation surface must not expose or mutate it.
+const CARD_MASTER_PRESETS_ENABLED: bool = false;
 const TRAY_PRESET_ADD_PREFIX: &str = "tray-preset-add:";
 const TRAY_PRESET_REMOVE_PREFIX: &str = "tray-preset-remove:";
 const TRAY_OPEN_UPDATES_ID: &str = "tray-open-updates";
@@ -161,39 +165,42 @@ fn collect_tray_menu_data(store: &core::skill_store::SkillStore) -> TrayMenuData
     let coding_agent_count = coding_keys.len();
     let coding_set: HashSet<&str> = coding_keys.iter().map(String::as_str).collect();
 
-    let synced_pairs_set: HashSet<(String, String)> = store
-        .get_all_targets()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|target| coding_set.contains(target.tool.as_str()))
-        .map(|target| (target.skill_id, target.tool))
-        .collect();
+    let mut presets = Vec::new();
+    if CARD_MASTER_PRESETS_ENABLED {
+        let synced_pairs_set: HashSet<(String, String)> = store
+            .get_all_targets()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|target| coding_set.contains(target.tool.as_str()))
+            .map(|target| (target.skill_id, target.tool))
+            .collect();
 
-    let scenarios = store.get_all_scenarios().unwrap_or_default();
-    let mut presets = Vec::with_capacity(scenarios.len());
-    for scenario in scenarios {
-        let skill_ids = store
-            .get_skill_ids_for_scenario(&scenario.id)
-            .unwrap_or_default();
-        let skill_count = skill_ids.len();
-        let total_pairs = skill_count * coding_agent_count;
-        let mut synced_pairs = 0usize;
-        if total_pairs > 0 {
-            for sid in &skill_ids {
-                for tk in &coding_keys {
-                    if synced_pairs_set.contains(&(sid.clone(), tk.clone())) {
-                        synced_pairs += 1;
+        let scenarios = store.get_all_scenarios().unwrap_or_default();
+        presets.reserve(scenarios.len());
+        for scenario in scenarios {
+            let skill_ids = store
+                .get_skill_ids_for_scenario(&scenario.id)
+                .unwrap_or_default();
+            let skill_count = skill_ids.len();
+            let total_pairs = skill_count * coding_agent_count;
+            let mut synced_pairs = 0usize;
+            if total_pairs > 0 {
+                for sid in &skill_ids {
+                    for tk in &coding_keys {
+                        if synced_pairs_set.contains(&(sid.clone(), tk.clone())) {
+                            synced_pairs += 1;
+                        }
                     }
                 }
             }
+            presets.push(TrayPresetEntry {
+                id: scenario.id,
+                name: scenario.name,
+                skill_count,
+                synced_pairs,
+                total_pairs,
+            });
         }
-        presets.push(TrayPresetEntry {
-            id: scenario.id,
-            name: scenario.name,
-            skill_count,
-            synced_pairs,
-            total_pairs,
-        });
     }
 
     TrayMenuData {
@@ -253,6 +260,9 @@ fn preset_menu_label(preset: &TrayPresetEntry) -> String {
 }
 
 fn preset_id_from_menu_id(menu_id: &str) -> Option<(&str, scenario_service_alias::BatchApplyMode)> {
+    if !CARD_MASTER_PRESETS_ENABLED {
+        return None;
+    }
     if let Some(id) = menu_id.strip_prefix(TRAY_PRESET_ADD_PREFIX) {
         return Some((id, scenario_service_alias::BatchApplyMode::Add));
     }
@@ -307,43 +317,44 @@ fn build_tray_menu_from_data<R: tauri::Runtime>(
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
 
-    let presets_submenu = Submenu::new(app, "Presets", true)?;
-    if data.coding_agent_count == 0 {
-        let no_agents = MenuItem::with_id(
-            app,
-            "tray-presets-no-agents",
-            "No coding agents connected",
-            false,
-            None::<&str>,
-        )?;
-        presets_submenu.append(&no_agents)?;
-    } else {
-        let visible: Vec<_> = data
-            .presets
-            .iter()
-            .filter(|p| !matches!(p.status(), TrayPresetStatus::Empty))
-            .collect();
-        if visible.is_empty() {
-            let empty = MenuItem::with_id(
+    if CARD_MASTER_PRESETS_ENABLED {
+        let presets_submenu = Submenu::new(app, "Presets", true)?;
+        if data.coding_agent_count == 0 {
+            let no_agents = MenuItem::with_id(
                 app,
-                "tray-presets-empty",
-                "No presets with skills",
+                "tray-presets-no-agents",
+                "No coding agents connected",
                 false,
                 None::<&str>,
             )?;
-            presets_submenu.append(&empty)?;
+            presets_submenu.append(&no_agents)?;
         } else {
-            for preset in visible {
-                let (id, _action) = preset_menu_item_id(preset);
-                let label = preset_menu_label(preset);
-                let item = MenuItem::with_id(app, id, label, true, None::<&str>)?;
-                presets_submenu.append(&item)?;
+            let visible: Vec<_> = data
+                .presets
+                .iter()
+                .filter(|p| !matches!(p.status(), TrayPresetStatus::Empty))
+                .collect();
+            if visible.is_empty() {
+                let empty = MenuItem::with_id(
+                    app,
+                    "tray-presets-empty",
+                    "No presets with skills",
+                    false,
+                    None::<&str>,
+                )?;
+                presets_submenu.append(&empty)?;
+            } else {
+                for preset in visible {
+                    let (id, _action) = preset_menu_item_id(preset);
+                    let label = preset_menu_label(preset);
+                    let item = MenuItem::with_id(app, id, label, true, None::<&str>)?;
+                    presets_submenu.append(&item)?;
+                }
             }
         }
+        menu.append(&presets_submenu)?;
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
     }
-    menu.append(&presets_submenu)?;
-
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
 
     let show_item = MenuItem::with_id(app, "show", "Open Card Master", true, None::<&str>)?;
     menu.append(&show_item)?;
@@ -441,6 +452,10 @@ fn apply_preset_from_tray<R: tauri::Runtime>(
     preset_id: &str,
     mode: core::scenario_service::BatchApplyMode,
 ) {
+    if !CARD_MASTER_PRESETS_ENABLED {
+        log::warn!("Ignored hidden Card Master preset action from native tray");
+        return;
+    }
     let store = app
         .state::<Arc<core::skill_store::SkillStore>>()
         .inner()
@@ -774,6 +789,18 @@ pub fn quit_app(app: &tauri::AppHandle) {
         core::auto_backup::commit_on_exit(&store);
     }
     app.exit(0);
+}
+
+#[cfg(test)]
+mod product_surface_tests {
+    use super::*;
+
+    #[test]
+    fn hidden_presets_cannot_be_dispatched_from_native_tray_ids() {
+        assert!(!CARD_MASTER_PRESETS_ENABLED);
+        assert!(preset_id_from_menu_id("tray-preset-add:legacy").is_none());
+        assert!(preset_id_from_menu_id("tray-preset-remove:legacy").is_none());
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
