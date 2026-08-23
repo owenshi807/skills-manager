@@ -39,7 +39,12 @@ pub struct DiscoveredLocation {
 }
 
 /// Directories to skip during recursive scans (internal/tool-specific metadata).
-const RECURSIVE_SCAN_SKIP_DIRS: &[&str] = &[".hub", ".git", "node_modules"];
+const RECURSIVE_SCAN_SKIP_DIRS: &[&str] = &[
+    ".hub",
+    ".git",
+    ".skill-card-manager-trash",
+    "node_modules",
+];
 
 fn is_symlink_to_central(path: &Path) -> bool {
     if let Ok(target) = std::fs::read_link(path) {
@@ -563,6 +568,35 @@ mod tests {
         assert_eq!(
             plan.discovered[0].found_path,
             tmp.path().join("real-skill").to_string_lossy()
+        );
+    }
+
+    #[test]
+    fn recursive_scan_ignores_skill_card_manager_quarantine() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path().join("root");
+        write_skill(&root.join("active-skill"));
+        write_skill(
+            &root
+                .join(".skill-card-manager-trash")
+                .join("workspace-duplicates/operation-1/archived-skill"),
+        );
+        let mut loose_root = discovery_root(&root, "hermes:root", Traversal::Recursive);
+        loose_root.provenance.source_kind = DiscoverySourceKind::Loose;
+
+        let plan = scan_discovery_roots(
+            &[],
+            DiscoveryInput {
+                roots: vec![loose_root],
+                diagnostics: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(plan.skills_found, 1);
+        assert_eq!(
+            plan.discovered[0].found_path,
+            root.join("active-skill").to_string_lossy()
         );
     }
 

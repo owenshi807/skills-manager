@@ -57,6 +57,26 @@ fn target_path_equals_skill(target_path: &str, skill_path: &str) -> bool {
     }
 }
 
+fn duplicate_alias_quarantine_path(
+    redundant_path: &Path,
+    operation_id: &str,
+) -> Result<PathBuf, AppError> {
+    let parent = redundant_path
+        .parent()
+        .ok_or_else(|| AppError::invalid_input("Invalid redundant Agent path"))?;
+    let file_name = redundant_path
+        .file_name()
+        .ok_or_else(|| AppError::invalid_input("Invalid redundant Agent path"))?;
+    // Keep quarantine next to the directory entry being moved. `rename` is
+    // therefore atomic even when the central library lives on another disk,
+    // and the hidden directory is ignored by Agent skill discovery.
+    Ok(parent
+        .join(".skill-card-manager-trash")
+        .join("workspace-duplicates")
+        .join(operation_id)
+        .join(file_name))
+}
+
 fn adapter_for_agent(
     store: &SkillStore,
     agent: &str,
@@ -329,21 +349,11 @@ pub async fn apply_agent_duplicate_alias(
             .get_skill_by_id(&skill_id)
             .map_err(AppError::db)?
             .ok_or_else(|| AppError::not_found("Managed Skill not found"))?;
-        let central = Path::new(&skill.central_path);
-        let central_root = central
-            .parent()
-            .and_then(Path::parent)
-            .ok_or_else(|| AppError::invalid_input("Invalid managed central path"))?;
         let operation_id = uuid::Uuid::new_v4().to_string();
-        let quarantined_path = central_root
-            .join(".trash")
-            .join("workspace-duplicates")
-            .join(&operation_id)
-            .join(
-                Path::new(&preview.redundant_path)
-                    .file_name()
-                    .ok_or_else(|| AppError::invalid_input("Invalid redundant Agent path"))?,
-            );
+        let quarantined_path = duplicate_alias_quarantine_path(
+            Path::new(&preview.redundant_path),
+            &operation_id,
+        )?;
         let payload = AgentDuplicateAliasPayload {
             agent: agent.clone(),
             skill_id: skill_id.clone(),
@@ -983,7 +993,7 @@ fn delete_agent_local_skill(
 #[cfg(test)]
 mod tests {
     use super::{
-        backfill_stranded_agent_targets, enrich_center_status,
+        backfill_stranded_agent_targets, duplicate_alias_quarantine_path, enrich_center_status,
         import_agent_local_skill_to_center, preview_duplicate_alias_sync,
         update_agent_local_skill_from_center,
     };
@@ -994,6 +1004,19 @@ mod tests {
     };
     use crate::core::{central_repo, installer, sync_engine, tool_adapters, tool_service};
     use std::collections::HashMap;
+
+    #[test]
+    fn duplicate_alias_quarantine_stays_on_the_source_filesystem() {
+        let redundant = std::path::Path::new("/agent/skills/legacy-alias");
+        let quarantine = duplicate_alias_quarantine_path(redundant, "operation-1").unwrap();
+        assert_eq!(
+            quarantine,
+            std::path::Path::new(
+                "/agent/skills/.skill-card-manager-trash/workspace-duplicates/operation-1/legacy-alias"
+            )
+        );
+        assert_eq!(quarantine.ancestors().nth(4), redundant.parent());
+    }
 
     #[cfg(unix)]
     #[test]

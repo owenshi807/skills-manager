@@ -19,7 +19,10 @@ use crate::core::{
     repo_lock::RepoLock,
     scanner,
     skill_metadata::{self, is_valid_skill_dir},
-    skill_store::{OrganizationOperationRecord, SkillRecord, SkillStore, SkillTargetRecord},
+    skill_store::{
+        OrganizationOperationRecord, OrganizationRelationshipMigrationPlan, SkillRecord,
+        SkillStore, SkillTargetRecord,
+    },
     sync_engine, sync_metadata,
     timing::should_log_first_or_slow,
 };
@@ -230,6 +233,8 @@ struct OrganizationArchivePayload {
     original_source_path: Option<String>,
     archived_source_path: Option<String>,
     source_tool: Option<String>,
+    #[serde(default)]
+    relationship_migration: Option<OrganizationRelationshipMigrationPlan>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1666,14 +1671,12 @@ fn organization_archive_preview_sync(
         .map_err(AppError::db)?
         .filter(|skill| skill.status != "archived")
         .ok_or_else(|| AppError::invalid_input("Archive skill is not active"))?;
-    if store
-        .skill_has_organization_dependencies(&archive.id)
-        .map_err(AppError::db)?
-    {
-        return Err(AppError::invalid_input(
-            "This Skill belongs to a tag or deck. Move those relationships before archiving it",
-        ));
-    }
+    // Planning parses every hidden legacy relationship now, so malformed
+    // Preset/Tag/deck data fails closed during preview instead of becoming a
+    // permanent archive blocker or being silently discarded.
+    store
+        .plan_organization_relationship_migration(&keep.id, &archive.id)
+        .map_err(AppError::db)?;
     let pending = store.list_pending_conflicts().map_err(AppError::db)?;
     if pending
         .iter()
@@ -1845,6 +1848,9 @@ pub async fn apply_organization_archive(
             let original_targets = store
                 .get_targets_for_skill(&archive.id)
                 .map_err(AppError::db)?;
+            let relationship_migration = store
+                .plan_organization_relationship_migration(&keep.id, &archive.id)
+                .map_err(AppError::db)?;
             let operation_id = uuid::Uuid::new_v4().to_string();
             let central = PathBuf::from(&archive.central_path);
             let central_root = central
@@ -1888,6 +1894,7 @@ pub async fn apply_organization_archive(
                     .source_effect
                     .as_ref()
                     .map(|effect| effect.tool.clone()),
+                relationship_migration: Some(relationship_migration),
             };
             let now = chrono::Utc::now().timestamp_millis();
             store
@@ -1955,15 +1962,17 @@ pub async fn apply_organization_archive(
                 let (transferred_targets, removed_tools) =
                     organization_archive_target_changes(&preview, &original_targets, &keep)?;
                 store
-                    .mark_skill_archived(
+                    .mark_skill_archived_with_relationships(
                         &archive.id,
                         &archive_path.to_string_lossy(),
                         &transferred_targets,
                         &removed_tools,
+                        payload
+                            .relationship_migration
+                            .as_ref()
+                            .expect("new archive operations include a relationship migration"),
+                        &operation_id,
                     )
-                    .map_err(AppError::db)?;
-                store
-                    .update_organization_operation(&operation_id, "complete", None)
                     .map_err(AppError::db)?;
                 if let Err(error) = sync_metadata::write_all_from_db_unlocked(&store) {
                     log::warn!("organization archive metadata refresh failed: {error:#}");
@@ -2054,6 +2063,15 @@ pub async fn undo_organization_archive(
                     "Archived skill changed after the operation; refusing to overwrite",
                 ));
             }
+            if let Some(migration) = payload.relationship_migration.as_ref() {
+                // Validate the reversible relationship snapshot before touching
+                // any files. RepoLock keeps manager-owned writes serialized, so
+                // a stale undo fails closed without leaving the filesystem half
+                // restored.
+                store
+                    .validate_applied_organization_relationship_migration(migration)
+                    .map_err(AppError::db)?;
+            }
             let original_central = PathBuf::from(&payload.original_central_path);
             let archive_path = PathBuf::from(&payload.archive_path);
             if original_central.exists() || !archive_path.exists() {
@@ -2129,18 +2147,34 @@ pub async fn undo_organization_archive(
                 sync_engine::sync_skill(&original_central, Path::new(&target.target_path), mode)
                     .map_err(AppError::db)?;
             }
-            store
-                .restore_archived_skill(
-                    &operation.archive_skill_id,
-                    &payload.original_central_path,
-                    payload.original_enabled,
-                    &payload.original_status,
-                    &payload.original_targets,
-                )
-                .map_err(AppError::db)?;
-            store
-                .update_organization_operation(&operation_id, "undone", None)
-                .map_err(AppError::db)?;
+            if let Some(migration) = payload.relationship_migration.as_ref() {
+                store
+                    .restore_archived_skill_with_relationships(
+                        &operation.archive_skill_id,
+                        &payload.original_central_path,
+                        payload.original_enabled,
+                        &payload.original_status,
+                        &payload.original_targets,
+                        migration,
+                        &operation_id,
+                    )
+                    .map_err(AppError::db)?;
+            } else {
+                // Operations created before relationship migration support
+                // were guarded from having any such dependencies.
+                store
+                    .restore_archived_skill(
+                        &operation.archive_skill_id,
+                        &payload.original_central_path,
+                        payload.original_enabled,
+                        &payload.original_status,
+                        &payload.original_targets,
+                    )
+                    .map_err(AppError::db)?;
+                store
+                    .update_organization_operation(&operation_id, "undone", None)
+                    .map_err(AppError::db)?;
+            }
             if let Err(error) = sync_metadata::write_all_from_db_unlocked(&store) {
                 log::warn!("organization undo metadata refresh failed: {error:#}");
             }

@@ -99,6 +99,46 @@ pub struct OrganizationOperationRecord {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OrganizationScenarioSkillRelationship {
+    pub scenario_id: String,
+    pub added_at: Option<i64>,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OrganizationScenarioToolRelationship {
+    pub scenario_id: String,
+    pub tool: String,
+    pub enabled: bool,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OrganizationSkillRelationshipState {
+    pub scenarios: Vec<OrganizationScenarioSkillRelationship>,
+    pub scenario_tools: Vec<OrganizationScenarioToolRelationship>,
+    pub tags: Vec<String>,
+}
+
+/// A deterministic, reversible migration of every hidden legacy relationship
+/// from the redundant Skill to the retained Skill. Both the expected before
+/// and after states are persisted in the organization operation payload so
+/// apply and Undo fail closed if another writer changes those relationships.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OrganizationRelationshipMigrationPlan {
+    pub keep_skill_id: String,
+    pub archive_skill_id: String,
+    pub before_keep: OrganizationSkillRelationshipState,
+    pub before_archive: OrganizationSkillRelationshipState,
+    pub after_keep: OrganizationSkillRelationshipState,
+    pub after_archive: OrganizationSkillRelationshipState,
+    pub before_custom_decks: Option<String>,
+    pub after_custom_decks: Option<String>,
+    pub before_deck_overrides: Option<String>,
+    pub after_deck_overrides: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DiscoveredSkillRecord {
     pub id: String,
@@ -371,9 +411,21 @@ impl SkillStore {
                     .as_object()
                     .into_iter()
                     .flat_map(|decks| decks.values())
-                    .filter_map(|deck| deck.get("addedSkills")?.as_array())
-                    .flatten()
-                    .any(|card| card.get("skillId").and_then(|id| id.as_str()) == Some(skill_id)),
+                    .any(|deck| {
+                        deck.get("addedSkills")
+                            .and_then(|items| items.as_array())
+                            .into_iter()
+                            .flatten()
+                            .any(|card| {
+                                card.get("skillId").and_then(|id| id.as_str()) == Some(skill_id)
+                            })
+                            || deck
+                                .get("removedSkillIds")
+                                .and_then(|items| items.as_array())
+                                .into_iter()
+                                .flatten()
+                                .any(|id| id.as_str() == Some(skill_id))
+                    }),
                 _ => false,
             };
             if referenced {
@@ -381,6 +433,169 @@ impl SkillStore {
             }
         }
         Ok(false)
+    }
+
+    pub fn plan_organization_relationship_migration(
+        &self,
+        keep_skill_id: &str,
+        archive_skill_id: &str,
+    ) -> Result<OrganizationRelationshipMigrationPlan> {
+        if keep_skill_id == archive_skill_id {
+            anyhow::bail!("Keep and archive Skills must differ");
+        }
+        let conn = self.conn.lock().unwrap();
+        let before_keep = read_skill_relationship_state(&conn, keep_skill_id)?;
+        let before_archive = read_skill_relationship_state(&conn, archive_skill_id)?;
+        let after_keep = merge_skill_relationship_states(&before_keep, &before_archive);
+        let after_archive = OrganizationSkillRelationshipState::default();
+        let before_custom_decks = read_setting_raw(&conn, "card_master_custom_decks_v1")?;
+        let before_deck_overrides =
+            read_setting_raw(&conn, "card_master_deck_overrides_v1")?;
+        let after_custom_decks = rewrite_custom_deck_relationships(
+            before_custom_decks.as_deref(),
+            keep_skill_id,
+            archive_skill_id,
+        )?;
+        let after_deck_overrides = rewrite_deck_override_relationships(
+            before_deck_overrides.as_deref(),
+            keep_skill_id,
+            archive_skill_id,
+        )?;
+        Ok(OrganizationRelationshipMigrationPlan {
+            keep_skill_id: keep_skill_id.to_string(),
+            archive_skill_id: archive_skill_id.to_string(),
+            before_keep,
+            before_archive,
+            after_keep,
+            after_archive,
+            before_custom_decks,
+            after_custom_decks,
+            before_deck_overrides,
+            after_deck_overrides,
+        })
+    }
+
+    pub fn mark_skill_archived_with_relationships(
+        &self,
+        skill_id: &str,
+        archive_path: &str,
+        transferred_targets: &[SkillTargetRecord],
+        removed_target_tools: &[String],
+        migration: &OrganizationRelationshipMigrationPlan,
+        operation_id: &str,
+    ) -> Result<()> {
+        if skill_id != migration.archive_skill_id {
+            anyhow::bail!("Relationship migration does not match archived Skill");
+        }
+        let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
+        assert_relationship_migration_state(&tx, migration, false)?;
+        write_relationship_migration_state(&tx, migration, true)?;
+        for tool in removed_target_tools {
+            tx.execute(
+                "DELETE FROM skill_targets WHERE skill_id = ?1 AND tool = ?2",
+                params![skill_id, tool],
+            )?;
+        }
+        for target in transferred_targets {
+            tx.execute(
+                "UPDATE skill_targets SET skill_id = ?1, target_path = ?2, mode = ?3,
+                        source_hash = ?4, synced_at = ?5, status = 'ok', last_error = NULL
+                 WHERE id = ?6",
+                params![
+                    target.skill_id,
+                    target.target_path,
+                    target.mode,
+                    target.source_hash,
+                    target.synced_at,
+                    target.id
+                ],
+            )?;
+        }
+        tx.execute(
+            "UPDATE skills SET central_path = ?1, status = 'archived', enabled = 0,
+                    updated_at = ?2 WHERE id = ?3",
+            params![
+                archive_path,
+                chrono::Utc::now().timestamp_millis(),
+                skill_id
+            ],
+        )?;
+        tx.execute(
+            "UPDATE organization_operations SET status = 'complete', error = NULL, updated_at = ?1
+             WHERE operation_id = ?2",
+            params![chrono::Utc::now().timestamp_millis(), operation_id],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn validate_applied_organization_relationship_migration(
+        &self,
+        migration: &OrganizationRelationshipMigrationPlan,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        assert_relationship_migration_state(&conn, migration, true)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_archived_skill_with_relationships(
+        &self,
+        skill_id: &str,
+        central_path: &str,
+        enabled: bool,
+        status: &str,
+        original_targets: &[SkillTargetRecord],
+        migration: &OrganizationRelationshipMigrationPlan,
+        operation_id: &str,
+    ) -> Result<()> {
+        if skill_id != migration.archive_skill_id {
+            anyhow::bail!("Relationship migration does not match archived Skill");
+        }
+        let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
+        assert_relationship_migration_state(&tx, migration, true)?;
+        write_relationship_migration_state(&tx, migration, false)?;
+        for target in original_targets {
+            tx.execute(
+                "DELETE FROM skill_targets WHERE id = ?1",
+                params![target.id],
+            )?;
+            tx.execute(
+                "INSERT INTO skill_targets
+                    (id, skill_id, tool, target_path, mode, status, synced_at, last_error, source_hash)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    target.id,
+                    target.skill_id,
+                    target.tool,
+                    target.target_path,
+                    target.mode,
+                    target.status,
+                    target.synced_at,
+                    target.last_error,
+                    target.source_hash,
+                ],
+            )?;
+        }
+        tx.execute(
+            "UPDATE skills SET central_path = ?1, status = ?2, enabled = ?3, updated_at = ?4
+             WHERE id = ?5",
+            params![
+                central_path,
+                status,
+                enabled,
+                chrono::Utc::now().timestamp_millis(),
+                skill_id
+            ],
+        )?;
+        tx.execute(
+            "UPDATE organization_operations SET status = 'undone', error = NULL, updated_at = ?1
+             WHERE operation_id = ?2",
+            params![chrono::Utc::now().timestamp_millis(), operation_id],
+        )?;
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn mark_skill_archived(
@@ -1804,6 +2019,337 @@ impl SkillStore {
     }
 }
 
+fn read_setting_raw(conn: &Connection, key: &str) -> Result<Option<String>> {
+    let mut stmt = conn.prepare("SELECT value FROM settings WHERE key = ?1")?;
+    let mut rows = stmt.query_map(params![key], |row| row.get::<_, String>(0))?;
+    Ok(rows.next().transpose()?)
+}
+
+fn write_setting_raw(conn: &Connection, key: &str, value: Option<&str>) -> Result<()> {
+    if let Some(value) = value {
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+            params![key, value],
+        )?;
+    } else {
+        conn.execute("DELETE FROM settings WHERE key = ?1", params![key])?;
+    }
+    Ok(())
+}
+
+fn read_skill_relationship_state(
+    conn: &Connection,
+    skill_id: &str,
+) -> Result<OrganizationSkillRelationshipState> {
+    let scenarios = {
+        let mut stmt = conn.prepare(
+            "SELECT scenario_id, added_at, sort_order FROM scenario_skills
+             WHERE skill_id = ?1 ORDER BY scenario_id",
+        )?;
+        let rows = stmt.query_map(params![skill_id], |row| {
+            Ok(OrganizationScenarioSkillRelationship {
+                scenario_id: row.get(0)?,
+                added_at: row.get(1)?,
+                sort_order: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+        rows
+    };
+    let scenario_tools = {
+        let mut stmt = conn.prepare(
+            "SELECT scenario_id, tool, enabled, updated_at FROM scenario_skill_tools
+             WHERE skill_id = ?1 ORDER BY scenario_id, tool",
+        )?;
+        let rows = stmt.query_map(params![skill_id], |row| {
+            Ok(OrganizationScenarioToolRelationship {
+                scenario_id: row.get(0)?,
+                tool: row.get(1)?,
+                enabled: row.get::<_, i64>(2)? != 0,
+                updated_at: row.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+        rows
+    };
+    let tags = {
+        let mut stmt =
+            conn.prepare("SELECT tag FROM skill_tags WHERE skill_id = ?1 ORDER BY tag")?;
+        let rows = stmt
+            .query_map(params![skill_id], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        rows
+    };
+    Ok(OrganizationSkillRelationshipState {
+        scenarios,
+        scenario_tools,
+        tags,
+    })
+}
+
+fn merge_skill_relationship_states(
+    keep: &OrganizationSkillRelationshipState,
+    archive: &OrganizationSkillRelationshipState,
+) -> OrganizationSkillRelationshipState {
+    let mut scenarios = keep.scenarios.clone();
+    for relationship in &archive.scenarios {
+        if !scenarios
+            .iter()
+            .any(|existing| existing.scenario_id == relationship.scenario_id)
+        {
+            scenarios.push(relationship.clone());
+        }
+    }
+    scenarios.sort_by(|a, b| a.scenario_id.cmp(&b.scenario_id));
+
+    let mut scenario_tools = keep.scenario_tools.clone();
+    for relationship in &archive.scenario_tools {
+        if !scenario_tools.iter().any(|existing| {
+            existing.scenario_id == relationship.scenario_id
+                && existing.tool == relationship.tool
+        }) {
+            scenario_tools.push(relationship.clone());
+        }
+    }
+    scenario_tools.sort_by(|a, b| {
+        (&a.scenario_id, &a.tool).cmp(&(&b.scenario_id, &b.tool))
+    });
+
+    let mut tags = keep.tags.clone();
+    for tag in &archive.tags {
+        if !tags.contains(tag) {
+            tags.push(tag.clone());
+        }
+    }
+    tags.sort();
+    OrganizationSkillRelationshipState {
+        scenarios,
+        scenario_tools,
+        tags,
+    }
+}
+
+fn replace_skill_relationship_state(
+    conn: &Connection,
+    skill_id: &str,
+    state: &OrganizationSkillRelationshipState,
+) -> Result<()> {
+    conn.execute(
+        "DELETE FROM scenario_skill_tools WHERE skill_id = ?1",
+        params![skill_id],
+    )?;
+    conn.execute(
+        "DELETE FROM scenario_skills WHERE skill_id = ?1",
+        params![skill_id],
+    )?;
+    conn.execute(
+        "DELETE FROM skill_tags WHERE skill_id = ?1",
+        params![skill_id],
+    )?;
+    for relationship in &state.scenarios {
+        conn.execute(
+            "INSERT INTO scenario_skills (scenario_id, skill_id, added_at, sort_order)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![
+                relationship.scenario_id,
+                skill_id,
+                relationship.added_at,
+                relationship.sort_order
+            ],
+        )?;
+    }
+    for relationship in &state.scenario_tools {
+        conn.execute(
+            "INSERT INTO scenario_skill_tools
+                (scenario_id, skill_id, tool, enabled, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                relationship.scenario_id,
+                skill_id,
+                relationship.tool,
+                relationship.enabled,
+                relationship.updated_at
+            ],
+        )?;
+    }
+    for tag in &state.tags {
+        conn.execute(
+            "INSERT INTO skill_tags (skill_id, tag) VALUES (?1, ?2)",
+            params![skill_id, tag],
+        )?;
+    }
+    Ok(())
+}
+
+fn assert_relationship_migration_state(
+    conn: &Connection,
+    migration: &OrganizationRelationshipMigrationPlan,
+    applied: bool,
+) -> Result<()> {
+    let (expected_keep, expected_archive, expected_custom, expected_overrides) = if applied {
+        (
+            &migration.after_keep,
+            &migration.after_archive,
+            &migration.after_custom_decks,
+            &migration.after_deck_overrides,
+        )
+    } else {
+        (
+            &migration.before_keep,
+            &migration.before_archive,
+            &migration.before_custom_decks,
+            &migration.before_deck_overrides,
+        )
+    };
+    if read_skill_relationship_state(conn, &migration.keep_skill_id)? != *expected_keep
+        || read_skill_relationship_state(conn, &migration.archive_skill_id)? != *expected_archive
+        || read_setting_raw(conn, "card_master_custom_decks_v1")? != *expected_custom
+        || read_setting_raw(conn, "card_master_deck_overrides_v1")? != *expected_overrides
+    {
+        anyhow::bail!("Skill relationships changed; refresh before applying this operation");
+    }
+    Ok(())
+}
+
+fn write_relationship_migration_state(
+    conn: &Connection,
+    migration: &OrganizationRelationshipMigrationPlan,
+    applied: bool,
+) -> Result<()> {
+    let (keep, archive, custom, overrides) = if applied {
+        (
+            &migration.after_keep,
+            &migration.after_archive,
+            migration.after_custom_decks.as_deref(),
+            migration.after_deck_overrides.as_deref(),
+        )
+    } else {
+        (
+            &migration.before_keep,
+            &migration.before_archive,
+            migration.before_custom_decks.as_deref(),
+            migration.before_deck_overrides.as_deref(),
+        )
+    };
+    replace_skill_relationship_state(conn, &migration.keep_skill_id, keep)?;
+    replace_skill_relationship_state(conn, &migration.archive_skill_id, archive)?;
+    write_setting_raw(conn, "card_master_custom_decks_v1", custom)?;
+    write_setting_raw(conn, "card_master_deck_overrides_v1", overrides)?;
+    Ok(())
+}
+
+fn rewrite_custom_deck_relationships(
+    raw: Option<&str>,
+    keep_skill_id: &str,
+    archive_skill_id: &str,
+) -> Result<Option<String>> {
+    let Some(raw) = raw else { return Ok(None) };
+    let mut value: serde_json::Value = serde_json::from_str(raw)?;
+    let decks = value
+        .as_array_mut()
+        .ok_or_else(|| anyhow::anyhow!("Custom deck data is not an array"))?;
+    let mut changed = false;
+    for deck in decks {
+        let Some(cards) = deck.get_mut("cards").and_then(|cards| cards.as_array_mut()) else {
+            continue;
+        };
+        let mut keep_seen = cards.iter().any(|card| {
+            card.get("skill_id").and_then(|id| id.as_str()) == Some(keep_skill_id)
+        });
+        let mut rewritten = Vec::with_capacity(cards.len());
+        for mut card in std::mem::take(cards) {
+            if card.get("skill_id").and_then(|id| id.as_str()) == Some(archive_skill_id) {
+                changed = true;
+                if keep_seen {
+                    continue;
+                }
+                let object = card
+                    .as_object_mut()
+                    .ok_or_else(|| anyhow::anyhow!("Custom deck card is not an object"))?;
+                object.insert(
+                    "skill_id".to_string(),
+                    serde_json::Value::String(keep_skill_id.to_string()),
+                );
+                keep_seen = true;
+            }
+            rewritten.push(card);
+        }
+        *cards = rewritten;
+    }
+    if changed {
+        Ok(Some(serde_json::to_string(&value)?))
+    } else {
+        Ok(Some(raw.to_string()))
+    }
+}
+
+fn rewrite_deck_override_relationships(
+    raw: Option<&str>,
+    keep_skill_id: &str,
+    archive_skill_id: &str,
+) -> Result<Option<String>> {
+    let Some(raw) = raw else { return Ok(None) };
+    let mut value: serde_json::Value = serde_json::from_str(raw)?;
+    let overrides = value
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("Deck override data is not an object"))?;
+    let mut changed = false;
+    for deck in overrides.values_mut() {
+        if let Some(removed) = deck
+            .get_mut("removedSkillIds")
+            .and_then(|items| items.as_array_mut())
+        {
+            let mut keep_seen = removed.iter().any(|id| id.as_str() == Some(keep_skill_id));
+            let mut rewritten = Vec::with_capacity(removed.len());
+            for id in std::mem::take(removed) {
+                if id.as_str() == Some(archive_skill_id) {
+                    changed = true;
+                    if keep_seen {
+                        continue;
+                    }
+                    rewritten.push(serde_json::Value::String(keep_skill_id.to_string()));
+                    keep_seen = true;
+                } else {
+                    rewritten.push(id);
+                }
+            }
+            *removed = rewritten;
+        }
+        if let Some(added) = deck
+            .get_mut("addedSkills")
+            .and_then(|items| items.as_array_mut())
+        {
+            let mut keep_seen = added.iter().any(|item| {
+                item.get("skillId").and_then(|id| id.as_str()) == Some(keep_skill_id)
+            });
+            let mut rewritten = Vec::with_capacity(added.len());
+            for mut item in std::mem::take(added) {
+                if item.get("skillId").and_then(|id| id.as_str()) == Some(archive_skill_id) {
+                    changed = true;
+                    if keep_seen {
+                        continue;
+                    }
+                    let object = item
+                        .as_object_mut()
+                        .ok_or_else(|| anyhow::anyhow!("Deck override entry is not an object"))?;
+                    object.insert(
+                        "skillId".to_string(),
+                        serde_json::Value::String(keep_skill_id.to_string()),
+                    );
+                    keep_seen = true;
+                }
+                rewritten.push(item);
+            }
+            *added = rewritten;
+        }
+    }
+    if changed {
+        Ok(Some(serde_json::to_string(&value)?))
+    } else {
+        Ok(Some(raw.to_string()))
+    }
+}
+
 #[cfg(test)]
 mod organization_fact_tests {
     use super::*;
@@ -2430,6 +2976,183 @@ mod organization_operation_tests {
         assert!(store
             .skill_has_organization_dependencies(&override_card.id)
             .unwrap());
+    }
+
+    fn insert_planned_archive_operation(
+        store: &SkillStore,
+        keep: &SkillRecord,
+        archive: &SkillRecord,
+        operation_id: &str,
+    ) {
+        store
+            .create_organization_operation(&OrganizationOperationRecord {
+                operation_id: operation_id.to_string(),
+                case_key: "case-1".to_string(),
+                case_revision: "revision-1".to_string(),
+                kind: "archive_redundant".to_string(),
+                status: "planned".to_string(),
+                keep_skill_id: keep.id.clone(),
+                archive_skill_id: archive.id.clone(),
+                payload_json: "{}".to_string(),
+                error: None,
+                created_at: 1,
+                updated_at: 1,
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn relationship_migration_moves_hidden_dependencies_and_undo_restores_them() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let keep = skill("keep", "/central/keep");
+        let archive = skill("archive", "/central/archive");
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        store
+            .insert_scenario(&ScenarioRecord {
+                id: "legacy-preset".to_string(),
+                name: "Legacy Preset".to_string(),
+                description: None,
+                icon: None,
+                sort_order: 0,
+                created_at: 1,
+                updated_at: 1,
+            })
+            .unwrap();
+        store
+            .add_skill_to_scenario("legacy-preset", &archive.id)
+            .unwrap();
+        store
+            .set_scenario_skill_tool_enabled("legacy-preset", &archive.id, "codex", false)
+            .unwrap();
+        store
+            .set_tags_for_skill(&archive.id, &["research".to_string()])
+            .unwrap();
+        let custom_before = r#"[{"id":"one","cards":[{"skill_id":"archive","stage":"do"}]},{"id":"two","cards":[{"skill_id":"keep"},{"skill_id":"archive"}]}]"#;
+        let overrides_before = r#"{"vibe":{"removedSkillIds":["archive"],"addedSkills":[{"skillId":"archive","stageId":"verify"}]}}"#;
+        store
+            .set_setting("card_master_custom_decks_v1", custom_before)
+            .unwrap();
+        store
+            .set_setting("card_master_deck_overrides_v1", overrides_before)
+            .unwrap();
+
+        let migration = store
+            .plan_organization_relationship_migration(&keep.id, &archive.id)
+            .unwrap();
+        assert_eq!(migration.after_keep.scenarios.len(), 1);
+        assert_eq!(migration.after_keep.scenario_tools.len(), 1);
+        assert_eq!(migration.after_keep.tags, vec!["research".to_string()]);
+        assert!(!migration
+            .after_custom_decks
+            .as_deref()
+            .unwrap()
+            .contains("archive"));
+        assert!(!migration
+            .after_deck_overrides
+            .as_deref()
+            .unwrap()
+            .contains("archive"));
+
+        insert_planned_archive_operation(&store, &keep, &archive, "operation-1");
+        store
+            .mark_skill_archived_with_relationships(
+                &archive.id,
+                "/trash/archive",
+                &[],
+                &[],
+                &migration,
+                "operation-1",
+            )
+            .unwrap();
+        assert!(!store
+            .skill_has_organization_dependencies(&archive.id)
+            .unwrap());
+        assert!(store
+            .skill_has_organization_dependencies(&keep.id)
+            .unwrap());
+        assert_eq!(
+            store
+                .get_organization_operation("operation-1")
+                .unwrap()
+                .unwrap()
+                .status,
+            "complete"
+        );
+
+        store
+            .restore_archived_skill_with_relationships(
+                &archive.id,
+                &archive.central_path,
+                archive.enabled,
+                &archive.status,
+                &[],
+                &migration,
+                "operation-1",
+            )
+            .unwrap();
+        assert!(store
+            .skill_has_organization_dependencies(&archive.id)
+            .unwrap());
+        let restored = store
+            .plan_organization_relationship_migration(&keep.id, &archive.id)
+            .unwrap();
+        assert_eq!(restored, migration);
+        assert_eq!(
+            store
+                .get_setting("card_master_custom_decks_v1")
+                .unwrap()
+                .as_deref(),
+            Some(custom_before)
+        );
+        assert_eq!(
+            store
+                .get_setting("card_master_deck_overrides_v1")
+                .unwrap()
+                .as_deref(),
+            Some(overrides_before)
+        );
+        assert_eq!(
+            store
+                .get_organization_operation("operation-1")
+                .unwrap()
+                .unwrap()
+                .status,
+            "undone"
+        );
+    }
+
+    #[test]
+    fn relationship_migration_fails_closed_when_dependencies_change_after_preview() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let keep = skill("keep", "/central/keep");
+        let archive = skill("archive", "/central/archive");
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        let migration = store
+            .plan_organization_relationship_migration(&keep.id, &archive.id)
+            .unwrap();
+        store
+            .set_tags_for_skill(&archive.id, &["changed-later".to_string()])
+            .unwrap();
+        insert_planned_archive_operation(&store, &keep, &archive, "operation-2");
+
+        assert!(store
+            .mark_skill_archived_with_relationships(
+                &archive.id,
+                "/trash/archive",
+                &[],
+                &[],
+                &migration,
+                "operation-2",
+            )
+            .is_err());
+        assert_eq!(
+            store.get_skill_by_id(&archive.id).unwrap().unwrap().status,
+            "ok"
+        );
     }
 }
 
