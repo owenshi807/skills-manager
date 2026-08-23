@@ -19,7 +19,7 @@ export function SkillSourceDiffViewer({ entries, className }: Props) {
 
   if (entries.length === 0) {
     return (
-      <div className={cn("rounded-xl border border-border-subtle bg-bg-secondary px-4 py-6 text-center", className)}>
+      <div className={cn("rounded-xl bg-surface-hover px-4 py-6 text-center", className)}>
         <div className="text-[13px] font-medium text-secondary">{t("mySkills.sourceDiff.noChanges")}</div>
       </div>
     );

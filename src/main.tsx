@@ -1,9 +1,13 @@
 import { Component, StrictMode, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import i18n, { i18nReady } from "./i18n";
+import { applyDesignSkin } from "./lib/designSystem";
 import { logStartupEvent } from "./lib/tauri";
+import "./styles/skins/skill-manager.css";
 import "./index.css";
 import App from "./App.tsx";
+
+applyDesignSkin();
 
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };

@@ -378,6 +378,11 @@
   },
   "mySkills": {
     "title": "技能庫",
+    "discovery": {
+      "detected": "發現 {{count}} 個尚未納管的 Agent Skill",
+      "hint": "來自 {{agents}} 個 Agent，尚未納入統一技能庫。先查看來源，再決定是否收入。",
+      "review": "查看並納入"
+    },
     "foundation": {
       "subtitle": "這裡是已納管的完整技能池。先確認有哪些 Skill，再決定哪些投放給 Agent。",
       "managed": "已納管",
@@ -400,6 +405,23 @@
       "symlink": "軟連結投放",
       "copy": "副本投放",
       "placed": "已投放"
+    },
+    "visibilityFilter": {
+      "title": "投放範圍",
+      "all": "全部",
+      "unassigned": "未分配",
+      "assigned": "Agent 可見",
+      "source": "來源",
+      "agentHint": "查看 {{agent}} 目前可以使用的 Skill"
+    },
+    "assignment": {
+      "title": "Agent 可見範圍",
+      "hint": "勾選後 Agent 即可使用；取消只撤下投放，不刪除技能庫內容。",
+      "manage": "管理可使用此 Skill 的 Agent",
+      "unassigned": "分配 Agent",
+      "visible": "可見",
+      "notVisible": "未分配",
+      "unavailable": "Agent 不可用"
     },
     "organization": {
       "healthTitle": "技能庫健康",
@@ -623,6 +645,10 @@
         "title": "已處理",
         "records": "筆記錄",
         "intro": "已做的關係判斷和真實整理操作都保存在這裡。判斷只改變分類；封存會讓冗餘 Skill 停止提供給 Agent，但不會永久刪除。",
+        "categories": "依問題類型查看",
+        "categoryCount": "{{count}} 筆判斷與操作記錄",
+        "decision": "已確認判斷",
+        "operation": "真實整理操作",
         "trashTitle": "Skill Card Manager 回收區",
         "trashHint": "這裡不是 macOS 垃圾桶，而是 Skill Card Manager 自己的可恢復區域。你不需要手動尋找檔案；在下方整理記錄中點擊「撤銷」，即可恢復 Skill 和原有 Agent 投放。",
         "trashPath": "內部位置：~/.skills-manager/.trash/organization/",
@@ -630,6 +656,20 @@
       },
       "formatRepair": {
         "title": "修復方式",
+        "batchTitle": "可批次產生 {{count}} 項修復方案",
+        "batchHint": "Agent 只修改隔離副本；Skill Card Manager 會逐項複檢，產生方案後再由你批次套用。",
+        "batchReady": "{{ready}} / {{total}} 項修復方案已通過複檢",
+        "batchReadyHint": "只會套用已通過複檢的方案；失敗項繼續留在待處理中。",
+        "prepareBatch": "批次審核 {{count}} 項",
+        "regenerateBatch": "重新審核 {{count}} 項",
+        "preparingBatch": "正在批次審核…",
+        "applyBatch": "批次套用 {{count}} 項",
+        "batchRunning": "正在產生並複檢修復方案（{{completed}} / {{total}}）…",
+        "batchPrepared": "批次審核完成：{{ready}} 項可套用，{{failed}} 項仍需處理",
+        "batchApplying": "正在安全套用 {{count}} 項修復…",
+        "batchApplied": "已套用 {{applied}} 項修復；{{failed}} 項未通過最新複核",
+        "batchUndone": "已撤銷 {{count}} 項批次修復",
+        "batchPromptCopied": "已複製 {{count}} 項批次修復任務；完成後請重新整理檢查",
         "methods": {
           "agent": "由 Agent 產生修復方案",
           "dependency": "先解決身分與投放依賴",
@@ -816,6 +856,7 @@
     "syncCoverage": "同步覆蓋",
     "syncSummary": "已同步 {{synced}} / {{total}}",
     "agentTogglesTitle": "全域工作區",
+    "agentSkillCount": "目前有 {{count}} 個 Skill",
     "expandAgentToggles": "展開",
     "collapseAgentToggles": "收起",
     "agentToggleNotInstalled": "未安裝",
@@ -869,6 +910,64 @@
     "confirmSyncMessage": "將把「{{name}}」同步到以下 {{count}} 個 Agent。",
     "confirmUnsyncMessage": "將從以下 {{count}} 個 Agent 移除「{{name}}」的同步結果。",
     "sourceRef": "來源位置",
+    "contentSource": {
+      "sourceTitle": "來源：{{source}}",
+      "sourceUnknown": "未記錄原始來源位置",
+      "readable": "來源可讀取",
+      "showMetadata": "查看來源資訊",
+      "hideMetadata": "收起來源資訊",
+      "liveSource": "持續變化，無固定版本",
+      "revision": "版本 {{revision}}",
+      "checkingTitle": "正在檢查 Skill 的內容來源",
+      "checkingHint": "技能庫版本已經可用；正在確認原始來源是否仍可讀取。",
+      "unavailableTitle": "技能庫版本可用，但原始來源暫時無法讀取",
+      "unavailableHint": "Agent 仍可使用技能庫版本；查看來源資訊後可重新關聯原始位置。",
+      "readyTitle": "技能庫版本已就緒，原始來源可讀取",
+      "readyHint": "打開詳情後可以分別查看技能庫版本、原始來源，並按需比較整個目錄。",
+      "identicalTitle": "技能庫版本與原始來源內容一致",
+      "identicalHint": "完整目錄比較未發現差異；當前不需要處理。",
+      "differencesTitle": "技能庫版本與原始來源有 {{count}} 個檔案不同",
+      "differencesHint": "Skill 仍可正常使用；打開詳情可查看具體差異，不會修改任何檔案。",
+      "review": "查看內容與來源",
+      "collapse": "收起內容與來源",
+      "contentVersions": "Skill 內容版本",
+      "comparing": "正在比較整個 Skill 目錄…",
+      "kind": {
+        "git": "Git 倉庫",
+        "skillssh": "skills.sh",
+        "local": "本機 Skill",
+        "import": "本機資料夾匯入"
+      },
+      "view": {
+        "managedTitle": "正在查看：技能庫版本",
+        "managedHint": "這是 Skill Card Manager 管理的統一副本；已投放的 Agent 從這裡取得內容。",
+        "sourceTitle": "正在查看：原始來源",
+        "sourceHint": "這是最初收入技能庫的來源位置；查看不會修改原始檔案。",
+        "diffTitle": "正在查看：比較差異",
+        "diffHint": "比較整個 Skill 目錄，而不只是 SKILL.md。"
+      }
+    },
+    "docTabs": {
+      "local": "技能庫版本",
+      "diff": "比較差異",
+      "diffCount": "比較差異 · {{count}}",
+      "source": "原始來源"
+    },
+    "sourceDiffUnavailable": "暫時無法讀取來源版本內容",
+    "sourceDiff": {
+      "noChanges": "無差異 —— 來源與技能庫內容一致",
+      "status": {
+        "added": "新增",
+        "removed": "刪除",
+        "modified": "修改"
+      },
+      "execBit": "權限 {{before}} → {{after}}",
+      "summary": {
+        "binary": "二進位檔案已變更",
+        "too_large": "檔案已變更，但過大無法預覽",
+        "permission_only": "僅檔案權限發生變化"
+      }
+    },
     "localSource": "本機倉庫",
     "agentCount": "{{count}} 個 Agent",
     "ready": "已就緒",
@@ -1040,6 +1139,13 @@
         "detected": "已發現",
         "pending": "待匯入",
         "imported": "已匯入"
+      },
+      "reasons": {
+        "same_name_managed": "技能庫已有同名 Skill；請改名後匯入，或先確認它們的關係。",
+        "same_name_discovered": "發現多個同名來源；請分別改名後匯入，或先確認它們的關係。",
+        "external_source": "這是外掛或外部執行環境來源，目前不複製進技能庫。",
+        "content_unavailable": "內容讀取失敗；修復來源後重新掃描。",
+        "unsafe_source": "來源包含目前複製模式無法安全保留的連結或特殊檔案。"
       }
     }
   },

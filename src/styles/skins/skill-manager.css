@@ -1,0 +1,171 @@
+/*
+ * Skill Card Manager default skin.
+ *
+ * This file owns visual expression only. Product structure, information
+ * architecture, copy, and behavior must not depend on a skin. A future Linear
+ * or Airbnb skin implements the same token contract under its own
+ * [data-design-skin] selector.
+ */
+
+:root[data-design-skin="skill-manager"] {
+  color-scheme: light;
+
+  /* Density and typography */
+  --app-scale: 1;
+  --font-sans: "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", Menlo, Monaco, monospace;
+  --tracking-body: -0.005em;
+
+  /* Canvas and elevation surfaces */
+  --color-bg: #fafafa;
+  --color-bg-secondary: #f4f4f5;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f4f4f5;
+  --color-surface-active: #e4e4e7;
+  --color-overlay: rgb(0 0 0 / 0.6);
+  --tone-overlay: 0 0 0;
+  --color-control-knob: #ffffff;
+  --background-help-header: radial-gradient(circle at top left, rgb(245 158 11 / 0.18), transparent 45%), radial-gradient(circle at top right, rgb(16 185 129 / 0.16), transparent 40%);
+
+  /* Structure */
+  --color-border: #d4d4d8;
+  --color-border-subtle: #e4e4e7;
+  --color-border-faint: #eeeef0;
+
+  /* Content hierarchy */
+  --color-text-primary: #18181b;
+  --color-text-secondary: #27272a;
+  --color-text-tertiary: #52525b;
+  --color-text-muted: #71717a;
+  --color-text-faint: #8b8b94;
+  --color-text-on-accent: #ffffff;
+
+  /* Brand and actions */
+  --color-accent: #059669;
+  --color-accent-light: #10b981;
+  --color-accent-dark: #047857;
+  --color-accent-bg: rgb(5 150 105 / 0.08);
+  --color-accent-border: rgb(5 150 105 / 0.25);
+
+  /* Semantic state colors */
+  --color-danger: #dc2626;
+  --color-danger-bg: rgb(220 38 38 / 0.08);
+  --color-warning: #d97706;
+  --color-warning-bg: rgb(245 158 11 / 0.1);
+  --color-success: #059669;
+  --color-success-bg: rgb(16 185 129 / 0.1);
+  --color-info: #0284c7;
+  --color-info-bg: rgb(14 165 233 / 0.1);
+  --color-feature: #7c3aed;
+  --color-feature-bg: rgb(139 92 246 / 0.1);
+
+  /* Compatibility color ramps. Existing Tailwind palette classes resolve to
+     these semantic roles, so legacy screens participate in every skin. */
+  --tone-success-weak: 236 253 245;
+  --tone-success-soft: 110 231 183;
+  --tone-success: 16 185 129;
+  --tone-success-strong: 4 120 87;
+  --tone-success-deep: 2 44 34;
+  --tone-warning-weak: 255 251 235;
+  --tone-warning-soft: 252 211 77;
+  --tone-warning: 245 158 11;
+  --tone-warning-strong: 180 83 9;
+  --tone-warning-deep: 69 26 3;
+  --tone-danger-weak: 254 242 242;
+  --tone-danger-soft: 252 165 165;
+  --tone-danger: 239 68 68;
+  --tone-danger-strong: 185 28 28;
+  --tone-danger-deep: 69 10 10;
+  --tone-info-weak: 240 249 255;
+  --tone-info-soft: 125 211 252;
+  --tone-info: 14 165 233;
+  --tone-info-strong: 3 105 161;
+  --tone-info-deep: 8 47 73;
+  --tone-feature-weak: 245 243 255;
+  --tone-feature-soft: 196 181 253;
+  --tone-feature: 139 92 246;
+  --tone-feature-strong: 109 40 217;
+  --tone-feature-deep: 46 16 101;
+
+  /* Diff visualization */
+  --color-diff-delete-line: #ffd7d5;
+  --color-diff-delete-bg: #ffebe9;
+  --color-diff-delete-edge: #cf222e;
+  --color-diff-add-line: #aceebb;
+  --color-diff-add-bg: #dafbe1;
+  --color-diff-add-edge: #1a7f37;
+  --color-diff-hunk-bg: #ddf4ff;
+
+  /* Shape */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-dialog: 28px;
+  --radius-pill: 9999px;
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgb(24 24 27 / 0.04);
+  --shadow-card-hover: 0 4px 12px rgb(24 24 27 / 0.07);
+  --shadow-dialog: 0 40px 90px rgb(0 0 0 / 0.45);
+  --shadow-control-knob: 0 1px 2px rgb(0 0 0 / 0.25);
+  --shadow-highlight-inset: inset 0 1px 0 rgb(255 255 255 / 0.04);
+
+  /* Motion */
+  --duration-instant: 100ms;
+  --duration-fast: 160ms;
+  --duration-standard: 250ms;
+  --duration-slow: 360ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Component aliases for transitions.dev patterns */
+  --tabs-dur: var(--duration-standard);
+  --tabs-ease: var(--ease-smooth-out);
+  --tabs-text-muted: var(--color-text-muted);
+  --tabs-text-active: var(--color-text-primary);
+  --tabs-bar-bg: var(--color-surface);
+  --tabs-pill-bg: var(--color-surface-active);
+  --acc-expand: var(--duration-standard);
+  --acc-collapse: var(--duration-standard);
+  --acc-chevron: var(--duration-standard);
+  --acc-ease: var(--ease-smooth-out);
+}
+
+:root[data-design-skin="skill-manager"].dark {
+  color-scheme: dark;
+  --color-bg: #0c0c0f;
+  --color-bg-secondary: #0f0f13;
+  --color-surface: #131317;
+  --color-surface-hover: #17171e;
+  --color-surface-active: #1e1e28;
+  --color-overlay: rgb(0 0 0 / 0.6);
+  --tone-overlay: 0 0 0;
+  --color-control-knob: #ffffff;
+  --color-border: #222229;
+  --color-border-subtle: #1c1c22;
+  --color-border-faint: #18181e;
+  --color-text-primary: #f4f4f5;
+  --color-text-secondary: #d4d4d8;
+  --color-text-tertiary: #a1a1aa;
+  --color-text-muted: #8e8e96;
+  --color-text-faint: #71717a;
+  --color-text-on-accent: #ffffff;
+  --color-accent: #10b981;
+  --color-accent-light: #34d399;
+  --color-accent-dark: #059669;
+  --color-accent-bg: rgb(16 185 129 / 0.08);
+  --color-accent-border: rgb(16 185 129 / 0.25);
+  --color-danger: #ef4444;
+  --color-danger-bg: rgb(239 68 68 / 0.08);
+  --color-warning: #f59e0b;
+  --color-warning-bg: rgb(245 158 11 / 0.1);
+  --color-success: #10b981;
+  --color-success-bg: rgb(16 185 129 / 0.1);
+  --color-info: #0ea5e9;
+  --color-info-bg: rgb(14 165 233 / 0.1);
+  --color-feature: #8b5cf6;
+  --color-feature-bg: rgb(139 92 246 / 0.1);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-card-hover: 0 4px 14px rgb(0 0 0 / 0.45);
+}

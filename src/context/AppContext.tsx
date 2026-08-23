@@ -1,7 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
-import type { ManagedSkill, Project, Preset, ToolInfo } from "../lib/tauri";
+import type {
+  LocalDiscoverySummary,
+  ManagedSkill,
+  Project,
+  Preset,
+  ScanResult,
+  ToolInfo,
+} from "../lib/tauri";
 import * as api from "../lib/tauri";
 import i18n from "../i18n";
 import { applyTextSize } from "../lib/textScale";
@@ -16,6 +23,8 @@ interface AppState {
   viewedPreset: Preset | null;
   tools: ToolInfo[];
   managedSkills: ManagedSkill[];
+  localDiscovery: ScanResult | null;
+  localDiscoverySummary: LocalDiscoverySummary;
   projects: Project[];
   loading: boolean;
   appError: string | null;
@@ -25,6 +34,7 @@ interface AppState {
   refreshPresets: () => Promise<void>;
   refreshTools: () => Promise<void>;
   refreshManagedSkills: () => Promise<void>;
+  refreshLocalDiscovery: () => Promise<ScanResult | null>;
   refreshProjects: () => Promise<void>;
   setViewedPresetId: (id: string) => void;
   applyPresetToDefault: (id: string) => Promise<void>;
@@ -53,6 +63,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [managedSkills, setManagedSkills] = useState<ManagedSkill[]>([]);
+  const [localDiscovery, setLocalDiscovery] = useState<ScanResult | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [appError, setAppError] = useState<string | null>(null);
@@ -61,6 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const autoCheckInFlightRef = useRef(false);
   const lastUpdateNotificationRef = useRef<string | null>(null);
   const lastActivePresetIdRef = useRef<string | null>(null);
+  const lastDiscoveryNotificationRef = useRef<string | null>(null);
 
   const setTranslatedError = useCallback((key: string) => {
     setAppError(i18n.t("common.loadFailed", { item: i18n.t(key) }));
@@ -144,6 +156,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshProjects();
   }, [setTranslatedError, refreshProjects]);
 
+  const refreshLocalDiscovery = useCallback(async () => {
+    try {
+      const result = await api.scanLocalSkills();
+      setLocalDiscovery(result);
+      const summary = api.summarizeLocalDiscovery(result);
+      api.logStartupEvent(
+        `local_discovery_ready_${summary.ready}_review_${summary.needsReview}_external_${summary.external}_blocked_${summary.blocked}`,
+        performance.now(),
+      ).catch(() => {});
+      const unavailableCount = result.groups.filter((group) => group.import_reason === "content_unavailable").length;
+      const unsafeCount = result.groups.filter((group) => group.import_reason === "unsafe_source").length;
+      api.logStartupEvent(
+        `local_discovery_blocked_content_${unavailableCount}_unsafe_${unsafeCount}`,
+        performance.now(),
+      ).catch(() => {});
+      const actionable = result.groups.filter((group) =>
+        group.import_state === "ready" ||
+        group.import_state === "needs_review" ||
+        (group.import_state === "blocked" && group.import_reason !== "external_source"),
+      );
+      const signature = actionable
+        .map((group) => `${group.fingerprint ?? group.name}:${group.locations.map((location) => location.found_path).sort().join("|")}`)
+        .sort()
+        .join("||");
+      if (actionable.length === 0) {
+        lastDiscoveryNotificationRef.current = null;
+      } else if (signature !== lastDiscoveryNotificationRef.current) {
+        lastDiscoveryNotificationRef.current = signature;
+        toast.info(i18n.t("install.scan.summary", {
+          tools: result.tools_scanned,
+          skills: summary.ready,
+        }), {
+          id: "new-agent-skills-detected",
+          duration: 8000,
+          action: {
+            label: i18n.t("mySkills.discovery.review"),
+            onClick: () => {
+              window.history.pushState(null, "", "/install?tab=local");
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            },
+          },
+        });
+      }
+      return result;
+    } catch (error) {
+      console.error("Failed to scan local Agent skills:", error);
+      return null;
+    }
+  }, []);
+
   const refreshAppData = useCallback(async () => {
     setLoading(true);
     await Promise.all([refreshPresets(), refreshTools(), refreshManagedSkills(), refreshProjects()]);
@@ -199,6 +261,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       api.logStartupEvent("refresh_app_data_start", performance.now()).catch(() => {});
       await refreshAppData();
       api.logStartupEvent("refresh_app_data_done", performance.now()).catch(() => {});
+      void refreshLocalDiscovery();
       // Apply saved text size on startup
       const savedSize = await api.getSettings("text_size").catch(() => null);
       if (savedSize) {
@@ -206,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     init();
-  }, [refreshAppData]);
+  }, [refreshAppData, refreshLocalDiscovery]);
 
   useEffect(() => {
     const unlistenPromise = listen("tray-open-updates", () => {
@@ -234,7 +297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearTimeout(refreshTimer);
       }
       refreshTimer = setTimeout(() => {
-        refreshAppData().catch((error) => {
+        Promise.all([refreshAppData(), refreshLocalDiscovery()]).catch((error) => {
           console.error("Failed to refresh after filesystem change:", error);
         });
       }, 500);
@@ -250,7 +313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.error("Failed to unlisten app-files-changed:", error);
         });
     };
-  }, [refreshAppData]);
+  }, [refreshAppData, refreshLocalDiscovery]);
 
   const notifyUpdatableSkills = useCallback((skills: ManagedSkill[]) => {
     const updatable = skills
@@ -381,6 +444,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         viewedPreset,
         tools,
         managedSkills,
+        localDiscovery,
+        localDiscoverySummary: api.summarizeLocalDiscovery(localDiscovery),
         projects,
         loading,
         appError,
@@ -390,6 +455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         refreshPresets,
         refreshTools,
         refreshManagedSkills,
+        refreshLocalDiscovery,
         refreshProjects,
         setViewedPresetId,
         applyPresetToDefault: handleApplyPresetToDefault,

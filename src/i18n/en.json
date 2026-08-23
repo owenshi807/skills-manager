@@ -421,6 +421,11 @@
   },
   "mySkills": {
     "title": "Library",
+    "discovery": {
+      "detected": "Found {{count}} unmanaged Agent Skills",
+      "hint": "Found across {{agents}} Agents and not yet added to the managed library. Review provenance before importing.",
+      "review": "Review and import"
+    },
     "foundation": {
       "subtitle": "This is the complete managed skill pool. First see what you own, then decide what each agent can access.",
       "managed": "Managed",
@@ -443,6 +448,23 @@
       "symlink": "Symlink deployment",
       "copy": "Copy deployment",
       "placed": "Deployed"
+    },
+    "visibilityFilter": {
+      "title": "Visibility",
+      "all": "All",
+      "unassigned": "Unassigned",
+      "assigned": "Agent visible",
+      "source": "Source",
+      "agentHint": "Show Skills currently available to {{agent}}"
+    },
+    "assignment": {
+      "title": "Agent visibility",
+      "hint": "Select an Agent to make this Skill available. Removing a deployment keeps the Skill in the library.",
+      "manage": "Manage which Agents can use this Skill",
+      "unassigned": "Assign Agent",
+      "visible": "Visible",
+      "notVisible": "Unassigned",
+      "unavailable": "Agent unavailable"
     },
     "organization": {
       "healthTitle": "Library health",
@@ -666,6 +688,10 @@
         "title": "Processed",
         "records": "records",
         "intro": "Confirmed relationship decisions and real organization operations live here. Decisions only change classification; archiving stops a redundant Skill from being provided to Agents without permanently deleting it.",
+        "categories": "Browse by issue type",
+        "categoryCount": "{{count}} decisions and operations",
+        "decision": "Confirmed decision",
+        "operation": "Applied organization action",
         "trashTitle": "Skill Card Manager trash",
         "trashHint": "This is not the macOS Trash. It is Skill Card Manager's own recoverable area. You do not need to find files manually; use Undo in the history below to restore the Skill and its Agent projections.",
         "trashPath": "Internal location: ~/.skills-manager/.trash/organization/",
@@ -673,6 +699,20 @@
       },
       "formatRepair": {
         "title": "Repair method",
+        "batchTitle": "Prepare repair plans for {{count}} items",
+        "batchHint": "The Agent edits isolated copies only. Skill Card Manager validates each result before you apply the batch.",
+        "batchReady": "{{ready}} of {{total}} repair plans passed validation",
+        "batchReadyHint": "Only validated plans will be applied. Failed items remain in review.",
+        "prepareBatch": "Review {{count}} items",
+        "regenerateBatch": "Review {{count}} items again",
+        "preparingBatch": "Reviewing batch…",
+        "applyBatch": "Apply {{count}} repairs",
+        "batchRunning": "Preparing and validating repairs ({{completed}} / {{total}})…",
+        "batchPrepared": "Batch review complete: {{ready}} ready, {{failed}} still need work",
+        "batchApplying": "Safely applying {{count}} repairs…",
+        "batchApplied": "Applied {{applied}} repairs; {{failed}} failed current validation",
+        "batchUndone": "Undid {{count}} batch repairs",
+        "batchPromptCopied": "Copied a batch repair task for {{count}} items. Refresh after it finishes",
         "methods": {
           "agent": "Have an Agent prepare the repair",
           "dependency": "Resolve identity and projection dependencies first",
@@ -915,10 +955,48 @@
     "sourceBranch": "Branch",
     "sourceSubpath": "Subpath",
     "sourceRevision": "Revision",
+    "contentSource": {
+      "sourceTitle": "Source: {{source}}",
+      "sourceUnknown": "Original source location not recorded",
+      "readable": "Source available",
+      "showMetadata": "View source details",
+      "hideMetadata": "Hide source details",
+      "liveSource": "Live source, no fixed revision",
+      "revision": "Revision {{revision}}",
+      "checkingTitle": "Checking this Skill's content source",
+      "checkingHint": "The managed library version is ready while the original source is being checked.",
+      "unavailableTitle": "The library version is ready, but its original source is unavailable",
+      "unavailableHint": "Agents can keep using the library version. Open source details to relink the original location.",
+      "readyTitle": "The library version is ready and its original source is available",
+      "readyHint": "Open details to view the library version, original source, or compare the complete directories.",
+      "identicalTitle": "The library version matches its original source",
+      "identicalHint": "The complete directory comparison found no differences. No action is needed.",
+      "differencesTitle": "The library version and original source differ in {{count}} files",
+      "differencesHint": "The Skill remains usable. Open details to review the differences without changing files.",
+      "review": "Review content and source",
+      "collapse": "Hide content and source",
+      "contentVersions": "Skill content versions",
+      "comparing": "Comparing the complete Skill directories…",
+      "kind": {
+        "git": "Git repository",
+        "skillssh": "skills.sh",
+        "local": "Local Skill",
+        "import": "Imported local folder"
+      },
+      "view": {
+        "managedTitle": "Viewing: Library version",
+        "managedHint": "This is the copy managed by Skill Card Manager and used by assigned Agents.",
+        "sourceTitle": "Viewing: Original source",
+        "sourceHint": "This is where the Skill was originally collected from. Viewing it does not modify source files.",
+        "diffTitle": "Viewing: Difference comparison",
+        "diffHint": "Compares the complete Skill directory, not only SKILL.md."
+      }
+    },
     "docTabs": {
-      "local": "Local",
-      "diff": "Diff",
-      "source": "Source"
+      "local": "Library version",
+      "diff": "Compare differences",
+      "diffCount": "Compare differences · {{count}}",
+      "source": "Original source"
     },
     "sourceDiffUnavailable": "Source content is unavailable right now",
     "sourceDiff": {
@@ -940,6 +1018,7 @@
     "ready": "Ready",
     "standby": "Standby",
     "agentTogglesTitle": "Global Workspace",
+    "agentSkillCount": "{{count}} Skills currently available",
     "expandAgentToggles": "Expand",
     "collapseAgentToggles": "Collapse",
     "agentToggleEnabled": "{{agent}} enabled",
@@ -1131,6 +1210,13 @@
         "detected": "Detected",
         "pending": "Pending",
         "imported": "Imported"
+      },
+      "reasons": {
+        "same_name_managed": "A managed Skill already has this name. Rename it before importing, or review the relationship first.",
+        "same_name_discovered": "Multiple discovered sources share this name. Rename them separately, or review the relationship first.",
+        "external_source": "This is a plugin or external runtime source and is not copied into the managed library.",
+        "content_unavailable": "The content could not be read. Repair the source and scan again.",
+        "unsafe_source": "The source contains links or special files that the current copy mode cannot preserve safely."
       }
     }
   },

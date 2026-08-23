@@ -22,10 +22,10 @@ export function HelpDialog() {
   if (!helpOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-overlay/60 px-6 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={closeHelp} />
-      <div className="relative w-full max-w-[640px] overflow-hidden rounded-[28px] border border-border bg-bg-secondary shadow-[0_40px_90px_rgba(0,0,0,0.45)]">
-        <div className="border-b border-border-subtle bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_45%),radial-gradient(circle_at_top_right,rgba(16,185,129,0.16),transparent_40%)] px-6 py-5">
+      <div className="relative w-full max-w-[640px] overflow-hidden rounded-dialog border border-border bg-bg-secondary shadow-dialog">
+        <div className="border-b border-border-subtle px-6 py-5" style={{ backgroundImage: "var(--background-help-header)" }}>
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-faint">

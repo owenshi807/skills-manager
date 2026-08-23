@@ -160,7 +160,7 @@ jobs:
         if: startsWith(matrix.platform, 'macos')
         run: |
           set -euo pipefail
-          APP_PATH="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Card Master.app"
+          APP_PATH="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Skill Card Manager.app"
           if [ ! -d "$APP_PATH" ]; then
             echo "Expected app bundle not found at $APP_PATH" >&2
             exit 1

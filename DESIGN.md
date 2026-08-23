@@ -1,6 +1,77 @@
 # Skill Card Manager Design System
 
-## Direction
+## Purpose
+
+This document is the boundary between **what the product is** and **how a skin
+expresses it**. Skill Card Manager must be able to adopt a Linear, Airbnb, or
+another future visual language without rewriting product structure, copy,
+behavior, or business state.
+
+There are three layers:
+
+1. **Product contract (invariant)** — information architecture, task flow,
+   semantics, accessibility, safety, and interaction outcomes.
+2. **Component contract (stable API)** — semantic component roles such as page,
+   panel, toolbar, control, status, choice, and action.
+3. **Skin (replaceable)** — color, typography, radii, elevation, density, and
+   motion values supplied through tokens.
+
+Light/dark is a mode inside a skin. It is not a separate skin.
+
+## Architecture
+
+- Runtime skin selection is owned by `src/lib/designSystem.ts` and expressed on
+  the root element as `data-design-skin`.
+- Skin implementations live in `src/styles/skins/`. The current upstream-derived
+  appearance is `skill-manager.css` and remains the default skin.
+- `src/index.css` owns structural utilities and component behavior. It must not
+  contain visual literals.
+- `tailwind.config.js` maps semantic utilities to the Token Contract. Legacy
+  palette utilities are compatibility aliases to semantic state ramps, so older
+  upstream screens can be skinned before they are component-by-component
+  migrated.
+- `npm run design:check` derives the live contract from every `var(--token)`
+  consumer, adds the required compatibility ramps, and rejects incomplete skins
+  or visual literals outside a skin file.
+
+## Token Contract
+
+Every skin must implement the following roles in both readable light and dark
+modes. Token names are the public API; their values are private to the skin.
+
+| Domain | Required roles | Meaning |
+| --- | --- | --- |
+| Typography | `font-sans`, `font-mono`, `tracking-body` | Voice and reading density |
+| Canvas | `bg`, `bg-secondary`, `surface`, `surface-hover`, `surface-active` | Luminance hierarchy, not decoration |
+| Structure | `border`, `border-subtle`, `border-faint` | Controls, regions, internal separation |
+| Content | `text-primary`, `secondary`, `tertiary`, `muted`, `faint`, `on-accent` | Reading priority |
+| Brand/action | `accent`, `accent-light`, `accent-dark`, `accent-bg`, `accent-border` | Selection, focus, and primary action |
+| State | `danger`, `warning`, `success`, `info`, `feature` plus backgrounds and ramps | Meaning must remain stable across skins |
+| Shape | `radius-xs`, `sm`, `control`, `panel`, `dialog`, `pill` | Component family geometry |
+| Elevation | `shadow-card`, `card-hover`, `dialog`, `control-knob`, `highlight-inset` | Depth without changing structure |
+| Motion | `duration-instant`, `fast`, `standard`, `slow`, `ease-standard`, `ease-smooth-out` | State continuity and perceived speed |
+
+Tokens may change expression but not meaning. For example, a Linear skin may use
+tighter radii and quieter shadows, while an Airbnb skin may use warmer surfaces
+and more generous radii. Neither skin may turn `danger` into decoration, change a
+radio choice into a multi-select control, or move an action into another task.
+
+## Adding a Skin
+
+1. Copy `src/styles/skins/skill-manager.css` and change only token values and its
+   `data-design-skin` selector.
+2. Add the skin id to `DESIGN_SKINS` in `src/lib/designSystem.ts` and import its
+   CSS once from `src/main.tsx`.
+3. Translate the reference Design MD (for example Linear or Airbnb) into the
+   Token Contract. Do not copy reference product IA or branded assets.
+4. Run `npm run design:check`, `npm run lint`, and `npm run build` in light and
+   dark mode. A skin is incomplete if any screen falls back to a raw color,
+   radius, shadow, or motion literal.
+
+No skin picker is shown while only one skin exists. The runtime contract is ready;
+the control becomes useful only when a second complete skin is installed.
+
+## Default Skin Direction
 
 Skill Card Manager uses **Linear's dark, surface-led information hierarchy** with
 **Airbnb's restrained interaction clarity**. It is a dense desktop tool, not a
@@ -10,9 +81,10 @@ The product keeps its existing emerald identity. Emerald is scarce and semantic:
 it appears on the primary action, the selected radio control, focus, and confirmed
 success. It is not a section background or an informational border.
 
-This first pass applies only to Skill Card Manager additions. Existing upstream
-Skill Manager screens retain their current structure until they are deliberately
-themed later.
+The default skin preserves the existing Skill Manager appearance while routing
+the entire product through the shared Token Contract.
+
+## Product Interaction Contract (Skin-invariant)
 
 ## Hierarchy
 

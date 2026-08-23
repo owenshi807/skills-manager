@@ -314,13 +314,71 @@ export interface DiscoveredGroup {
   locations: { id: string; tool: string; found_path: string }[];
   imported: boolean;
   found_at: number;
+  import_state: "imported" | "ready" | "needs_review" | "blocked";
+  import_reason:
+    | "already_managed"
+    | "same_name_managed"
+    | "same_name_discovered"
+    | "external_source"
+    | "content_unavailable"
+    | "unsafe_source"
+    | null;
 }
 
 export interface ScanResult {
   tools_scanned: number;
   skills_found: number;
+  observations_found: number;
+  groups_found: number;
   groups: DiscoveredGroup[];
   diagnostics?: unknown[];
+}
+
+export interface LocalDiscoverySummary {
+  /** New, unique loose Skills that can be copied into the managed library now. */
+  ready: number;
+  /** Identity/name collisions that need a user or Agent decision before import. */
+  needsReview: number;
+  /** Plugin/runtime-owned Skills that remain managed by their external owner. */
+  external: number;
+  /** Sources that cannot be verified or copied safely until repaired. */
+  blocked: number;
+  imported: number;
+  /** Groups that still need an action in Skill Card Manager. External groups are informational. */
+  actionable: number;
+  observedAgents: number;
+}
+
+export function summarizeLocalDiscovery(result: ScanResult | null): LocalDiscoverySummary {
+  const summary: LocalDiscoverySummary = {
+    ready: 0,
+    needsReview: 0,
+    external: 0,
+    blocked: 0,
+    imported: 0,
+    actionable: 0,
+    observedAgents: 0,
+  };
+  if (!result) return summary;
+
+  const agents = new Set<string>();
+  for (const group of result.groups) {
+    for (const location of group.locations) agents.add(location.tool);
+    if (group.import_state === "imported") {
+      summary.imported += 1;
+    } else if (group.import_state === "ready") {
+      summary.ready += 1;
+    } else if (group.import_state === "needs_review") {
+      summary.needsReview += 1;
+    } else if (group.import_reason === "external_source") {
+      summary.external += 1;
+    } else {
+      summary.blocked += 1;
+    }
+  }
+  summary.actionable = summary.ready + summary.needsReview + summary.blocked;
+  summary.observedAgents = agents.size;
+  return summary;
 }
 
 export interface SkillsShSkill {

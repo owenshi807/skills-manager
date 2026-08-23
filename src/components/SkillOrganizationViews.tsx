@@ -16,7 +16,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   ManagedSkill,
@@ -28,6 +28,10 @@ import type {
   ToolInfo,
 } from "../lib/tauri";
 import type { SkillIssue, SkillRelationGroup } from "../lib/skillOrganization";
+import {
+  organizationArchivePreviewIdentity,
+  organizationIssueSelectionIdentity,
+} from "../lib/organizationPreviewIdentity";
 import { cn } from "../utils";
 
 interface SharedProps {
@@ -49,6 +53,8 @@ interface IssuesProps extends SharedProps {
   onHandOff: (issue: SkillIssue) => void;
   onPrepareFormatRepair: (issue: SkillIssue, issueCodes: string[]) => Promise<FormatRepairPreview | null>;
   onApplyFormatRepair: (preview: FormatRepairPreview) => Promise<void>;
+  onPrepareFormatRepairBatch: (issues: SkillIssue[], issueCode: string) => Promise<FormatRepairPreview[]>;
+  onApplyFormatRepairBatch: (previews: FormatRepairPreview[]) => Promise<string[]>;
   agentAssessments: Map<string, OrganizationAgentDisplayAssessment>;
   agentError: string | null;
   processingBatch: boolean;
@@ -72,6 +78,50 @@ interface ProcessedProps {
 }
 
 export type OrganizationExecutionMode = "codex" | "claude_code" | "hermes" | "copy_prompt";
+
+type DropdownPlacement = "top" | "bottom";
+
+function useDropdownPlacement(
+  open: boolean,
+  anchorRef: React.RefObject<HTMLDivElement | null>,
+  itemCount: number,
+) {
+  const [placement, setPlacement] = useState<DropdownPlacement>("bottom");
+  const [maxHeight, setMaxHeight] = useState(320);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const updatePlacement = () => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+
+      const rect = anchor.getBoundingClientRect();
+      const viewportMargin = 12;
+      const menuGap = 8;
+      const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - menuGap - viewportMargin);
+      const spaceAbove = Math.max(0, rect.top - menuGap - viewportMargin);
+      const desiredHeight = Math.min(360, itemCount * 60 + 12);
+      const nextPlacement = spaceBelow >= Math.min(desiredHeight, 160) || spaceBelow >= spaceAbove
+        ? "bottom"
+        : "top";
+      const availableSpace = nextPlacement === "bottom" ? spaceBelow : spaceAbove;
+
+      setPlacement(nextPlacement);
+      setMaxHeight(Math.max(72, Math.min(360, availableSpace)));
+    };
+
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
+    };
+  }, [anchorRef, itemCount, open]);
+
+  return { placement, maxHeight };
+}
 
 export interface OrganizationExecutionOption {
   id: OrganizationExecutionMode;
@@ -309,6 +359,8 @@ export function SkillIssuesView({
   onHandOff,
   onPrepareFormatRepair,
   onApplyFormatRepair,
+  onPrepareFormatRepairBatch,
+  onApplyFormatRepairBatch,
   agentAssessments,
   agentError,
   processingBatch,
@@ -330,15 +382,38 @@ export function SkillIssuesView({
   const [selectedHealthCode, setSelectedHealthCode] = useState<string | null>(null);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [keepSkillId, setKeepSkillId] = useState<string | null>(null);
-  const [archivePreview, setArchivePreview] = useState<OrganizationArchivePreview | null>(null);
-  const [previewingArchive, setPreviewingArchive] = useState(false);
+  const [archivePreviewState, setArchivePreviewState] = useState<{
+    identity: string;
+    preview: OrganizationArchivePreview;
+  } | null>(null);
+  const [previewingArchiveIdentity, setPreviewingArchiveIdentity] = useState<string | null>(null);
   const [applyingArchive, setApplyingArchive] = useState(false);
   const [formatRepairPreview, setFormatRepairPreview] = useState<FormatRepairPreview | null>(null);
+  const [formatRepairBatchPreviews, setFormatRepairBatchPreviews] = useState<FormatRepairPreview[]>([]);
   const [preparingFormatRepair, setPreparingFormatRepair] = useState(false);
   const [applyingFormatRepair, setApplyingFormatRepair] = useState(false);
+  const [preparingFormatRepairBatch, setPreparingFormatRepairBatch] = useState(false);
+  const [applyingFormatRepairBatch, setApplyingFormatRepairBatch] = useState(false);
   const executionMenuRef = useRef<HTMLDivElement>(null);
   const formatExecutionMenuRef = useRef<HTMLDivElement>(null);
+  const formatBatchExecutionMenuRef = useRef<HTMLDivElement>(null);
   const [formatExecutionMenuOpen, setFormatExecutionMenuOpen] = useState(false);
+  const [formatBatchExecutionMenuOpen, setFormatBatchExecutionMenuOpen] = useState(false);
+  const executionMenuPlacement = useDropdownPlacement(
+    executionMenuOpen,
+    executionMenuRef,
+    executionOptions.length,
+  );
+  const formatExecutionMenuPlacement = useDropdownPlacement(
+    formatExecutionMenuOpen,
+    formatExecutionMenuRef,
+    executionOptions.length,
+  );
+  const formatBatchExecutionMenuPlacement = useDropdownPlacement(
+    formatBatchExecutionMenuOpen,
+    formatBatchExecutionMenuRef,
+    executionOptions.length,
+  );
   useEffect(() => {
     onReviewModeChange?.(selectedCategory !== null);
   }, [onReviewModeChange, selectedCategory]);
@@ -360,6 +435,16 @@ export function SkillIssuesView({
     window.addEventListener("mousedown", close);
     return () => window.removeEventListener("mousedown", close);
   }, [formatExecutionMenuOpen]);
+  useEffect(() => {
+    if (!formatBatchExecutionMenuOpen) return;
+    const close = (event: MouseEvent) => {
+      if (!formatBatchExecutionMenuRef.current?.contains(event.target as Node)) {
+        setFormatBatchExecutionMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [formatBatchExecutionMenuOpen]);
   const unresolvedIssues = issues.filter((issue) => !resolvedIds.has(issue.id));
   const searchedIssues = unresolvedIssues.filter((issue) => {
     const copy = issueCopy(issue.kind, t);
@@ -398,9 +483,20 @@ export function SkillIssuesView({
   const narrowedIssues = categoryIssues.filter((issue) =>
     selectedCategory !== "format" || !selectedHealthCode || (issue.healthCodes ?? ["unknown"]).includes(selectedHealthCode));
   const activeIssue = narrowedIssues.find((issue) => issue.id === selectedIssueId) ?? narrowedIssues[0];
+  const formatBatchIssues = selectedCategory === "format" && selectedHealthCode
+    && formatRepairMode(selectedHealthCode) === "agent"
+    ? narrowedIssues.filter((issue) => issue.kind === "format_health" && !!issue.skills[0])
+    : [];
+  const activeBatchFormatPreview = activeIssue
+    ? formatRepairBatchPreviews.find((preview) => preview.skill_id === activeIssue.skills[0]?.id) ?? null
+    : null;
+  const activeFormatRepairPreview = formatRepairPreview ?? activeBatchFormatPreview;
   useEffect(() => {
     setFormatRepairPreview(null);
   }, [activeIssue?.id, selectedHealthCode]);
+  useEffect(() => {
+    setFormatRepairBatchPreviews([]);
+  }, [selectedHealthCode]);
   const visibleIssues = activeIssue ? [activeIssue] : [];
   const semanticIssues = selectedCategory === "same_name"
     ? categoryIssues.filter((issue) => issue.decisionTier === "needs_semantic")
@@ -437,6 +533,31 @@ export function SkillIssuesView({
       && !!activeAgentAssessment
       && !activeAgentAssessment.stale
       && activeAgentAssessment.assessment.recommended_action === "archive_one");
+  const activeIssueMemberIds = activeIssue?.skills.map((skill) => skill.id) ?? [];
+  const defaultKeepSkillId = activeIssue?.skills.some((skill) => skill.id === recommendedKeepSkillId)
+    ? recommendedKeepSkillId
+    : activeIssue?.skills[0]?.id ?? null;
+  const activeIssueSelectionIdentity = organizationIssueSelectionIdentity(
+    activeIssue?.id,
+    activeIssueMemberIds,
+    recommendedKeepSkillId,
+  );
+  const activeArchiveSkillId = activeIssue?.skills.find((skill) => skill.id !== keepSkillId)?.id ?? null;
+  const activeArchivePreviewIdentity = organizationArchivePreviewIdentity({
+    active: activeArchiveRecommended,
+    issueId: activeIssue?.id,
+    caseRevision: activeIssue?.caseRevision,
+    issueKind: activeIssue?.kind,
+    memberIds: activeIssueMemberIds,
+    keepSkillId,
+    archiveSkillId: activeArchiveSkillId,
+  });
+  const activeIssueRef = useRef(activeIssue);
+  activeIssueRef.current = activeIssue;
+  const archivePreview = archivePreviewState?.identity === activeArchivePreviewIdentity
+    ? archivePreviewState.preview
+    : null;
+  const previewingArchive = previewingArchiveIdentity === activeArchivePreviewIdentity;
 
   const openCategory = (category: IssueCategory) => {
     const first = unresolvedIssues.find((issue) => issueCategory(issue) === category);
@@ -472,56 +593,76 @@ export function SkillIssuesView({
   }, [selectedCategoryStillExists]);
 
   useEffect(() => {
-    const recommendedId = activeIssue?.skills.some((skill) => skill.id === recommendedKeepSkillId)
-      ? recommendedKeepSkillId
-      : null;
-    setKeepSkillId(recommendedId ?? activeIssue?.skills[0]?.id ?? null);
-    setArchivePreview(null);
-  }, [activeIssue?.id, activeIssue?.skills, recommendedKeepSkillId]);
+    setKeepSkillId(defaultKeepSkillId);
+    setArchivePreviewState(null);
+  }, [activeIssueSelectionIdentity, defaultKeepSkillId]);
 
   useEffect(() => {
-    if (!activeIssue || !activeArchiveRecommended || !keepSkillId) return;
-    if (!activeIssue.skills.some((skill) => skill.id === keepSkillId)) return;
-    const archiveId = activeIssue.skills.find((skill) => skill.id !== keepSkillId)?.id;
-    if (!archiveId) return;
+    if (!activeArchivePreviewIdentity || !keepSkillId || !activeArchiveSkillId) {
+      setPreviewingArchiveIdentity(null);
+      setArchivePreviewState(null);
+      return;
+    }
+    const issue = activeIssueRef.current;
+    if (!issue || !issue.skills.some((skill) => skill.id === keepSkillId)) return;
     let cancelled = false;
-    setPreviewingArchive(true);
-    setArchivePreview(null);
-    onPreviewArchive(activeIssue, keepSkillId, archiveId)
+    setPreviewingArchiveIdentity(activeArchivePreviewIdentity);
+    setArchivePreviewState((current) => (
+      current?.identity === activeArchivePreviewIdentity ? current : null
+    ));
+    onPreviewArchive(issue, keepSkillId, activeArchiveSkillId)
       .then((preview) => {
-        if (!cancelled) setArchivePreview(preview);
+        if (!cancelled) {
+          setArchivePreviewState({ identity: activeArchivePreviewIdentity, preview });
+        }
       })
       .catch(() => {
         // The parent owns the user-facing error toast. A retry action remains visible.
       })
       .finally(() => {
-        if (!cancelled) setPreviewingArchive(false);
+        if (!cancelled) {
+          setPreviewingArchiveIdentity((current) => (
+            current === activeArchivePreviewIdentity ? null : current
+          ));
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [activeArchiveRecommended, activeIssue, keepSkillId, onPreviewArchive]);
+  }, [activeArchivePreviewIdentity, activeArchiveSkillId, keepSkillId, onPreviewArchive]);
 
   const previewArchivePlan = async (issue: SkillIssue) => {
     const keepId = keepSkillId ?? issue.skills[0]?.id;
     const archiveId = issue.skills.find((skill) => skill.id !== keepId)?.id;
     if (!keepId || !archiveId) return;
-    setPreviewingArchive(true);
+    const previewIdentity = organizationArchivePreviewIdentity({
+      active: true,
+      issueId: issue.id,
+      caseRevision: issue.caseRevision,
+      issueKind: issue.kind,
+      memberIds: issue.skills.map((skill) => skill.id),
+      keepSkillId: keepId,
+      archiveSkillId: archiveId,
+    });
+    if (!previewIdentity) return;
+    setPreviewingArchiveIdentity(previewIdentity);
     try {
-      setArchivePreview(await onPreviewArchive(issue, keepId, archiveId));
+      const preview = await onPreviewArchive(issue, keepId, archiveId);
+      setArchivePreviewState({ identity: previewIdentity, preview });
     } catch {
       // The parent owns the user-facing error toast.
     } finally {
-      setPreviewingArchive(false);
+      setPreviewingArchiveIdentity((current) => current === previewIdentity ? null : current);
     }
   };
 
   const applyArchivePlan = async (issue: SkillIssue) => {
-    if (!archivePreview) return;
+    if (!archivePreview || !activeArchivePreviewIdentity) return;
+    const appliedIdentity = activeArchivePreviewIdentity;
     setApplyingArchive(true);
     try {
       await onApplyArchive(issue, archivePreview.keep_skill_id, archivePreview.archive_skill_id);
-      setArchivePreview(null);
+      setArchivePreviewState((current) => current?.identity === appliedIdentity ? null : current);
     } catch {
       // The parent owns the user-facing error toast.
     } finally {
@@ -542,15 +683,43 @@ export function SkillIssuesView({
   };
 
   const applyFormatRepairPlan = async () => {
-    if (!formatRepairPreview) return;
+    if (!activeFormatRepairPreview) return;
     setApplyingFormatRepair(true);
     try {
-      await onApplyFormatRepair(formatRepairPreview);
+      await onApplyFormatRepair(activeFormatRepairPreview);
       setFormatRepairPreview(null);
+      setFormatRepairBatchPreviews((current) => current.filter(
+        (preview) => preview.skill_id !== activeFormatRepairPreview.skill_id,
+      ));
     } catch {
       // The parent owns the user-facing error toast.
     } finally {
       setApplyingFormatRepair(false);
+    }
+  };
+
+  const prepareFormatRepairBatch = async () => {
+    if (!selectedHealthCode || formatBatchIssues.length < 2) return;
+    setPreparingFormatRepairBatch(true);
+    try {
+      const previews = await onPrepareFormatRepairBatch(formatBatchIssues, selectedHealthCode);
+      setFormatRepairBatchPreviews(previews);
+    } finally {
+      setPreparingFormatRepairBatch(false);
+    }
+  };
+
+  const applyFormatRepairBatch = async () => {
+    if (formatRepairBatchPreviews.length === 0) return;
+    setApplyingFormatRepairBatch(true);
+    try {
+      const appliedSkillIds = new Set(await onApplyFormatRepairBatch(formatRepairBatchPreviews));
+      setFormatRepairBatchPreviews((current) => current.filter(
+        (preview) => !appliedSkillIds.has(preview.skill_id),
+      ));
+      setFormatRepairPreview(null);
+    } finally {
+      setApplyingFormatRepairBatch(false);
     }
   };
 
@@ -777,7 +946,13 @@ export function SkillIssuesView({
                 <ChevronDown className={cn("h-4 w-4 transition-transform", executionMenuOpen && "rotate-180")} />
               </button>
               {executionMenuOpen && (
-                <div className="absolute right-0 top-full z-50 mt-2 min-w-[260px] overflow-hidden rounded-xl border border-border bg-surface p-1.5 text-primary shadow-2xl">
+                <div
+                  className={cn(
+                    "absolute right-0 z-50 min-w-[260px] overflow-y-auto rounded-xl border border-border bg-surface p-1.5 text-primary shadow-2xl",
+                    executionMenuPlacement.placement === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
+                  )}
+                  style={{ maxHeight: executionMenuPlacement.maxHeight }}
+                >
                   {executionOptions.map((option) => (
                     <button
                       key={option.id}
@@ -830,6 +1005,98 @@ export function SkillIssuesView({
         </section>
       )}
 
+      {selectedCategory === "format" && selectedHealthCode && formatBatchIssues.length > 1 && (
+        <section className="flex flex-col gap-3 border-b border-border-faint pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h3 className="text-[13px] font-semibold text-primary">
+              {formatRepairBatchPreviews.length > 0
+                ? t("mySkills.organization.formatRepair.batchReady", {
+                    ready: formatRepairBatchPreviews.length,
+                    total: formatBatchIssues.length,
+                  })
+                : t("mySkills.organization.formatRepair.batchTitle", { count: formatBatchIssues.length })}
+            </h3>
+            <p className="mt-0.5 text-[11px] leading-4 text-muted">
+              {formatRepairBatchPreviews.length > 0
+                ? t("mySkills.organization.formatRepair.batchReadyHint")
+                : t("mySkills.organization.formatRepair.batchHint")}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+            {formatRepairBatchPreviews.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void applyFormatRepairBatch()}
+                disabled={applyingFormatRepairBatch}
+                className="app-button-primary h-10"
+              >
+                {applyingFormatRepairBatch && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {t("mySkills.organization.formatRepair.applyBatch", { count: formatRepairBatchPreviews.length })}
+              </button>
+            )}
+            <div ref={formatBatchExecutionMenuRef} className="relative flex h-10 items-stretch rounded-lg bg-surface-hover text-secondary">
+              <button
+                type="button"
+                onClick={() => void prepareFormatRepairBatch()}
+                disabled={preparingFormatRepairBatch || applyingFormatRepairBatch}
+                className="flex h-10 items-center gap-2 rounded-l-lg px-3 text-[12px] font-semibold transition-colors hover:bg-surface-active disabled:opacity-60"
+              >
+                {preparingFormatRepairBatch
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Bot className="h-3.5 w-3.5" />}
+                {preparingFormatRepairBatch
+                  ? t("mySkills.organization.formatRepair.preparingBatch")
+                  : formatRepairBatchPreviews.length > 0
+                    ? t("mySkills.organization.formatRepair.regenerateBatch", { count: formatBatchIssues.length })
+                    : t("mySkills.organization.formatRepair.prepareBatch", { count: formatBatchIssues.length })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormatBatchExecutionMenuOpen((open) => !open)}
+                disabled={preparingFormatRepairBatch || applyingFormatRepairBatch}
+                className="flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-border-subtle transition-colors hover:bg-surface-active disabled:opacity-60"
+                aria-label={t("mySkills.organization.chooseAgent")}
+                aria-expanded={formatBatchExecutionMenuOpen}
+              >
+                <ChevronDown className={cn("h-4 w-4 transition-transform", formatBatchExecutionMenuOpen && "rotate-180")} />
+              </button>
+              {formatBatchExecutionMenuOpen && (
+                <div
+                  className={cn(
+                    "absolute right-0 z-50 min-w-[260px] overflow-y-auto rounded-xl border border-border bg-surface p-1.5 text-primary shadow-2xl",
+                    formatBatchExecutionMenuPlacement.placement === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
+                  )}
+                  style={{ maxHeight: formatBatchExecutionMenuPlacement.maxHeight }}
+                >
+                  {executionOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => {
+                        onExecutionModeChange(option.id);
+                        setFormatBatchExecutionMenuOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-hover",
+                        option.id === executionMode && "bg-accent-bg",
+                      )}
+                    >
+                      <span className="mt-0.5 flex h-4 w-4 items-center justify-center">
+                        {option.id === executionMode && <CheckCircle2 className="h-4 w-4 text-accent-light" />}
+                      </span>
+                      <span>
+                        <span className="block text-[12px] font-semibold">{option.label}</span>
+                        <span className="mt-0.5 block text-[10px] leading-4 text-muted">{option.description}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {selectedCategory === "format" && !selectedHealthCode ? (
         <section className="space-y-3">
           <div>
@@ -872,11 +1139,11 @@ export function SkillIssuesView({
         <div className={cn(
           "app-panel grid items-start overflow-hidden shadow-card",
           selectedCategory === "format"
-            ? "xl:grid-cols-[220px_280px_minmax(0,1fr)]"
+            ? "md:grid-cols-[180px_220px_minmax(0,1fr)]"
             : "lg:grid-cols-[300px_minmax(0,1fr)]",
         )}>
           {selectedCategory === "format" && (
-            <aside className="max-h-[720px] overflow-y-auto border-b border-border-faint bg-bg-secondary/55 p-2 xl:sticky xl:top-4 xl:border-b-0 xl:border-r">
+            <aside className="max-h-[720px] overflow-y-auto border-b border-border-faint bg-bg-secondary/55 p-2 md:sticky md:top-4 md:border-b-0 md:border-r">
               <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
                 {t("mySkills.organization.issueDirectory.formatCauses")}
               </div>
@@ -910,7 +1177,7 @@ export function SkillIssuesView({
           <aside className={cn(
             "max-h-[680px] overflow-y-auto border-b border-border-faint bg-bg-secondary/35 p-2",
             selectedCategory === "format"
-              ? "xl:sticky xl:top-4 xl:border-b-0 xl:border-r"
+              ? "md:sticky md:top-4 md:border-b-0 md:border-r"
               : "lg:sticky lg:top-4 lg:border-b-0 lg:border-r",
           )}>
             <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
@@ -1186,8 +1453,7 @@ export function SkillIssuesView({
                                   checked={selected}
                                   onChange={() => {
                                     setKeepSkillId(skill.id);
-                                    setArchivePreview(null);
-                                    setPreviewingArchive(true);
+                                    setArchivePreviewState(null);
                                   }}
                                   className="scm-radio-control"
                                 />
@@ -1353,14 +1619,14 @@ export function SkillIssuesView({
                           {activeFormatGuidance.recommendation}
                         </p>
                       </div>
-                      {!formatRepairPreview && activeFormatGuidance.mode === "agent" && (
+                      {!activeFormatRepairPreview && activeFormatGuidance.mode === "agent" && (
                         <span className="shrink-0 text-[10px] text-faint">
                           {t("mySkills.organization.formatRepair.managedCopyOnly")}
                         </span>
                       )}
                     </div>
 
-                    {formatRepairPreview && activeFormatGuidance.mode === "agent" ? (
+                    {activeFormatRepairPreview && activeFormatGuidance.mode === "agent" ? (
                       <div className="mt-3 rounded-lg bg-bg-secondary/60 p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-[11px] font-semibold text-secondary">
@@ -1371,17 +1637,24 @@ export function SkillIssuesView({
                           </span>
                         </div>
                         <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-4 text-muted">
-                          {formatRepairPreview.summary}
+                          {activeFormatRepairPreview.summary}
                         </p>
                         <div className="mt-2 text-[10px] text-faint">
                           {t("mySkills.organization.formatRepair.changedFiles", {
-                            files: formatRepairPreview.changed_paths.join("、"),
+                            files: activeFormatRepairPreview.changed_paths.join("、"),
                           })}
                         </div>
                         <div className="mt-3 flex min-h-10 flex-wrap items-center justify-between gap-3">
                           <button
                             type="button"
-                            onClick={() => setFormatRepairPreview(null)}
+                            onClick={() => {
+                              setFormatRepairPreview(null);
+                              if (activeFormatRepairPreview) {
+                                setFormatRepairBatchPreviews((current) => current.filter(
+                                  (preview) => preview.skill_id !== activeFormatRepairPreview.skill_id,
+                                ));
+                              }
+                            }}
                             className="scm-button-tertiary h-10"
                           >
                             {t("common.cancel")}
@@ -1441,7 +1714,13 @@ export function SkillIssuesView({
                               <ChevronDown className={cn("h-4 w-4 transition-transform", formatExecutionMenuOpen && "rotate-180")} />
                             </button>
                             {formatExecutionMenuOpen && (
-                              <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[260px] overflow-hidden rounded-xl border border-border bg-surface p-1.5 text-primary shadow-2xl">
+                              <div
+                                className={cn(
+                                  "absolute right-0 z-50 min-w-[260px] overflow-y-auto rounded-xl border border-border bg-surface p-1.5 text-primary shadow-2xl",
+                                  formatExecutionMenuPlacement.placement === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
+                                )}
+                                style={{ maxHeight: formatExecutionMenuPlacement.maxHeight }}
+                              >
                                 {executionOptions.map((option) => (
                                   <button
                                     key={option.id}
@@ -1531,6 +1810,7 @@ export function SkillProcessedView({
   onUndoOperation,
 }: ProcessedProps) {
   const { t } = useTranslation();
+  const [selectedCategory, setSelectedCategory] = useState<IssueCategory | null>(null);
   const resolvedIssues = issues.filter((issue) =>
     resolvedIds.has(issue.id) && matchesSearch(issue.skills, issueCopy(issue.kind, t).title, search));
   const query = search.trim().toLocaleLowerCase();
@@ -1540,6 +1820,28 @@ export function SkillProcessedView({
     operation.status,
   ].some((value) => value.toLocaleLowerCase().includes(query)));
   const processedCount = resolvedIssues.length + visibleOperations.length;
+  const categoryDefinitions = [
+    { id: "duplicate" as const, icon: Copy, tone: "text-emerald-500 bg-emerald-500/10" },
+    { id: "same_name" as const, icon: GitCompareArrows, tone: "text-amber-500 bg-amber-500/10" },
+    { id: "format" as const, icon: FileWarning, tone: "text-rose-500 bg-rose-500/10" },
+    { id: "source" as const, icon: Link2, tone: "text-violet-500 bg-violet-500/10" },
+  ];
+  const processedCategories = categoryDefinitions.map((definition) => {
+    const decisions = resolvedIssues.filter((issue) => issueCategory(issue) === definition.id);
+    const categoryOperations = visibleOperations.filter((operation) => (
+      definition.id === "format"
+        ? operation.kind === "format_repair"
+        : definition.id === "duplicate" && operation.kind === "archive_redundant"
+    ));
+    return {
+      ...definition,
+      decisions,
+      operations: categoryOperations,
+      count: decisions.length + categoryOperations.length,
+    };
+  }).filter((category) => category.count > 0);
+  const activeCategory = processedCategories.find((category) => category.id === selectedCategory)
+    ?? processedCategories[0];
 
   return (
     <div className="space-y-4 pb-8">
@@ -1569,73 +1871,101 @@ export function SkillProcessedView({
         </div>
       </section>
 
-      {resolvedIssues.length > 0 && (
-        <section className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
-          <div>
-            <h2 className="text-[13px] font-semibold text-primary">
-              {t("mySkills.organization.confirmedRelations", { count: resolvedIssues.length })}
-            </h2>
-            <p className="mt-0.5 text-[10.5px] text-muted">{t("mySkills.organization.confirmedRelationsHint")}</p>
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-2">
-            {resolvedIssues.map((issue) => (
-              <article key={issue.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2.5">
-                <div className="min-w-0">
-                  <h3 className="truncate text-[12px] font-semibold text-primary">{issueCopy(issue.kind, t).title}</h3>
-                  <p className="mt-0.5 truncate text-[10.5px] text-muted">
-                    {issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ")}
-                  </p>
-                </div>
-                <button type="button" onClick={() => onUndoDecision(issue.id)} className="app-button-secondary shrink-0">
-                  {t("mySkills.organization.undoDecision")}
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {visibleOperations.length > 0 && (
-        <section className="rounded-xl border border-border-subtle bg-surface p-4 shadow-card">
-          <div>
-            <h2 className="text-[13px] font-semibold text-primary">
-              {t("mySkills.organization.operationHistory.title", { count: visibleOperations.length })}
-            </h2>
-            <p className="mt-0.5 text-[10.5px] text-muted">{t("mySkills.organization.operationHistory.hint")}</p>
-          </div>
-          <div className="mt-3 space-y-2">
-            {visibleOperations.map((operation) => (
-              <article key={operation.operation_id} className="flex items-center justify-between gap-3 rounded-lg border border-border-faint bg-bg-secondary/45 px-3 py-2.5">
-                <div className="min-w-0">
-                  <h3 className="truncate text-[12px] font-semibold text-primary">
-                    {operation.kind === "format_repair"
-                      ? operation.status === "undone"
-                        ? t("mySkills.organization.operationHistory.formatRepairUndone", { skill: operation.keep_name })
-                        : t("mySkills.organization.operationHistory.formatRepaired", { skill: operation.keep_name })
-                      : operation.status === "undone"
-                        ? t("mySkills.organization.operationHistory.undone", { archive: operation.archive_name })
-                        : t("mySkills.organization.operationHistory.archived", {
-                            keep: operation.keep_name,
-                            archive: operation.archive_name,
-                          })}
-                  </h3>
-                  <p className="mt-0.5 text-[10.5px] text-muted">
-                    {operation.status === "needs_recovery"
-                      ? t("mySkills.organization.operationHistory.needsRecovery")
-                      : new Date(operation.updated_at).toLocaleString()}
-                  </p>
-                </div>
-                {operation.status === "complete" && (
+      {activeCategory && (
+        <section className="app-panel grid overflow-hidden shadow-card md:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="border-b border-border-faint bg-bg-secondary/45 p-2 md:border-b-0 md:border-r">
+            <div className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
+              {t("mySkills.organization.processed.categories")}
+            </div>
+            <div className="space-y-1">
+              {processedCategories.map((category) => {
+                const Icon = category.icon;
+                return (
                   <button
+                    key={category.id}
                     type="button"
-                    onClick={() => void onUndoOperation(operation.operation_id)}
-                    className="app-button-secondary shrink-0"
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors",
+                      activeCategory.id === category.id ? "bg-surface-active text-primary" : "text-secondary hover:bg-surface-hover",
+                    )}
                   >
-                    {t("mySkills.organization.undo")}
+                    <span className={cn("rounded-md p-1.5", category.tone)}><Icon className="h-3.5 w-3.5" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-semibold">
+                        {t(`mySkills.organization.issueDirectory.categories.${category.id}.title`)}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[9.5px] text-muted">
+                        {t(`mySkills.organization.issueDirectory.categories.${category.id}.hint`)}
+                      </span>
+                    </span>
+                    <span className="text-[10px] tabular-nums text-faint">{category.count}</span>
                   </button>
-                )}
-              </article>
-            ))}
+                );
+              })}
+            </div>
+          </aside>
+          <div className="min-w-0 p-3">
+            <div className="px-1 pb-3">
+              <h2 className="text-[13px] font-semibold text-primary">
+                {t(`mySkills.organization.issueDirectory.categories.${activeCategory.id}.title`)}
+              </h2>
+              <p className="mt-0.5 text-[10.5px] text-muted">
+                {t("mySkills.organization.processed.categoryCount", { count: activeCategory.count })}
+              </p>
+            </div>
+            <div className="divide-y divide-border-faint overflow-hidden rounded-lg bg-bg-secondary/35">
+              {activeCategory.decisions.map((issue) => (
+                <article key={issue.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-[9.5px] font-medium uppercase tracking-wide text-faint">
+                      {t("mySkills.organization.processed.decision")}
+                    </div>
+                    <h3 className="mt-0.5 truncate text-[12px] font-semibold text-primary">
+                      {issue.skills.map((skill) => displayNames.get(skill.id) || skill.name).join(" / ")}
+                    </h3>
+                  </div>
+                  <button type="button" onClick={() => onUndoDecision(issue.id)} className="scm-button-tertiary h-9 shrink-0">
+                    {t("mySkills.organization.undoDecision")}
+                  </button>
+                </article>
+              ))}
+              {activeCategory.operations.map((operation) => (
+                <article key={operation.operation_id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-[9.5px] font-medium uppercase tracking-wide text-faint">
+                      {t("mySkills.organization.processed.operation")}
+                    </div>
+                    <h3 className="mt-0.5 truncate text-[12px] font-semibold text-primary">
+                      {operation.kind === "format_repair"
+                        ? operation.status === "undone"
+                          ? t("mySkills.organization.operationHistory.formatRepairUndone", { skill: operation.keep_name })
+                          : t("mySkills.organization.operationHistory.formatRepaired", { skill: operation.keep_name })
+                        : operation.status === "undone"
+                          ? t("mySkills.organization.operationHistory.undone", { archive: operation.archive_name })
+                          : t("mySkills.organization.operationHistory.archived", {
+                              keep: operation.keep_name,
+                              archive: operation.archive_name,
+                            })}
+                    </h3>
+                    <p className="mt-0.5 text-[10.5px] text-muted">
+                      {operation.status === "needs_recovery"
+                        ? t("mySkills.organization.operationHistory.needsRecovery")
+                        : new Date(operation.updated_at).toLocaleString()}
+                    </p>
+                  </div>
+                  {operation.status === "complete" && (
+                    <button
+                      type="button"
+                      onClick={() => void onUndoOperation(operation.operation_id)}
+                      className="scm-button-tertiary h-9 shrink-0"
+                    >
+                      {t("mySkills.organization.undo")}
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
         </section>
       )}

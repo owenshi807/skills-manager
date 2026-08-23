@@ -555,42 +555,58 @@ fn import_agent_local_skill_to_center(
     let all_managed = store.get_all_skills().unwrap_or_default();
     let all_targets = store.get_all_targets().unwrap_or_default();
     if let Some(existing) = find_verified_center_match(&skill, &all_managed, &all_targets) {
-        let result = installer::install_from_local_to_destination(
-            &source_path,
-            Some(&existing.name),
-            Path::new(&existing.central_path),
-        )
-        .map_err(AppError::io)?;
-        store
-            .update_skill_after_install(
-                &existing.id,
-                &existing.name,
-                result.description.as_deref(),
-                existing.source_revision.as_deref(),
-                existing.remote_revision.as_deref(),
-                Some(&result.content_hash),
-                "local_only",
-            )
-            .map_err(AppError::db)?;
-
         let already_matched_by_ref = source_ref_matches_skill_path(
             &skill.path,
             std::fs::canonicalize(&skill.path).ok().as_ref(),
             existing,
         );
-        if existing.source_type == "local" && already_matched_by_ref {
+        let matched_managed_target = all_targets.iter().any(|target| {
+            target.skill_id == existing.id
+                && target_matches_skill_path(
+                    target,
+                    &skill.path,
+                    std::fs::canonicalize(&skill.path).ok().as_ref(),
+                )
+        });
+
+        if already_matched_by_ref {
+            let result = installer::install_from_local_to_destination(
+                &source_path,
+                Some(&existing.name),
+                Path::new(&existing.central_path),
+            )
+            .map_err(AppError::io)?;
             store
-                .update_skill_source_ref(&existing.id, &skill.path)
+                .update_skill_after_install(
+                    &existing.id,
+                    &existing.name,
+                    result.description.as_deref(),
+                    existing.source_revision.as_deref(),
+                    existing.remote_revision.as_deref(),
+                    Some(&result.content_hash),
+                    "local_only",
+                )
                 .map_err(AppError::db)?;
+            if existing.source_type == "local" {
+                store
+                    .update_skill_source_ref(&existing.id, &skill.path)
+                    .map_err(AppError::db)?;
+            }
+            scenario_service::sync_single_skill_to_tool(store, &existing.id, agent)?;
+            return Ok(());
         }
 
-        // Register this agent as a managed sync target so the adopted skill is
-        // recognized as managed (gives it a delete button). Reusing the regular
-        // sync path keeps the target consistent with every other managed skill:
-        // sync_engine owns the on-disk artifact, so later unsync/scenario-sync
-        // touch only that managed artifact, never the user's source.
-        scenario_service::sync_single_skill_to_tool(store, &existing.id, agent)?;
-        return Ok(());
+        if matched_managed_target {
+            let central_hash =
+                crate::core::content_hash::hash_directory(Path::new(&existing.central_path))
+                    .map_err(AppError::io)?;
+            if skill.content_hash.as_deref() != Some(central_hash.as_str()) {
+                return Err(AppError::invalid_input(
+                    "Managed Agent copy changed; compare it with the library before importing",
+                ));
+            }
+            return Ok(());
+        }
     }
 
     let result =
