@@ -2342,6 +2342,24 @@ fn rewrite_deck_override_relationships(
             }
             *added = rewritten;
         }
+        let keep_is_explicitly_added = deck
+            .get("addedSkills")
+            .and_then(|items| items.as_array())
+            .into_iter()
+            .flatten()
+            .any(|item| {
+                item.get("skillId").and_then(|id| id.as_str()) == Some(keep_skill_id)
+            });
+        if keep_is_explicitly_added {
+            if let Some(removed) = deck
+                .get_mut("removedSkillIds")
+                .and_then(|items| items.as_array_mut())
+            {
+                let previous_len = removed.len();
+                removed.retain(|id| id.as_str() != Some(keep_skill_id));
+                changed |= removed.len() != previous_len;
+            }
+        }
     }
     if changed {
         Ok(Some(serde_json::to_string(&value)?))
@@ -3054,6 +3072,13 @@ mod organization_operation_tests {
             .as_deref()
             .unwrap()
             .contains("archive"));
+        let overrides_after: serde_json::Value = serde_json::from_str(
+            migration.after_deck_overrides.as_deref().unwrap(),
+        )
+        .unwrap();
+        let vibe = &overrides_after["vibe"];
+        assert_eq!(vibe["removedSkillIds"], serde_json::json!([]));
+        assert_eq!(vibe["addedSkills"][0]["skillId"], "keep");
 
         insert_planned_archive_operation(&store, &keep, &archive, "operation-1");
         store
