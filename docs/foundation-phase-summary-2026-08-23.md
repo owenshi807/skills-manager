@@ -30,6 +30,16 @@
 
 这个 DMG 只用于当前阶段本机测试，不作为正式分发包。正式包必须等 PR 审查和自动检查全部通过后，重新执行 Developer ID 签名、公证、staple 与 Gatekeeper 验证。
 
+## 本地验证
+
+- `npm run design:check`：通过，1 个默认 skin、95 个必需语义 Token 完整。
+- `npm run lint`：通过。
+- `npm run build`：通过。
+- `node --test tests/*.test.ts`：6 项通过，0 失败。
+- `cargo test --manifest-path src-tauri/Cargo.toml`：495 项通过，1 项按设计忽略，0 失败。
+- `git diff --check`：通过。
+- 无签名 DMG 构建、完整性校验、只读挂载和 App 元数据检查：通过。
+
 ## 发布门
 
 1. 本地完整验证通过。
