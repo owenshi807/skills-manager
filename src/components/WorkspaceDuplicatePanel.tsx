@@ -169,6 +169,7 @@ export function WorkspaceDuplicatePanel({
           evidence_fingerprint: caseEvidence.case_revision,
           keep_skill_id: archivePreview.keep_skill_id,
           archive_skill_id: archivePreview.archive_skill_id,
+          ownership_revision: archivePreview.ownership_revision,
         });
         await onApplied();
         toast.success(t("globalWorkspace.duplicates.archiveApplied", { agent: agentName }), {

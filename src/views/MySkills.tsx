@@ -1696,10 +1696,11 @@ Edit only this managed Skill directory. Do not modify its external source, other
 
   const applyOrganizationArchive = useCallback(async (
     issue: SkillIssue,
-    keepSkillId: string,
-    archiveSkillId: string,
+    preview: api.OrganizationArchivePreview,
   ) => {
     if (!issue.caseRevision) throw new Error(t("mySkills.organization.decisionEvidenceMissing"));
+    const keepSkillId = preview.keep_skill_id;
+    const archiveSkillId = preview.archive_skill_id;
     const archivedSkillName = issue.skills.find((skill) => skill.id === archiveSkillId)?.name ?? archiveSkillId;
     const request: api.OrganizationArchiveRequest = {
       case: {
@@ -1711,6 +1712,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
       evidence_fingerprint: issue.caseRevision,
       keep_skill_id: keepSkillId,
       archive_skill_id: archiveSkillId,
+      ownership_revision: preview.ownership_revision,
     };
     try {
       const result = await api.applyOrganizationArchive(request);
@@ -1776,11 +1778,18 @@ Edit only this managed Skill directory. Do not modify its external source, other
             );
             kept += 1;
           } else {
+            const preview = await api.previewOrganizationArchive({
+              case: caseRequest,
+              evidence_fingerprint: plan.caseRevision,
+              keep_skill_id: plan.keepSkill.id,
+              archive_skill_id: plan.archiveSkill.id,
+            });
             await api.applyOrganizationArchive({
               case: caseRequest,
               evidence_fingerprint: plan.caseRevision,
               keep_skill_id: plan.keepSkill.id,
               archive_skill_id: plan.archiveSkill.id,
+              ownership_revision: preview.ownership_revision,
             });
             archived += 1;
           }

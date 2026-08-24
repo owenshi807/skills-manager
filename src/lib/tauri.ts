@@ -220,6 +220,7 @@ export interface OrganizationArchiveRequest {
   evidence_fingerprint: string;
   keep_skill_id: string;
   archive_skill_id: string;
+  ownership_revision?: string;
 }
 
 export interface OrganizationArchivePreview {
@@ -238,6 +239,7 @@ export interface OrganizationArchivePreview {
     action: "archive_and_rewire_to_keep";
   } | null;
   source_preserved: boolean;
+  ownership_revision: string;
 }
 
 export interface OrganizationOperationResult {

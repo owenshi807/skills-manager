@@ -63,7 +63,7 @@ interface IssuesProps extends SharedProps {
   onRefresh: () => void;
   onDecide: (issue: SkillIssue, disposition: OrganizationDisposition) => void;
   onPreviewArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<OrganizationArchivePreview>;
-  onApplyArchive: (issue: SkillIssue, keepSkillId: string, archiveSkillId: string) => Promise<void>;
+  onApplyArchive: (issue: SkillIssue, preview: OrganizationArchivePreview) => Promise<void>;
   onReviewModeChange?: (active: boolean) => void;
 }
 
@@ -661,7 +661,7 @@ export function SkillIssuesView({
     const appliedIdentity = activeArchivePreviewIdentity;
     setApplyingArchive(true);
     try {
-      await onApplyArchive(issue, archivePreview.keep_skill_id, archivePreview.archive_skill_id);
+      await onApplyArchive(issue, archivePreview);
       setArchivePreviewState((current) => current?.identity === appliedIdentity ? null : current);
     } catch {
       // The parent owns the user-facing error toast.

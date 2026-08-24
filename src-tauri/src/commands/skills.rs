@@ -190,6 +190,11 @@ pub struct OrganizationArchiveRequest {
     pub evidence_fingerprint: String,
     pub keep_skill_id: String,
     pub archive_skill_id: String,
+    /// Opaque live-tree revision returned by archive preview. Apply requires
+    /// it so a fresh plan cannot silently adopt filesystem changes that were
+    /// never shown to the user.
+    #[serde(default)]
+    pub ownership_revision: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -215,12 +220,82 @@ pub struct OrganizationArchivePreview {
     pub target_effects: Vec<OrganizationArchiveTargetEffect>,
     pub source_effect: Option<OrganizationArchiveSourceEffect>,
     pub source_preserved: bool,
+    pub ownership_revision: String,
 }
 
 #[derive(Debug)]
 struct OrganizationArchivePlan {
     preview: OrganizationArchivePreview,
     archive_ownership_digest: String,
+    keep_ownership_digest: String,
+    target_ownership_digests: HashMap<String, String>,
+}
+
+fn organization_target_ownership_key(tool: &str, target_path: &str) -> String {
+    format!("{}\0{}", tool, target_path)
+}
+
+fn organization_ownership_revision_field(hasher: &mut Sha256, tag: &str, value: &str) {
+    hasher.update((tag.len() as u32).to_be_bytes());
+    hasher.update(tag.as_bytes());
+    hasher.update((value.len() as u64).to_be_bytes());
+    hasher.update(value.as_bytes());
+}
+
+fn organization_symlink_ownership_digest(path: &Path) -> Result<String, AppError> {
+    let metadata = std::fs::symlink_metadata(path).map_err(AppError::db)?;
+    if !metadata.file_type().is_symlink() {
+        return Err(AppError::invalid_input(format!(
+            "Agent projection is not a symlink: {}",
+            path.display()
+        )));
+    }
+    let target = std::fs::read_link(path).map_err(AppError::db)?;
+    let target = target.to_str().ok_or_else(|| {
+        AppError::invalid_input(format!(
+            "Agent projection target is not valid UTF-8: {}",
+            path.display()
+        ))
+    })?;
+    let mut hasher = Sha256::new();
+    organization_ownership_revision_field(&mut hasher, "format", "scm-symlink-ownership-v1");
+    organization_ownership_revision_field(&mut hasher, "target", target);
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn organization_archive_ownership_revision(
+    archive_digest: &str,
+    keep_digest: &str,
+    source_effect: Option<&OrganizationArchiveSourceEffect>,
+    target_effects: &[OrganizationArchiveTargetEffect],
+    target_digests: &HashMap<String, String>,
+) -> Result<String, AppError> {
+    let mut hasher = Sha256::new();
+    organization_ownership_revision_field(
+        &mut hasher,
+        "format",
+        "scm-organization-preview-ownership-v1",
+    );
+    organization_ownership_revision_field(&mut hasher, "archive", archive_digest);
+    organization_ownership_revision_field(&mut hasher, "keep", keep_digest);
+    if let Some(effect) = source_effect {
+        organization_ownership_revision_field(&mut hasher, "source-tool", &effect.tool);
+        organization_ownership_revision_field(&mut hasher, "source-path", &effect.source_path);
+        organization_ownership_revision_field(&mut hasher, "source-digest", archive_digest);
+    } else {
+        organization_ownership_revision_field(&mut hasher, "source", "preserved");
+    }
+    for effect in target_effects {
+        let key = organization_target_ownership_key(&effect.tool, &effect.target_path);
+        let digest = target_digests.get(&key).ok_or_else(|| {
+            AppError::invalid_input("Organization target ownership snapshot is incomplete")
+        })?;
+        organization_ownership_revision_field(&mut hasher, "target-tool", &effect.tool);
+        organization_ownership_revision_field(&mut hasher, "target-path", &effect.target_path);
+        organization_ownership_revision_field(&mut hasher, "target-action", &effect.action);
+        organization_ownership_revision_field(&mut hasher, "target-digest", digest);
+    }
+    Ok(hex::encode(hasher.finalize()))
 }
 
 #[derive(Debug, Serialize)]
@@ -1705,6 +1780,10 @@ fn organization_archive_plan_sync(
     let archive_ownership_digest =
         crate::core::content_hash::hash_directory_ownership_v1(archive_central)
             .map_err(AppError::db)?;
+    let keep_ownership_digest = crate::core::content_hash::hash_directory_ownership_v1(Path::new(
+        &keep.central_path,
+    ))
+    .map_err(AppError::db)?;
     let source_effect = archive
         .source_ref_resolved
         .as_deref()
@@ -1735,6 +1814,7 @@ fn organization_archive_plan_sync(
             })
         });
     let mut target_effects = Vec::with_capacity(archive_targets.len());
+    let mut target_ownership_digests = HashMap::new();
     for target in archive_targets {
         let target_path = Path::new(&target.target_path);
         let mode = match target.mode.as_str() {
@@ -1742,22 +1822,36 @@ fn organization_archive_plan_sync(
             "copy" => sync_engine::SyncMode::Copy,
             _ => return Err(AppError::invalid_input("Unsupported projection mode")),
         };
-        let owned = match mode {
+        let ownership_digest = match mode {
             sync_engine::SyncMode::Symlink => {
-                sync_engine::is_target_current(archive_central, target_path, mode, None, None)
+                if !sync_engine::is_target_current(archive_central, target_path, mode, None, None) {
+                    return Err(AppError::invalid_input(format!(
+                        "Projection changed outside Card Master: {}",
+                        target.target_path
+                    )));
+                }
+                organization_symlink_ownership_digest(target_path)?
             }
             sync_engine::SyncMode::Copy => {
-                let target_hash =
-                    crate::core::content_hash::hash_directory_ownership_v1(target_path).ok();
-                target_hash.as_deref() == Some(archive_ownership_digest.as_str())
+                let expected =
+                    crate::core::content_hash::hash_expected_copy_projection_v1(archive_central)
+                        .map_err(AppError::db)?;
+                let observed =
+                    crate::core::content_hash::hash_observed_copy_projection_v1(target_path)
+                        .map_err(AppError::db)?;
+                if observed != expected {
+                    return Err(AppError::invalid_input(format!(
+                        "Projection changed outside Card Master: {}",
+                        target.target_path
+                    )));
+                }
+                // Once the expected copy transformation is proven, retain a
+                // complete digest of the actual target to detect every live
+                // entry change between preview and apply.
+                crate::core::content_hash::hash_directory_ownership_v1(target_path)
+                    .map_err(AppError::db)?
             }
         };
-        if !owned {
-            return Err(AppError::invalid_input(format!(
-                "Projection changed outside Card Master: {}",
-                target.target_path
-            )));
-        }
         let action = if source_effect
             .as_ref()
             .is_some_and(|effect| effect.tool == target.tool)
@@ -1767,12 +1861,28 @@ fn organization_archive_plan_sync(
         } else {
             "rewire_to_keep"
         };
+        target_ownership_digests.insert(
+            organization_target_ownership_key(&target.tool, &target.target_path),
+            ownership_digest,
+        );
         target_effects.push(OrganizationArchiveTargetEffect {
             tool: target.tool,
             target_path: target.target_path,
             action: action.to_string(),
         });
     }
+    target_effects.sort_by(|left, right| {
+        left.tool
+            .cmp(&right.tool)
+            .then_with(|| left.target_path.cmp(&right.target_path))
+    });
+    let ownership_revision = organization_archive_ownership_revision(
+        &archive_ownership_digest,
+        &keep_ownership_digest,
+        source_effect.as_ref(),
+        &target_effects,
+        &target_ownership_digests,
+    )?;
     Ok(OrganizationArchivePlan {
         preview: OrganizationArchivePreview {
             keep_skill_id: keep.id,
@@ -1782,8 +1892,11 @@ fn organization_archive_plan_sync(
             target_effects,
             source_preserved: archive.source_ref.is_some() && source_effect.is_none(),
             source_effect,
+            ownership_revision,
         },
         archive_ownership_digest,
+        keep_ownership_digest,
+        target_ownership_digests,
     })
 }
 
@@ -1805,6 +1918,23 @@ fn ensure_organization_owned_directory(
         return Err(AppError::invalid_input(format!(
             "{label} changed after preview; refresh before applying"
         )));
+    }
+    Ok(())
+}
+
+fn ensure_organization_preview_revision(
+    expected_revision: Option<&str>,
+    current_revision: &str,
+) -> Result<(), AppError> {
+    let expected_revision = expected_revision.ok_or_else(|| {
+        AppError::invalid_input(
+            "Archive preview is required before applying; refresh the action plan",
+        )
+    })?;
+    if expected_revision != current_revision {
+        return Err(AppError::invalid_input(
+            "Skill files changed after preview; refresh the action plan before applying",
+        ));
     }
     Ok(())
 }
@@ -1876,6 +2006,10 @@ pub async fn apply_organization_archive(
             let _lock = RepoLock::acquire_foreground("archive redundant organization skill")
                 .map_err(AppError::db)?;
             let plan = organization_archive_plan_sync(&request, &store)?;
+            ensure_organization_preview_revision(
+                request.ownership_revision.as_deref(),
+                &plan.preview.ownership_revision,
+            )?;
             let preview = plan.preview;
             let keep = store
                 .get_skill_by_id(&request.keep_skill_id)
@@ -1963,6 +2097,11 @@ pub async fn apply_organization_archive(
                     &plan.archive_ownership_digest,
                     "Managed archive Skill",
                 )?;
+                ensure_organization_owned_directory(
+                    Path::new(&keep.central_path),
+                    &plan.keep_ownership_digest,
+                    "Managed keep Skill",
+                )?;
                 if let (Some(effect), Some(source_archive)) = (
                     preview.source_effect.as_ref(),
                     archived_source_path.as_ref(),
@@ -1994,23 +2133,39 @@ pub async fn apply_organization_archive(
                             AppError::invalid_input("Organization target preview changed")
                         })?;
                     let target_path = Path::new(&target.target_path);
+                    let target_ownership_digest = plan
+                        .target_ownership_digests
+                        .get(&organization_target_ownership_key(
+                            &target.tool,
+                            &target.target_path,
+                        ))
+                        .ok_or_else(|| {
+                            AppError::invalid_input(
+                                "Organization target ownership snapshot is incomplete",
+                            )
+                        })?;
                     if target.mode == "copy" {
                         ensure_organization_owned_directory(
                             target_path,
-                            &plan.archive_ownership_digest,
+                            target_ownership_digest,
                             "Agent copy projection",
                         )?;
-                    } else if !sync_engine::is_target_current(
-                        &central,
-                        target_path,
-                        sync_engine::SyncMode::Symlink,
-                        None,
-                        None,
-                    ) {
-                        return Err(AppError::invalid_input(format!(
-                            "Agent symlink projection changed after preview: {}",
-                            target.target_path
-                        )));
+                    } else {
+                        let current_digest = organization_symlink_ownership_digest(target_path)?;
+                        if current_digest != *target_ownership_digest
+                            || !sync_engine::is_target_current(
+                                &central,
+                                target_path,
+                                sync_engine::SyncMode::Symlink,
+                                None,
+                                None,
+                            )
+                        {
+                            return Err(AppError::invalid_input(format!(
+                                "Agent symlink projection changed after preview: {}",
+                                target.target_path
+                            )));
+                        }
                     }
                     if effect.action == "rewire_to_keep" {
                         let mode = if target.mode == "copy" {
@@ -2202,10 +2357,15 @@ pub async fn undo_organization_archive(
                             None,
                         ),
                         sync_engine::SyncMode::Copy => {
-                            crate::core::content_hash::hash_directory_ownership_v1(target_path)
-                                .ok()
-                                .as_deref()
-                                == Some(keep_ownership_digest.as_str())
+                            let expected = crate::core::content_hash::hash_expected_copy_projection_v1(
+                                Path::new(&keep.central_path),
+                            )
+                            .ok();
+                            let observed = crate::core::content_hash::hash_observed_copy_projection_v1(
+                                target_path,
+                            )
+                            .ok();
+                            expected.is_some() && expected == observed
                         }
                     };
                     if !projection_is_unchanged {
@@ -3159,6 +3319,7 @@ mod organization_health_tests {
             evidence_fingerprint: evidence[0].case_revision.clone(),
             keep_skill_id: "keep".to_string(),
             archive_skill_id: "archive".to_string(),
+            ownership_revision: None,
         };
 
         let preview = organization_archive_preview_sync(&request, &store).unwrap();
@@ -3176,6 +3337,165 @@ mod organization_health_tests {
         projection.mode = "copy".to_string();
         store.insert_target(&projection).unwrap();
         assert!(organization_archive_preview_sync(&request, &store).is_err());
+    }
+
+    #[test]
+    fn archive_preview_revision_changes_when_ignored_live_entries_change() {
+        let tmp = tempdir().unwrap();
+        let keep_dir = tmp.path().join("skills/keep");
+        let archive_dir = tmp.path().join("skills/archive");
+        let target_dir = tmp.path().join("agent/archive");
+        std::fs::create_dir_all(&keep_dir).unwrap();
+        std::fs::create_dir_all(&archive_dir).unwrap();
+        std::fs::write(
+            keep_dir.join("SKILL.md"),
+            "---\nname: compare\ndescription: richer\n---\n# Keep\n",
+        )
+        .unwrap();
+        std::fs::write(
+            archive_dir.join("SKILL.md"),
+            "---\nname: compare\ndescription: older\n---\n# Archive\n",
+        )
+        .unwrap();
+        sync_engine::sync_skill(
+            &archive_dir,
+            &target_dir,
+            sync_engine::SyncMode::Copy,
+        )
+        .unwrap();
+
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut keep = skill(&keep_dir);
+        keep.id = "keep".to_string();
+        keep.name = "compare".to_string();
+        keep.content_hash = Some(crate::core::content_hash::hash_directory(&keep_dir).unwrap());
+        let mut archive = skill(&archive_dir);
+        archive.id = "archive".to_string();
+        archive.name = "compare".to_string();
+        archive.content_hash =
+            Some(crate::core::content_hash::hash_directory(&archive_dir).unwrap());
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        let mut projection = target(&target_dir);
+        projection.id = "archive-target".to_string();
+        projection.skill_id = "archive".to_string();
+        projection.mode = "copy".to_string();
+        store.insert_target(&projection).unwrap();
+
+        let case = OrganizationCaseRequest {
+            case_id: "name:compare".to_string(),
+            issue_kind: "name_collision".to_string(),
+            member_ids: vec!["keep".to_string(), "archive".to_string()],
+            verify_strict_artifact: true,
+        };
+        let evidence = inspect_organization_cases_sync(
+            vec![OrganizationCaseRequest {
+                case_id: case.case_id.clone(),
+                issue_kind: case.issue_kind.clone(),
+                member_ids: case.member_ids.clone(),
+                verify_strict_artifact: true,
+            }],
+            &store,
+        )
+        .unwrap();
+        let request = OrganizationArchiveRequest {
+            case,
+            evidence_fingerprint: evidence[0].case_revision.clone(),
+            keep_skill_id: "keep".to_string(),
+            archive_skill_id: "archive".to_string(),
+            ownership_revision: None,
+        };
+        let first = organization_archive_preview_sync(&request, &store).unwrap();
+
+        // The strict case revision intentionally ignores this file. Even when
+        // central and copy projection change identically and a newly-built
+        // plan still validates, apply must reject the stale preview revision.
+        std::fs::write(archive_dir.join(".DS_Store"), "new live entry").unwrap();
+        std::fs::write(target_dir.join(".DS_Store"), "new live entry").unwrap();
+        let second = organization_archive_preview_sync(&request, &store).unwrap();
+        assert_ne!(first.ownership_revision, second.ownership_revision);
+        assert!(ensure_organization_preview_revision(
+            Some(&first.ownership_revision),
+            &second.ownership_revision,
+        )
+        .is_err());
+        assert!(ensure_organization_preview_revision(None, &second.ownership_revision).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn archive_preview_accepts_card_master_copy_transformations() {
+        let tmp = tempdir().unwrap();
+        let keep_dir = tmp.path().join("skills/keep");
+        let archive_dir = tmp.path().join("skills/archive");
+        let target_dir = tmp.path().join("agent/archive");
+        std::fs::create_dir_all(&keep_dir).unwrap();
+        std::fs::create_dir_all(archive_dir.join(".git")).unwrap();
+        std::fs::write(keep_dir.join("SKILL.md"), "# keep\n").unwrap();
+        std::fs::write(archive_dir.join("SKILL.md"), "# archive\n").unwrap();
+        std::fs::write(archive_dir.join(".git/config"), "not deployed\n").unwrap();
+        let helper = tmp.path().join("helper.md");
+        std::fs::write(&helper, "linked helper\n").unwrap();
+        std::os::unix::fs::symlink(&helper, archive_dir.join("reference.md")).unwrap();
+        sync_engine::sync_skill(
+            &archive_dir,
+            &target_dir,
+            sync_engine::SyncMode::Copy,
+        )
+        .unwrap();
+        assert!(!target_dir.join(".git").exists());
+        assert!(target_dir.join("reference.md").is_file());
+        assert!(!std::fs::symlink_metadata(target_dir.join("reference.md"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut keep = skill(&keep_dir);
+        keep.id = "keep".to_string();
+        keep.name = "compare".to_string();
+        keep.content_hash = Some(crate::core::content_hash::hash_directory(&keep_dir).unwrap());
+        let mut archive = skill(&archive_dir);
+        archive.id = "archive".to_string();
+        archive.name = "compare".to_string();
+        archive.content_hash =
+            Some(crate::core::content_hash::hash_directory(&archive_dir).unwrap());
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        let mut projection = target(&target_dir);
+        projection.id = "archive-target".to_string();
+        projection.skill_id = "archive".to_string();
+        projection.mode = "copy".to_string();
+        store.insert_target(&projection).unwrap();
+
+        let case = OrganizationCaseRequest {
+            case_id: "name:compare".to_string(),
+            issue_kind: "name_collision".to_string(),
+            member_ids: vec!["keep".to_string(), "archive".to_string()],
+            verify_strict_artifact: true,
+        };
+        let evidence = inspect_organization_cases_sync(
+            vec![OrganizationCaseRequest {
+                case_id: case.case_id.clone(),
+                issue_kind: case.issue_kind.clone(),
+                member_ids: case.member_ids.clone(),
+                verify_strict_artifact: true,
+            }],
+            &store,
+        )
+        .unwrap();
+        let preview = organization_archive_preview_sync(
+            &OrganizationArchiveRequest {
+                case,
+                evidence_fingerprint: evidence[0].case_revision.clone(),
+                keep_skill_id: "keep".to_string(),
+                archive_skill_id: "archive".to_string(),
+                ownership_revision: None,
+            },
+            &store,
+        )
+        .unwrap();
+        assert_eq!(preview.target_effects.len(), 1);
     }
 
     #[cfg(unix)]
@@ -3243,6 +3563,7 @@ mod organization_health_tests {
                 evidence_fingerprint: evidence[0].case_revision.clone(),
                 keep_skill_id: "keep".to_string(),
                 archive_skill_id: "archive".to_string(),
+                ownership_revision: None,
             },
             &store,
         )
@@ -3345,6 +3666,7 @@ mod organization_health_tests {
                 evidence_fingerprint: evidence[0].case_revision.clone(),
                 keep_skill_id: "keep".to_string(),
                 archive_skill_id: "archive".to_string(),
+                ownership_revision: None,
             },
             &store,
         )
@@ -3429,6 +3751,7 @@ mod organization_health_tests {
                 evidence_fingerprint: evidence[0].case_revision.clone(),
                 keep_skill_id: "keep".to_string(),
                 archive_skill_id: "archive".to_string(),
+                ownership_revision: None,
             },
             &store,
         )
