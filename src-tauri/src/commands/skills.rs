@@ -217,6 +217,12 @@ pub struct OrganizationArchivePreview {
     pub source_preserved: bool,
 }
 
+#[derive(Debug)]
+struct OrganizationArchivePlan {
+    preview: OrganizationArchivePreview,
+    archive_ownership_digest: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct OrganizationOperationResult {
     pub operation_id: String,
@@ -1630,10 +1636,10 @@ pub async fn clear_organization_decision(
     .await?
 }
 
-fn organization_archive_preview_sync(
+fn organization_archive_plan_sync(
     request: &OrganizationArchiveRequest,
     store: &SkillStore,
-) -> Result<OrganizationArchivePreview, AppError> {
+) -> Result<OrganizationArchivePlan, AppError> {
     if request.case.member_ids.len() != 2
         || request.keep_skill_id == request.archive_skill_id
         || request.evidence_fingerprint.len() != 64
@@ -1693,14 +1699,12 @@ fn organization_archive_preview_sync(
         .get_targets_for_skill(&keep.id)
         .map_err(AppError::db)?;
     let archive_central = Path::new(&archive.central_path);
-    // The stored content hash describes the last indexed state and may be
-    // stale when the managed copy is edited outside Card Master. Re-hash the
-    // live managed tree before deciding that an original source or copied
-    // projection is redundant; otherwise an older matching source could be
-    // archived and rewired even though it is now distinct from the managed
-    // copy being organized.
-    let archive_live_hash = crate::core::content_hash::hash_directory(archive_central)
-        .map_err(AppError::db)?;
+    // Destructive ownership decisions use a complete, fail-closed digest,
+    // separate from content/update hashes. Nothing in a live source or copy
+    // projection may be ignored before Card Master removes or replaces it.
+    let archive_ownership_digest =
+        crate::core::content_hash::hash_directory_ownership_v1(archive_central)
+            .map_err(AppError::db)?;
     let source_effect = archive
         .source_ref_resolved
         .as_deref()
@@ -1715,8 +1719,9 @@ fn organization_archive_preview_sync(
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
                 return None;
             }
-            let source_hash = crate::core::content_hash::hash_directory(source_path).ok()?;
-            if source_hash != archive_live_hash {
+            let source_hash =
+                crate::core::content_hash::hash_directory_ownership_v1(source_path).ok()?;
+            if source_hash != archive_ownership_digest {
                 return None;
             }
             let target = archive_targets.iter().find(|target| {
@@ -1742,8 +1747,9 @@ fn organization_archive_preview_sync(
                 sync_engine::is_target_current(archive_central, target_path, mode, None, None)
             }
             sync_engine::SyncMode::Copy => {
-                let target_hash = crate::core::content_hash::hash_directory(target_path).ok();
-                target_hash.as_deref() == Some(archive_live_hash.as_str())
+                let target_hash =
+                    crate::core::content_hash::hash_directory_ownership_v1(target_path).ok();
+                target_hash.as_deref() == Some(archive_ownership_digest.as_str())
             }
         };
         if !owned {
@@ -1767,15 +1773,40 @@ fn organization_archive_preview_sync(
             action: action.to_string(),
         });
     }
-    Ok(OrganizationArchivePreview {
-        keep_skill_id: keep.id,
-        keep_name: keep.name,
-        archive_skill_id: archive.id,
-        archive_name: archive.name,
-        target_effects,
-        source_preserved: archive.source_ref.is_some() && source_effect.is_none(),
-        source_effect,
+    Ok(OrganizationArchivePlan {
+        preview: OrganizationArchivePreview {
+            keep_skill_id: keep.id,
+            keep_name: keep.name,
+            archive_skill_id: archive.id,
+            archive_name: archive.name,
+            target_effects,
+            source_preserved: archive.source_ref.is_some() && source_effect.is_none(),
+            source_effect,
+        },
+        archive_ownership_digest,
     })
+}
+
+fn organization_archive_preview_sync(
+    request: &OrganizationArchiveRequest,
+    store: &SkillStore,
+) -> Result<OrganizationArchivePreview, AppError> {
+    Ok(organization_archive_plan_sync(request, store)?.preview)
+}
+
+fn ensure_organization_owned_directory(
+    path: &Path,
+    expected_digest: &str,
+    label: &str,
+) -> Result<(), AppError> {
+    let digest = crate::core::content_hash::hash_directory_ownership_v1(path)
+        .map_err(|error| AppError::invalid_input(format!("{label} is unreadable: {error:#}")))?;
+    if digest != expected_digest {
+        return Err(AppError::invalid_input(format!(
+            "{label} changed after preview; refresh before applying"
+        )));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1844,7 +1875,8 @@ pub async fn apply_organization_archive(
         move || -> Result<OrganizationOperationResult, AppError> {
             let _lock = RepoLock::acquire_foreground("archive redundant organization skill")
                 .map_err(AppError::db)?;
-            let preview = organization_archive_preview_sync(&request, &store)?;
+            let plan = organization_archive_plan_sync(&request, &store)?;
+            let preview = plan.preview;
             let keep = store
                 .get_skill_by_id(&request.keep_skill_id)
                 .map_err(AppError::db)?
@@ -1921,13 +1953,25 @@ pub async fn apply_organization_archive(
                 })
                 .map_err(AppError::db)?;
 
+            let mut applied_targets = Vec::new();
             let apply_result = (|| -> Result<(), AppError> {
                 store
                     .update_organization_operation(&operation_id, "staged", None)
                     .map_err(AppError::db)?;
-                if let (Some(effect), Some(source_archive)) =
-                    (preview.source_effect.as_ref(), archived_source_path.as_ref())
-                {
+                ensure_organization_owned_directory(
+                    &central,
+                    &plan.archive_ownership_digest,
+                    "Managed archive Skill",
+                )?;
+                if let (Some(effect), Some(source_archive)) = (
+                    preview.source_effect.as_ref(),
+                    archived_source_path.as_ref(),
+                ) {
+                    ensure_organization_owned_directory(
+                        Path::new(&effect.source_path),
+                        &plan.archive_ownership_digest,
+                        "Original Agent source",
+                    )?;
                     if let Some(parent) = source_archive.parent() {
                         std::fs::create_dir_all(parent).map_err(AppError::db)?;
                     }
@@ -1950,21 +1994,46 @@ pub async fn apply_organization_archive(
                             AppError::invalid_input("Organization target preview changed")
                         })?;
                     let target_path = Path::new(&target.target_path);
+                    if target.mode == "copy" {
+                        ensure_organization_owned_directory(
+                            target_path,
+                            &plan.archive_ownership_digest,
+                            "Agent copy projection",
+                        )?;
+                    } else if !sync_engine::is_target_current(
+                        &central,
+                        target_path,
+                        sync_engine::SyncMode::Symlink,
+                        None,
+                        None,
+                    ) {
+                        return Err(AppError::invalid_input(format!(
+                            "Agent symlink projection changed after preview: {}",
+                            target.target_path
+                        )));
+                    }
                     if effect.action == "rewire_to_keep" {
                         let mode = if target.mode == "copy" {
                             sync_engine::SyncMode::Copy
                         } else {
                             sync_engine::SyncMode::Symlink
                         };
+                        applied_targets.push(target.clone());
                         sync_engine::sync_skill(Path::new(&keep.central_path), target_path, mode)
                             .map_err(AppError::db)?;
                     } else {
+                        applied_targets.push(target.clone());
                         sync_engine::remove_target(target_path).map_err(AppError::db)?;
                     }
                 }
                 if let Some(parent) = archive_path.parent() {
                     std::fs::create_dir_all(parent).map_err(AppError::db)?;
                 }
+                ensure_organization_owned_directory(
+                    &central,
+                    &plan.archive_ownership_digest,
+                    "Managed archive Skill",
+                )?;
                 std::fs::rename(&central, &archive_path).map_err(AppError::db)?;
 
                 let (transferred_targets, removed_tools) =
@@ -2003,7 +2072,10 @@ pub async fn apply_organization_archive(
                         let _ = std::fs::rename(source_archive, source);
                     }
                 }
-                for target in &original_targets {
+                // Only reverse projections this attempt actually touched. A
+                // target that failed ownership revalidation may contain new
+                // user data and must never be overwritten by rollback.
+                for target in &applied_targets {
                     let mode = if target.mode == "copy" {
                         sync_engine::SyncMode::Copy
                     } else {
@@ -2091,6 +2163,10 @@ pub async fn undo_organization_archive(
                 .get_skill_by_id(&operation.keep_skill_id)
                 .map_err(AppError::db)?
                 .ok_or_else(|| AppError::not_found("Keep skill not found"))?;
+            let keep_ownership_digest = crate::core::content_hash::hash_directory_ownership_v1(
+                Path::new(&keep.central_path),
+            )
+            .map_err(AppError::db)?;
             if let (Some(source), Some(source_archive)) = (
                 payload.original_source_path.as_deref(),
                 payload.archived_source_path.as_deref(),
@@ -2126,8 +2202,10 @@ pub async fn undo_organization_archive(
                             None,
                         ),
                         sync_engine::SyncMode::Copy => {
-                            crate::core::content_hash::hash_directory(target_path).ok()
-                                == keep.content_hash
+                            crate::core::content_hash::hash_directory_ownership_v1(target_path)
+                                .ok()
+                                .as_deref()
+                                == Some(keep_ownership_digest.as_str())
                         }
                     };
                     if !projection_is_unchanged {
@@ -2138,6 +2216,11 @@ pub async fn undo_organization_archive(
                     }
                 }
             }
+            ensure_organization_owned_directory(
+                Path::new(&keep.central_path),
+                &keep_ownership_digest,
+                "Keep Skill",
+            )?;
             if let (Some(source), Some(source_archive)) = (
                 payload.original_source_path.as_deref(),
                 payload.archived_source_path.as_deref(),
@@ -3085,6 +3168,14 @@ mod organization_health_tests {
         std::fs::remove_file(&target_dir).unwrap();
         std::os::unix::fs::symlink(&keep_dir, &target_dir).unwrap();
         assert!(organization_archive_preview_sync(&request, &store).is_err());
+
+        std::fs::remove_file(&target_dir).unwrap();
+        std::fs::create_dir(&target_dir).unwrap();
+        std::fs::copy(archive_dir.join("SKILL.md"), target_dir.join("SKILL.md")).unwrap();
+        std::fs::write(target_dir.join(".gitignore"), "projection-only/\n").unwrap();
+        projection.mode = "copy".to_string();
+        store.insert_target(&projection).unwrap();
+        assert!(organization_archive_preview_sync(&request, &store).is_err());
     }
 
     #[cfg(unix)]
@@ -3104,8 +3195,7 @@ mod organization_health_tests {
             "---\nname: find-skills\ndescription: richer\n---\n# Keep\n",
         )
         .unwrap();
-        let archived_content =
-            "---\nname: find-skills\ndescription: older\n---\n# Archive\n";
+        let archived_content = "---\nname: find-skills\ndescription: older\n---\n# Archive\n";
         std::fs::write(archive_dir.join("SKILL.md"), archived_content).unwrap();
         std::fs::write(source_dir.join("SKILL.md"), archived_content).unwrap();
         std::os::unix::fs::symlink(&archive_dir, &target_dir).unwrap();
@@ -3262,6 +3352,103 @@ mod organization_health_tests {
 
         assert!(preview.source_effect.is_none());
         assert!(preview.source_preserved);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn archive_preview_preserves_source_with_unscoped_file_difference() {
+        let tmp = tempdir().unwrap();
+        let keep_dir = tmp.path().join("skills/keep");
+        let archive_dir = tmp.path().join("skills/archive");
+        let agent_root = tmp.path().join("agent");
+        let source_dir = agent_root.join("find-skills");
+        let target_dir = agent_root.join("find-skills-2");
+        for path in [&keep_dir, &archive_dir, &source_dir] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        std::fs::write(
+            keep_dir.join("SKILL.md"),
+            "---\nname: find-skills\ndescription: richer\n---\n# Keep\n",
+        )
+        .unwrap();
+        let archived_content =
+            "---\nname: find-skills\ndescription: older\n---\n# Archive\n";
+        std::fs::write(archive_dir.join("SKILL.md"), archived_content).unwrap();
+        std::fs::write(source_dir.join("SKILL.md"), archived_content).unwrap();
+        // Content/update digests intentionally ignore this file, but an
+        // ownership proof must include it before deleting the whole source.
+        std::fs::write(source_dir.join(".gitignore"), "private-output/\n").unwrap();
+        std::os::unix::fs::symlink(&archive_dir, &target_dir).unwrap();
+
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut keep = skill(&keep_dir);
+        keep.id = "keep".to_string();
+        keep.name = "find-skills".to_string();
+        keep.content_hash = Some(crate::core::content_hash::hash_directory(&keep_dir).unwrap());
+        let mut archive = skill(&archive_dir);
+        archive.id = "archive".to_string();
+        archive.name = "find-skills".to_string();
+        archive.source_ref = Some(source_dir.to_string_lossy().to_string());
+        archive.content_hash =
+            Some(crate::core::content_hash::hash_directory(&archive_dir).unwrap());
+        store.insert_skill(&keep).unwrap();
+        store.insert_skill(&archive).unwrap();
+        let mut projection = target(&target_dir);
+        projection.id = "archive-target".to_string();
+        projection.skill_id = "archive".to_string();
+        store.insert_target(&projection).unwrap();
+
+        assert_eq!(
+            crate::core::content_hash::hash_directory(&source_dir).unwrap(),
+            crate::core::content_hash::hash_directory(&archive_dir).unwrap()
+        );
+        assert_eq!(
+            crate::core::content_hash::hash_directory_strict_v2(&source_dir).unwrap(),
+            crate::core::content_hash::hash_directory_strict_v2(&archive_dir).unwrap()
+        );
+
+        let case = OrganizationCaseRequest {
+            case_id: "name:find-skills".to_string(),
+            issue_kind: "name_collision".to_string(),
+            member_ids: vec!["keep".to_string(), "archive".to_string()],
+            verify_strict_artifact: true,
+        };
+        let evidence = inspect_organization_cases_sync(
+            vec![OrganizationCaseRequest {
+                case_id: case.case_id.clone(),
+                issue_kind: case.issue_kind.clone(),
+                member_ids: case.member_ids.clone(),
+                verify_strict_artifact: true,
+            }],
+            &store,
+        )
+        .unwrap();
+        let preview = organization_archive_preview_sync(
+            &OrganizationArchiveRequest {
+                case,
+                evidence_fingerprint: evidence[0].case_revision.clone(),
+                keep_skill_id: "keep".to_string(),
+                archive_skill_id: "archive".to_string(),
+            },
+            &store,
+        )
+        .unwrap();
+
+        assert!(preview.source_effect.is_none());
+        assert!(preview.source_preserved);
+    }
+
+    #[test]
+    fn archive_ownership_recheck_detects_change_after_preview() {
+        let tmp = tempdir().unwrap();
+        std::fs::write(tmp.path().join("SKILL.md"), "# demo\n").unwrap();
+        let digest = crate::core::content_hash::hash_directory_ownership_v1(tmp.path()).unwrap();
+
+        std::fs::write(tmp.path().join(".gitignore"), "private-output/\n").unwrap();
+
+        let error = ensure_organization_owned_directory(tmp.path(), &digest, "Agent source")
+            .expect_err("a post-preview change must fail closed");
+        assert!(error.to_string().contains("changed after preview"));
     }
 }
 
