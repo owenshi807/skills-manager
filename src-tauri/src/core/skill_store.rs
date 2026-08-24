@@ -1140,6 +1140,21 @@ impl SkillStore {
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
+    /// Force Copy projections through the next sync pass.
+    ///
+    /// `source_hash` is only a skip hint; clearing it is fail-safe and does
+    /// not remove either the managed Skill or its Agent projection. Startup
+    /// uses this when the managed tree changed outside Card Master, because
+    /// legacy directory hashes alone cannot prove that a copy is current.
+    pub fn invalidate_copy_target_source_hashes(&self) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        Ok(conn.execute(
+            "UPDATE skill_targets SET source_hash = NULL
+             WHERE mode = 'copy' AND source_hash IS NOT NULL",
+            [],
+        )?)
+    }
+
     pub fn delete_target(&self, skill_id: &str, tool: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
@@ -2951,6 +2966,42 @@ mod organization_operation_tests {
         assert_eq!(store.get_all_skills().unwrap().len(), 2);
         assert!(store.get_targets_for_skill(&keep.id).unwrap().is_empty());
         assert_eq!(store.get_targets_for_skill(&archived.id).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn invalidating_copy_targets_preserves_symlink_freshness() {
+        let tmp = tempdir().unwrap();
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let managed = skill("managed", "/central/managed");
+        store.insert_skill(&managed).unwrap();
+        for (id, mode) in [("copy-target", "copy"), ("symlink-target", "symlink")] {
+            store
+                .insert_target(&SkillTargetRecord {
+                    id: id.to_string(),
+                    skill_id: managed.id.clone(),
+                    tool: id.to_string(),
+                    target_path: format!("/agent/{id}"),
+                    mode: mode.to_string(),
+                    status: "ok".to_string(),
+                    synced_at: Some(1),
+                    last_error: None,
+                    source_hash: Some("legacy-collision-prone-hash".to_string()),
+                })
+                .unwrap();
+        }
+
+        assert_eq!(store.invalidate_copy_target_source_hashes().unwrap(), 1);
+        let targets = store.get_all_targets().unwrap();
+        let copy = targets.iter().find(|target| target.mode == "copy").unwrap();
+        let symlink = targets
+            .iter()
+            .find(|target| target.mode == "symlink")
+            .unwrap();
+        assert!(copy.source_hash.is_none());
+        assert_eq!(
+            symlink.source_hash.as_deref(),
+            Some("legacy-collision-prone-hash")
+        );
     }
 
     #[test]

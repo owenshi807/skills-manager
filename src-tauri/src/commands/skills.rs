@@ -2832,7 +2832,11 @@ fn strip_frontmatter_version(text: &str) -> String {
                 }
                 return true;
             }
-            !(in_frontmatter && !frontmatter_closed && line.trim_start().starts_with("version:"))
+            // YAML nesting is indentation-sensitive. Only a `version` key at
+            // column zero belongs to the Skill's top-level frontmatter. A
+            // nested `version:` entry (including one inside a block scalar)
+            // can carry behavior and must remain part of the comparison.
+            !(in_frontmatter && !frontmatter_closed && line.starts_with("version:"))
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -3200,6 +3204,58 @@ mod organization_health_tests {
         assert_eq!(action.recommended_action, "archive_one");
         assert_eq!(action.keep_skill_id, "openclaw-copy");
         assert_eq!(action.archive_skill_id, "codex-copy");
+    }
+
+    #[test]
+    fn packaging_marker_preserves_nested_version_content() {
+        let members = vec![
+            ManagedDirectoryMemberEvidence {
+                skill_id: "packaged".to_string(),
+                files: vec![
+                    ManagedDirectoryFileEvidence {
+                        path: "SKILL.md".to_string(),
+                        bytes: 64,
+                        sha256: "packaged-hash".to_string(),
+                        unix_exec_bits: 0,
+                        text: Some(
+                            "---\nname: pdf\nconfig:\n  version: safe\n---\n# Guide\n"
+                                .to_string(),
+                        ),
+                    },
+                    ManagedDirectoryFileEvidence {
+                        path: ".clawx-preinstalled.json".to_string(),
+                        bytes: 2,
+                        sha256: "marker".to_string(),
+                        unix_exec_bits: 0,
+                        text: Some("{}".to_string()),
+                    },
+                ],
+            },
+            ManagedDirectoryMemberEvidence {
+                skill_id: "plain".to_string(),
+                files: vec![ManagedDirectoryFileEvidence {
+                    path: "SKILL.md".to_string(),
+                    bytes: 66,
+                    sha256: "plain-hash".to_string(),
+                    unix_exec_bits: 0,
+                    text: Some(
+                        "---\nname: pdf\nconfig:\n  version: unsafe\n---\n# Guide\n"
+                            .to_string(),
+                    ),
+                }],
+            },
+        ];
+
+        assert!(derive_packaging_only_safe_action(&members).is_none());
+    }
+
+    #[test]
+    fn frontmatter_version_normalization_preserves_block_scalar_content() {
+        let text = "---\nname: pdf\ndescription: |\n  version: behavior\nversion: 1.0.1\n---\n# Guide\n";
+        let normalized = strip_frontmatter_version(text);
+
+        assert!(normalized.contains("  version: behavior"));
+        assert!(!normalized.contains("version: 1.0.1"));
     }
 
     #[test]
