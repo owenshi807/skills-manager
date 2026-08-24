@@ -104,7 +104,7 @@ pub(crate) fn write_all_from_db_unlocked(store: &SkillStore) -> Result<()> {
     write_skill_records_from_db(store)?;
     write_scenario_records_from_db(store)?;
     remove_stale_metadata_files(store)?;
-    remember_index_fingerprints(store)?;
+    remember_metadata_fingerprint(store)?;
     Ok(())
 }
 
@@ -215,10 +215,14 @@ pub fn metadata_snapshot_fingerprint() -> Result<Option<String>> {
     Ok(Some(format!("{:x}", hasher.finalize())))
 }
 
-fn remember_index_fingerprints(store: &SkillStore) -> Result<()> {
+fn remember_metadata_fingerprint(store: &SkillStore) -> Result<()> {
     if let Some(fingerprint) = metadata_snapshot_fingerprint()? {
         store.set_setting(METADATA_FINGERPRINT_SETTING, &fingerprint)?;
     }
+    Ok(())
+}
+
+fn remember_managed_tree_fingerprint(store: &SkillStore) -> Result<()> {
     if let Some(fingerprint) = managed_tree_snapshot_fingerprint()? {
         store.set_setting(MANAGED_TREE_FINGERPRINT_SETTING, &fingerprint)?;
     }
@@ -342,7 +346,10 @@ pub(crate) fn reindex_from_metadata_unlocked(store: &SkillStore) -> Result<()> {
         store.replace_scenarios_from_metadata(&scenarios)?;
         store.replace_scenario_memberships_from_metadata(&memberships)?;
     }
-    remember_index_fingerprints(store)?;
+    remember_metadata_fingerprint(store)?;
+    // Only a completed reindex has recomputed every SkillRecord.content_hash.
+    // Metadata-only writes must never bless an out-of-band managed-tree edit.
+    remember_managed_tree_fingerprint(store)?;
     Ok(())
 }
 
@@ -361,7 +368,7 @@ pub(crate) fn ensure_skill_metadata_unlocked(store: &SkillStore, skill_id: &str)
         .ok_or_else(|| anyhow!("skill not found: {skill_id}"))?;
     let tags = store.get_tags_map()?.remove(skill_id).unwrap_or_default();
     write_skill_file(&skill, &tags)?;
-    remember_index_fingerprints(store)
+    remember_metadata_fingerprint(store)
 }
 
 pub fn cleanup_temporary_files() -> Result<()> {
@@ -897,6 +904,7 @@ mod tests {
             .unwrap();
 
         write_all_from_db_unlocked(&repo.store).unwrap();
+        reindex_from_metadata_unlocked(&repo.store).unwrap();
         let current = managed_tree_snapshot_fingerprint().unwrap().unwrap();
         assert_eq!(
             repo.store
@@ -912,6 +920,44 @@ mod tests {
         )
         .unwrap();
         assert_ne!(managed_tree_snapshot_fingerprint().unwrap().unwrap(), current);
+    }
+
+    #[test]
+    fn metadata_only_write_does_not_bless_unhashed_managed_tree_edit() {
+        let repo = test_repo();
+        let skill_dir = write_skill_dir("unblessed-skill");
+        repo.store
+            .insert_skill(&sample_skill("skill-unblessed", &skill_dir))
+            .unwrap();
+
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        reindex_from_metadata_unlocked(&repo.store).unwrap();
+        let indexed = repo
+            .store
+            .get_setting(MANAGED_TREE_FINGERPRINT_SETTING)
+            .unwrap()
+            .expect("reindex must remember the managed tree");
+
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: unblessed-skill\n---\nout-of-band edit\n",
+        )
+        .unwrap();
+        let edited = managed_tree_snapshot_fingerprint().unwrap().unwrap();
+        assert_ne!(edited, indexed);
+
+        // Auto backup and exit flows may flush metadata without rehashing the
+        // managed tree. That flush must leave the old trusted fingerprint in
+        // place so the next startup sees the mismatch and reindexes.
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        assert_eq!(
+            repo.store
+                .get_setting(MANAGED_TREE_FINGERPRINT_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some(indexed.as_str())
+        );
+        assert_ne!(edited, indexed);
     }
 
     #[test]
