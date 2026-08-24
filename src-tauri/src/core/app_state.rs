@@ -59,9 +59,13 @@ fn should_reindex_metadata(
     skill_count: usize,
     metadata_fingerprint: Option<&str>,
     indexed_fingerprint: Option<&str>,
+    managed_tree_fingerprint: Option<&str>,
+    indexed_managed_tree_fingerprint: Option<&str>,
 ) -> bool {
     metadata_fingerprint.is_some()
-        && (skill_count == 0 || metadata_fingerprint != indexed_fingerprint)
+        && (skill_count == 0
+            || metadata_fingerprint != indexed_fingerprint
+            || managed_tree_fingerprint != indexed_managed_tree_fingerprint)
 }
 
 fn initialize_store_inner(
@@ -92,10 +96,17 @@ fn initialize_store_inner(
     let indexed_fingerprint = store
         .get_setting(sync_metadata::METADATA_FINGERPRINT_SETTING)
         .context("Failed to read sync metadata index state")?;
+    let managed_tree_fingerprint = sync_metadata::managed_tree_snapshot_fingerprint()
+        .context("Failed to inspect managed Skill tree")?;
+    let indexed_managed_tree_fingerprint = store
+        .get_setting(sync_metadata::MANAGED_TREE_FINGERPRINT_SETTING)
+        .context("Failed to read managed Skill tree index state")?;
     let should_reindex = should_reindex_metadata(
         timings.skill_count,
         metadata_fingerprint.as_deref(),
         indexed_fingerprint.as_deref(),
+        managed_tree_fingerprint.as_deref(),
+        indexed_managed_tree_fingerprint.as_deref(),
     );
     if should_reindex {
         let step = Instant::now();
@@ -141,10 +152,35 @@ mod tests {
 
     #[test]
     fn metadata_reindex_only_runs_for_missing_or_changed_index() {
-        assert!(!should_reindex_metadata(394, Some("same"), Some("same")));
-        assert!(should_reindex_metadata(394, Some("new"), Some("old")));
-        assert!(should_reindex_metadata(0, Some("same"), Some("same")));
-        assert!(!should_reindex_metadata(394, None, None));
+        assert!(!should_reindex_metadata(
+            394,
+            Some("same"),
+            Some("same"),
+            Some("tree"),
+            Some("tree")
+        ));
+        assert!(should_reindex_metadata(
+            394,
+            Some("new"),
+            Some("old"),
+            Some("tree"),
+            Some("tree")
+        ));
+        assert!(should_reindex_metadata(
+            394,
+            Some("same"),
+            Some("same"),
+            Some("changed-tree"),
+            Some("old-tree")
+        ));
+        assert!(should_reindex_metadata(
+            0,
+            Some("same"),
+            Some("same"),
+            Some("tree"),
+            Some("tree")
+        ));
+        assert!(!should_reindex_metadata(394, None, None, Some("tree"), None));
     }
 }
 

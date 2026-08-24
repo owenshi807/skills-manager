@@ -26,7 +26,7 @@ pub const STRICT_DIRECTORY_DIGEST_ALGORITHM: &str = "scm-dir-v2";
 /// not ignore `.git`, `.gitignore`, generated files, or empty directories. A
 /// content/update digest answers "is the Skill behavior the same?"; this one
 /// answers the stricter question "would deleting this tree discard anything?".
-pub const OWNERSHIP_DIRECTORY_DIGEST_ALGORITHM: &str = "scm-ownership-v1";
+pub const OWNERSHIP_DIRECTORY_DIGEST_ALGORITHM: &str = "scm-ownership-v2";
 
 /// Canonical digest of the tree produced by copy-mode deployment.
 ///
@@ -34,7 +34,7 @@ pub const OWNERSHIP_DIRECTORY_DIGEST_ALGORITHM: &str = "scm-ownership-v1";
 /// symlinks as ordinary files. This digest models those transformations for
 /// source/target comparison without weakening the complete ownership digest
 /// used to detect post-preview changes in the live target.
-pub const COPY_PROJECTION_DIGEST_ALGORITHM: &str = "scm-copy-projection-v1";
+pub const COPY_PROJECTION_DIGEST_ALGORITHM: &str = "scm-copy-projection-v2";
 
 const STRICT_HASH_BUFFER_SIZE: usize = 64 * 1024;
 
@@ -216,6 +216,17 @@ fn strict_exec_bits(metadata: &std::fs::Metadata) -> u32 {
 fn strict_exec_bits(_metadata: &std::fs::Metadata) -> u32 {
     // Keep the encoding platform-neutral for ordinary files. A Unix file with
     // no executable bits and the same file on Windows must hash identically.
+    0
+}
+
+#[cfg(unix)]
+fn ownership_mode_bits(metadata: &std::fs::Metadata) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o7777
+}
+
+#[cfg(not(unix))]
+fn ownership_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
     0
 }
 
@@ -517,8 +528,8 @@ pub fn hash_directory_ownership_v1(dir: &Path) -> Result<String> {
                     bail!("Ownership directory changed: {}", entry.path.display());
                 }
                 strict_field(&mut hasher, b"kind", b"directory");
-                let exec_bits = strict_exec_bits(&metadata);
-                strict_field(&mut hasher, b"exec-bits", &exec_bits.to_be_bytes());
+                let mode_bits = ownership_mode_bits(&metadata);
+                strict_field(&mut hasher, b"mode-bits", &mode_bits.to_be_bytes());
             }
             OwnershipEntryKind::File | OwnershipEntryKind::FileSymlink { .. } => {
                 if let OwnershipEntryKind::FileSymlink {
@@ -550,8 +561,8 @@ pub fn hash_directory_ownership_v1(dir: &Path) -> Result<String> {
                         entry.path.display()
                     );
                 }
-                let exec_bits = strict_exec_bits(&metadata);
-                strict_field(&mut hasher, b"exec-bits", &exec_bits.to_be_bytes());
+                let mode_bits = ownership_mode_bits(&metadata);
+                strict_field(&mut hasher, b"mode-bits", &mode_bits.to_be_bytes());
                 hash_strict_file_contents(&mut hasher, &entry.path, metadata.len())?;
             }
         }
@@ -685,8 +696,8 @@ fn hash_copy_projection_entries(entries: Vec<OwnershipEntry>) -> Result<String> 
                         entry.path.display()
                     );
                 }
-                let exec_bits = strict_exec_bits(&metadata);
-                strict_field(&mut hasher, b"exec-bits", &exec_bits.to_be_bytes());
+                let mode_bits = ownership_mode_bits(&metadata);
+                strict_field(&mut hasher, b"mode-bits", &mode_bits.to_be_bytes());
                 hash_strict_file_contents(&mut hasher, &entry.path, metadata.len())?;
             }
         }
@@ -1035,6 +1046,30 @@ mod tests {
         assert_ne!(
             hash_expected_copy_projection_v1(&source).unwrap(),
             hash_observed_copy_projection_v1(&target).unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ownership_and_copy_digests_include_full_unix_permission_bits() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("SKILL.md");
+        fs::write(&file, "# demo\n").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let ownership_before = hash_directory_ownership_v1(tmp.path()).unwrap();
+        let copy_before = hash_observed_copy_projection_v1(tmp.path()).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+
+        assert_ne!(
+            hash_directory_ownership_v1(tmp.path()).unwrap(),
+            ownership_before
+        );
+        assert_ne!(
+            hash_observed_copy_projection_v1(tmp.path()).unwrap(),
+            copy_before
         );
     }
 
