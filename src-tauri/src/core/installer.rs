@@ -466,7 +466,12 @@ fn collision_suffixed_name(base: &str, index: u32) -> String {
 
     let suffix = format!("-{index}");
     let base_budget = MAX_SKILL_NAME_CHARS.saturating_sub(suffix.chars().count());
-    let bounded_base = base.chars().take(base_budget).collect::<String>();
+    let bounded_base = base
+        .chars()
+        .take(base_budget)
+        .collect::<String>()
+        .trim_end_matches('-')
+        .to_string();
     format!("{bounded_base}{suffix}")
 }
 
@@ -546,6 +551,21 @@ mod tests {
 
         assert_eq!(collision_name.chars().count(), 64);
         assert_eq!(collision_name.as_ref(), format!("{}-2", "a".repeat(62)));
+    }
+
+    #[test]
+    fn unique_dest_avoids_double_hyphen_at_truncation_boundary() {
+        let tmp = tempdir().unwrap();
+        let boundary_name = format!("{}-bc", "a".repeat(61));
+        assert_eq!(boundary_name.chars().count(), 64);
+        make_skill_dir(tmp.path(), &boundary_name, Some(&boundary_name));
+
+        let dest = unique_skill_dest(tmp.path(), &boundary_name);
+        let collision_name = dest.file_name().unwrap().to_string_lossy();
+
+        assert_eq!(collision_name.as_ref(), format!("{}-2", "a".repeat(61)));
+        assert!(collision_name.chars().count() <= 64);
+        assert!(!collision_name.contains("--"));
     }
 
     #[cfg(unix)]
