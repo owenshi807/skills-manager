@@ -450,7 +450,7 @@ fn unique_skill_dest(parent: &Path, sanitized_name: &str) -> PathBuf {
         let candidate = if i == 1 {
             parent.join(sanitized_name)
         } else {
-            parent.join(format!("{}-{}", sanitized_name, i))
+            parent.join(collision_suffixed_name(sanitized_name, i))
         };
 
         if !candidate.exists() {
@@ -459,6 +459,15 @@ fn unique_skill_dest(parent: &Path, sanitized_name: &str) -> PathBuf {
     }
 
     parent.join(sanitized_name)
+}
+
+fn collision_suffixed_name(base: &str, index: u32) -> String {
+    const MAX_SKILL_NAME_CHARS: usize = 64;
+
+    let suffix = format!("-{index}");
+    let base_budget = MAX_SKILL_NAME_CHARS.saturating_sub(suffix.chars().count());
+    let bounded_base = base.chars().take(base_budget).collect::<String>();
+    format!("{bounded_base}{suffix}")
 }
 
 fn is_ignored_copy_entry(name: &std::ffi::OsStr) -> bool {
@@ -524,6 +533,19 @@ mod tests {
 
         let dest = unique_skill_dest(tmp.path(), "a-b");
         assert_eq!(dest, tmp.path().join("a-b-2"));
+    }
+
+    #[test]
+    fn unique_dest_reserves_name_budget_for_collision_suffix() {
+        let tmp = tempdir().unwrap();
+        let max_length_name = "a".repeat(64);
+        make_skill_dir(tmp.path(), &max_length_name, Some(&max_length_name));
+
+        let dest = unique_skill_dest(tmp.path(), &max_length_name);
+        let collision_name = dest.file_name().unwrap().to_string_lossy();
+
+        assert_eq!(collision_name.chars().count(), 64);
+        assert_eq!(collision_name.as_ref(), format!("{}-2", "a".repeat(62)));
     }
 
     #[cfg(unix)]
