@@ -2645,8 +2645,15 @@ struct ManagedDirectoryFileEvidence {
 }
 
 #[derive(Debug, Serialize)]
+struct ManagedDirectoryDirectoryEvidence {
+    path: String,
+    unix_permission_bits: u32,
+}
+
+#[derive(Debug, Serialize)]
 struct ManagedDirectoryMemberEvidence {
     skill_id: String,
+    directories: Vec<ManagedDirectoryDirectoryEvidence>,
     files: Vec<ManagedDirectoryFileEvidence>,
 }
 
@@ -2675,7 +2682,7 @@ fn build_managed_directory_comparison(
         ));
     }
     let mut members = Vec::with_capacity(2);
-    let mut total_files = 0usize;
+    let mut total_entries = 0usize;
     let mut total_bytes = 0u64;
     for skill_id in member_ids {
         let mut text_budget = 80_000usize;
@@ -2687,21 +2694,47 @@ fn build_managed_directory_comparison(
         if !root.is_dir() {
             return Err(AppError::invalid_input("Managed Skill root is not a directory"));
         }
+        let mut directories = Vec::new();
         let mut files = Vec::new();
         for item in WalkDir::new(&root).follow_links(false).sort_by_file_name() {
             let entry = item.map_err(|error| AppError::internal(error.to_string()))?;
-            if entry.depth() == 0 || entry.file_type().is_dir() {
+            if entry.depth() == 0 {
                 continue;
             }
             if entry.file_type().is_symlink() || !entry.file_type().is_file() {
+                if entry.file_type().is_dir() {
+                    total_entries += 1;
+                    if total_entries > 512 {
+                        return Err(AppError::invalid_input(
+                            "The selected Skills contain too many entries for one complete comparison",
+                        ));
+                    }
+                    let relative = entry.path().strip_prefix(&root).map_err(|_| {
+                        AppError::invalid_input("Managed Skill directory escaped its root")
+                    })?;
+                    let path = relative
+                        .to_str()
+                        .ok_or_else(|| {
+                            AppError::invalid_input("Managed Skill contains a non-UTF-8 path")
+                        })?
+                        .replace('\\', "/");
+                    let metadata = entry
+                        .metadata()
+                        .map_err(|error| AppError::internal(error.to_string()))?;
+                    directories.push(ManagedDirectoryDirectoryEvidence {
+                        path,
+                        unix_permission_bits: metadata_permission_bits(&metadata),
+                    });
+                    continue;
+                }
                 return Err(AppError::invalid_input(
                     "Complete comparison does not follow symlinks or special files",
                 ));
             }
-            total_files += 1;
-            if total_files > 512 {
+            total_entries += 1;
+            if total_entries > 512 {
                 return Err(AppError::invalid_input(
-                    "The selected Skills contain too many files for one complete comparison",
+                    "The selected Skills contain too many entries for one complete comparison",
                 ));
             }
             let relative = entry
@@ -2752,12 +2785,13 @@ fn build_managed_directory_comparison(
         }
         members.push(ManagedDirectoryMemberEvidence {
             skill_id: skill_id.clone(),
+            directories,
             files,
         });
     }
     let safe_action = derive_packaging_only_safe_action(&members);
     Ok(ManagedDirectoryComparisonEvidence {
-        completeness: "complete_file_manifest_with_unix_exec_bits_and_bounded_utf8_content",
+        completeness: "complete_directory_and_file_manifest_with_unix_permission_bits_and_bounded_utf8_content",
         members,
         safe_action,
     })
@@ -2770,7 +2804,7 @@ fn derive_packaging_only_safe_action(
         return None;
     }
     let functional_map = |member: &ManagedDirectoryMemberEvidence| {
-        let mut map = std::collections::BTreeMap::new();
+        let mut file_map = std::collections::BTreeMap::new();
         for file in &member.files {
             if is_generated_comparison_artifact(&file.path)
                 || is_provenance_packaging_marker(&file.path)
@@ -2784,9 +2818,15 @@ fn derive_packaging_only_safe_action(
             } else {
                 file.sha256.clone()
             };
-            map.insert(file.path.clone(), (digest, file.unix_exec_bits));
+            file_map.insert(file.path.clone(), (digest, file.unix_exec_bits));
         }
-        Some(map)
+        let directory_map = member
+            .directories
+            .iter()
+            .filter(|directory| !is_generated_comparison_artifact(&directory.path))
+            .map(|directory| (directory.path.clone(), directory.unix_permission_bits))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        Some((file_map, directory_map))
     };
     if functional_map(&members[0])? != functional_map(&members[1])? {
         return None;
@@ -2812,6 +2852,17 @@ fn derive_packaging_only_safe_action(
 fn metadata_exec_bits(metadata: &std::fs::Metadata) -> u32 {
     use std::os::unix::fs::PermissionsExt;
     metadata.permissions().mode() & 0o111
+}
+
+#[cfg(unix)]
+fn metadata_permission_bits(metadata: &std::fs::Metadata) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o7777
+}
+
+#[cfg(not(unix))]
+fn metadata_permission_bits(_metadata: &std::fs::Metadata) -> u32 {
+    0
 }
 
 #[cfg(not(unix))]
@@ -3149,6 +3200,10 @@ mod organization_health_tests {
         let members = vec![
             ManagedDirectoryMemberEvidence {
                 skill_id: "openclaw-copy".to_string(),
+                directories: vec![ManagedDirectoryDirectoryEvidence {
+                    path: "scripts".to_string(),
+                    unix_permission_bits: 0o755,
+                }],
                 files: vec![
                     ManagedDirectoryFileEvidence {
                         path: "SKILL.md".to_string(),
@@ -3175,6 +3230,10 @@ mod organization_health_tests {
             },
             ManagedDirectoryMemberEvidence {
                 skill_id: "codex-copy".to_string(),
+                directories: vec![ManagedDirectoryDirectoryEvidence {
+                    path: "scripts".to_string(),
+                    unix_permission_bits: 0o755,
+                }],
                 files: vec![
                     ManagedDirectoryFileEvidence {
                         path: "SKILL.md".to_string(),
@@ -3211,6 +3270,7 @@ mod organization_health_tests {
         let members = vec![
             ManagedDirectoryMemberEvidence {
                 skill_id: "packaged".to_string(),
+                directories: Vec::new(),
                 files: vec![
                     ManagedDirectoryFileEvidence {
                         path: "SKILL.md".to_string(),
@@ -3233,6 +3293,7 @@ mod organization_health_tests {
             },
             ManagedDirectoryMemberEvidence {
                 skill_id: "plain".to_string(),
+                directories: Vec::new(),
                 files: vec![ManagedDirectoryFileEvidence {
                     path: "SKILL.md".to_string(),
                     bytes: 66,
@@ -3263,6 +3324,10 @@ mod organization_health_tests {
         let members = vec![
             ManagedDirectoryMemberEvidence {
                 skill_id: "packaged".to_string(),
+                directories: vec![ManagedDirectoryDirectoryEvidence {
+                    path: "scripts".to_string(),
+                    unix_permission_bits: 0o755,
+                }],
                 files: vec![
                     ManagedDirectoryFileEvidence {
                         path: "scripts/run.sh".to_string(),
@@ -3282,6 +3347,10 @@ mod organization_health_tests {
             },
             ManagedDirectoryMemberEvidence {
                 skill_id: "plain".to_string(),
+                directories: vec![ManagedDirectoryDirectoryEvidence {
+                    path: "scripts".to_string(),
+                    unix_permission_bits: 0o755,
+                }],
                 files: vec![ManagedDirectoryFileEvidence {
                     path: "scripts/run.sh".to_string(),
                     bytes: 8,
@@ -3293,6 +3362,39 @@ mod organization_health_tests {
         ];
 
         assert!(derive_packaging_only_safe_action(&members).is_none());
+    }
+
+    #[test]
+    fn packaging_marker_does_not_override_required_empty_directory() {
+        let tmp = tempdir().unwrap();
+        let packaged_dir = tmp.path().join("packaged");
+        let plain_dir = tmp.path().join("plain");
+        std::fs::create_dir_all(packaged_dir.join("templates")).unwrap();
+        std::fs::create_dir_all(&plain_dir).unwrap();
+        let skill_md = "---\nname: pdf\ndescription: PDF tools\n---\n# Guide\n";
+        std::fs::write(packaged_dir.join("SKILL.md"), skill_md).unwrap();
+        std::fs::write(plain_dir.join("SKILL.md"), skill_md).unwrap();
+        std::fs::write(packaged_dir.join(".clawx-preinstalled.json"), "{}").unwrap();
+
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let mut packaged = skill(&packaged_dir);
+        packaged.id = "packaged".to_string();
+        let mut plain = skill(&plain_dir);
+        plain.id = "plain".to_string();
+        store.insert_skill(&packaged).unwrap();
+        store.insert_skill(&plain).unwrap();
+
+        let evidence = build_managed_directory_comparison(
+            &["packaged".to_string(), "plain".to_string()],
+            &store,
+        )
+        .unwrap();
+
+        assert!(evidence.members[0]
+            .directories
+            .iter()
+            .any(|directory| directory.path == "templates"));
+        assert!(evidence.safe_action.is_none());
     }
 
     #[test]
