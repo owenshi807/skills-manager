@@ -1,9 +1,12 @@
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+#[cfg(any(not(unix), test))]
+use std::{fs::File, io::Read};
 use unicode_normalization::UnicodeNormalization;
 use walkdir::WalkDir;
 
@@ -14,6 +17,8 @@ use super::skill_store::{ScenarioRecord, SkillRecord, SkillStore};
 
 const SCHEMA_VERSION: u32 = 1;
 const APP_MIN_VERSION: &str = "2.0.0";
+pub const METADATA_FINGERPRINT_SETTING: &str = "sync_metadata_fingerprint_v1";
+pub const MANAGED_TREE_FINGERPRINT_SETTING: &str = "managed_skill_tree_fingerprint_v1";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SchemaFile {
@@ -101,6 +106,169 @@ pub(crate) fn write_all_from_db_unlocked(store: &SkillStore) -> Result<()> {
     write_skill_records_from_db(store)?;
     write_scenario_records_from_db(store)?;
     remove_stale_metadata_files(store)?;
+    remember_metadata_fingerprint(store)?;
+    Ok(())
+}
+
+/// Cheap, recursive fingerprint of the live managed Skill tree.
+///
+/// Unix filesystems expose inode and ctime evidence that cannot be restored by
+/// an ordinary content edit, so their fingerprint remains metadata-only and
+/// avoids re-reading a multi-gigabyte library on every launch. Other platforms
+/// (currently Windows) lack equivalent change evidence in stable `std`, so
+/// regular files additionally contribute a streaming content digest. The
+/// `.skills-manager` control directory is covered separately by
+/// [`metadata_snapshot_fingerprint`] and must not make the Skill tree
+/// fingerprint self-invalidating when metadata is rewritten.
+pub fn managed_tree_snapshot_fingerprint() -> Result<Option<String>> {
+    let root = central_repo::skills_dir();
+    if !root.exists() {
+        return Ok(None);
+    }
+
+    let mut entries = WalkDir::new(&root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
+            entry.depth() == 0
+                || !(entry.depth() == 1 && entry.file_name() == ".skills-manager")
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    entries.retain(|entry| entry.depth() > 0);
+    entries.sort_by(|a, b| a.path().cmp(b.path()));
+
+    let mut hasher = Sha256::new();
+    // v2 adds content evidence on non-Unix platforms. Changing the domain
+    // deliberately invalidates every stored v1 fingerprint once so startup
+    // reindexes before trusting legacy copy-projection hashes.
+    hasher.update(b"scm-managed-tree-state-v2");
+    for entry in entries {
+        let path = entry.path();
+        let relative = path.strip_prefix(&root)?;
+        let metadata = fs::symlink_metadata(path)
+            .with_context(|| format!("Failed to inspect managed entry {}", path.display()))?;
+        hasher.update(relative.to_string_lossy().as_bytes());
+        hasher.update([0]);
+        let file_type = metadata.file_type();
+        if file_type.is_dir() {
+            hasher.update(b"directory");
+        } else if file_type.is_file() {
+            hasher.update(b"file");
+        } else if file_type.is_symlink() {
+            hasher.update(b"symlink");
+            hasher.update(
+                fs::read_link(path)
+                    .with_context(|| format!("Failed to read managed symlink {}", path.display()))?
+                    .to_string_lossy()
+                    .as_bytes(),
+            );
+        } else {
+            hasher.update(b"special");
+        }
+        hasher.update(metadata.len().to_be_bytes());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            hasher.update(metadata.dev().to_be_bytes());
+            hasher.update(metadata.ino().to_be_bytes());
+            hasher.update(metadata.mode().to_be_bytes());
+            hasher.update(metadata.mtime().to_be_bytes());
+            hasher.update(metadata.mtime_nsec().to_be_bytes());
+            hasher.update(metadata.ctime().to_be_bytes());
+            hasher.update(metadata.ctime_nsec().to_be_bytes());
+        }
+
+        #[cfg(not(unix))]
+        {
+            let modified = metadata
+                .modified()
+                .with_context(|| format!("Failed to read modified time for {}", path.display()))?;
+            let (direction, seconds, nanos) = signed_system_time_parts(modified);
+            hasher.update([direction]);
+            hasher.update(seconds.to_be_bytes());
+            hasher.update(nanos.to_be_bytes());
+            hasher.update([u8::from(metadata.permissions().readonly())]);
+            if file_type.is_file() {
+                hasher.update(b"content-sha256");
+                hasher.update(managed_file_content_digest(path)?);
+            }
+        }
+        hasher.update([0xff]);
+    }
+
+    Ok(Some(format!("{:x}", hasher.finalize())))
+}
+
+#[cfg(any(not(unix), test))]
+fn signed_system_time_parts(value: std::time::SystemTime) -> (u8, u64, u32) {
+    match value.duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => (1, duration.as_secs(), duration.subsec_nanos()),
+        Err(error) => {
+            let duration = error.duration();
+            (0, duration.as_secs(), duration.subsec_nanos())
+        }
+    }
+}
+
+#[cfg(any(not(unix), test))]
+fn managed_file_content_digest(path: &Path) -> Result<[u8; 32]> {
+    let mut file = File::open(path)
+        .with_context(|| format!("Failed to open managed file {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .with_context(|| format!("Failed to read managed file {}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    let digest = hasher.finalize();
+    let mut bytes = [0_u8; 32];
+    bytes.copy_from_slice(&digest);
+    Ok(bytes)
+}
+
+pub fn metadata_snapshot_fingerprint() -> Result<Option<String>> {
+    let root = metadata_dir();
+    if !root.exists() {
+        return Ok(None);
+    }
+    let mut files = WalkDir::new(&root)
+        .into_iter()
+        .collect::<std::result::Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|entry| entry.file_type().is_file())
+        .filter(|entry| !entry.file_name().to_string_lossy().contains(".tmp."))
+        .map(|entry| entry.into_path())
+        .collect::<Vec<_>>();
+    files.sort();
+    let mut hasher = Sha256::new();
+    for path in files {
+        let relative = path.strip_prefix(&root)?;
+        hasher.update(relative.to_string_lossy().as_bytes());
+        hasher.update([0]);
+        hasher.update(fs::read(&path)?);
+        hasher.update([0xff]);
+    }
+    Ok(Some(format!("{:x}", hasher.finalize())))
+}
+
+fn remember_metadata_fingerprint(store: &SkillStore) -> Result<()> {
+    if let Some(fingerprint) = metadata_snapshot_fingerprint()? {
+        store.set_setting(METADATA_FINGERPRINT_SETTING, &fingerprint)?;
+    }
+    Ok(())
+}
+
+fn remember_managed_tree_fingerprint(store: &SkillStore) -> Result<()> {
+    if let Some(fingerprint) = managed_tree_snapshot_fingerprint()? {
+        store.set_setting(MANAGED_TREE_FINGERPRINT_SETTING, &fingerprint)?;
+    }
     Ok(())
 }
 
@@ -221,6 +389,10 @@ pub(crate) fn reindex_from_metadata_unlocked(store: &SkillStore) -> Result<()> {
         store.replace_scenarios_from_metadata(&scenarios)?;
         store.replace_scenario_memberships_from_metadata(&memberships)?;
     }
+    remember_metadata_fingerprint(store)?;
+    // Only a completed reindex has recomputed every SkillRecord.content_hash.
+    // Metadata-only writes must never bless an out-of-band managed-tree edit.
+    remember_managed_tree_fingerprint(store)?;
     Ok(())
 }
 
@@ -238,7 +410,8 @@ pub(crate) fn ensure_skill_metadata_unlocked(store: &SkillStore, skill_id: &str)
         .get_skill_by_id(skill_id)?
         .ok_or_else(|| anyhow!("skill not found: {skill_id}"))?;
     let tags = store.get_tags_map()?.remove(skill_id).unwrap_or_default();
-    write_skill_file(&skill, &tags)
+    write_skill_file(&skill, &tags)?;
+    remember_metadata_fingerprint(store)
 }
 
 pub fn cleanup_temporary_files() -> Result<()> {
@@ -740,6 +913,150 @@ mod tests {
         let err = reindex_from_metadata_unlocked(&repo.store).unwrap_err();
         assert!(err.to_string().contains("contains no skills"));
         assert!(repo.store.get_skill_by_id("skill-1").unwrap().is_some());
+    }
+
+    #[test]
+    fn metadata_fingerprint_marks_current_snapshot_and_detects_external_change() {
+        let repo = test_repo();
+        let skill_dir = write_skill_dir("fingerprinted-skill");
+        repo.store
+            .insert_skill(&sample_skill("skill-fingerprint", &skill_dir))
+            .unwrap();
+
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        let current = metadata_snapshot_fingerprint().unwrap().unwrap();
+        assert_eq!(
+            repo.store
+                .get_setting(METADATA_FINGERPRINT_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some(current.as_str())
+        );
+
+        let metadata_file = metadata_dir().join("skills/skill-fingerprint.json");
+        fs::write(&metadata_file, fs::read_to_string(&metadata_file).unwrap() + "\n").unwrap();
+        assert_ne!(metadata_snapshot_fingerprint().unwrap().unwrap(), current);
+    }
+
+    #[test]
+    fn managed_tree_fingerprint_marks_current_snapshot_and_detects_skill_edit() {
+        let repo = test_repo();
+        let skill_dir = write_skill_dir("tree-fingerprinted-skill");
+        repo.store
+            .insert_skill(&sample_skill("skill-tree-fingerprint", &skill_dir))
+            .unwrap();
+
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        reindex_from_metadata_unlocked(&repo.store).unwrap();
+        let current = managed_tree_snapshot_fingerprint().unwrap().unwrap();
+        assert_eq!(
+            repo.store
+                .get_setting(MANAGED_TREE_FINGERPRINT_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some(current.as_str())
+        );
+
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: tree-fingerprinted-skill\n---\nchanged content\n",
+        )
+        .unwrap();
+        assert_ne!(managed_tree_snapshot_fingerprint().unwrap().unwrap(), current);
+    }
+
+    #[test]
+    fn managed_file_content_evidence_distinguishes_same_size_replacement() {
+        let tmp = tempdir().unwrap();
+        let original = tmp.path().join("original.bin");
+        let replacement = tmp.path().join("replacement.bin");
+        fs::write(&original, b"same-size-a").unwrap();
+        fs::write(&replacement, b"same-size-b").unwrap();
+
+        assert_eq!(
+            fs::metadata(&original).unwrap().len(),
+            fs::metadata(&replacement).unwrap().len()
+        );
+        assert_ne!(
+            managed_file_content_digest(&original).unwrap(),
+            managed_file_content_digest(&replacement).unwrap()
+        );
+    }
+
+    #[test]
+    fn managed_tree_time_evidence_encodes_pre_epoch_values() {
+        let before_epoch = std::time::UNIX_EPOCH
+            .checked_sub(std::time::Duration::new(123, 456))
+            .unwrap();
+        let after_epoch = std::time::UNIX_EPOCH
+            .checked_add(std::time::Duration::new(789, 321))
+            .unwrap();
+
+        assert_eq!(signed_system_time_parts(before_epoch), (0, 123, 456));
+        assert_eq!(
+            signed_system_time_parts(std::time::UNIX_EPOCH),
+            (1, 0, 0)
+        );
+        assert_eq!(signed_system_time_parts(after_epoch), (1, 789, 321));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_managed_tree_fingerprint_detects_same_size_edit_with_restored_mtime() {
+        let _repo = test_repo();
+        let skill_dir = write_skill_dir("windows-content-fingerprint");
+        let behavior_file = skill_dir.join("behavior.txt");
+        fs::write(&behavior_file, b"same-size-a").unwrap();
+        let original_mtime = filetime::FileTime::from_last_modification_time(
+            &fs::metadata(&behavior_file).unwrap(),
+        );
+        let before = managed_tree_snapshot_fingerprint().unwrap().unwrap();
+
+        fs::write(&behavior_file, b"same-size-b").unwrap();
+        filetime::set_file_mtime(&behavior_file, original_mtime).unwrap();
+
+        assert_ne!(
+            managed_tree_snapshot_fingerprint().unwrap().unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn metadata_only_write_does_not_bless_unhashed_managed_tree_edit() {
+        let repo = test_repo();
+        let skill_dir = write_skill_dir("unblessed-skill");
+        repo.store
+            .insert_skill(&sample_skill("skill-unblessed", &skill_dir))
+            .unwrap();
+
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        reindex_from_metadata_unlocked(&repo.store).unwrap();
+        let indexed = repo
+            .store
+            .get_setting(MANAGED_TREE_FINGERPRINT_SETTING)
+            .unwrap()
+            .expect("reindex must remember the managed tree");
+
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: unblessed-skill\n---\nout-of-band edit\n",
+        )
+        .unwrap();
+        let edited = managed_tree_snapshot_fingerprint().unwrap().unwrap();
+        assert_ne!(edited, indexed);
+
+        // Auto backup and exit flows may flush metadata without rehashing the
+        // managed tree. That flush must leave the old trusted fingerprint in
+        // place so the next startup sees the mismatch and reindexes.
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        assert_eq!(
+            repo.store
+                .get_setting(MANAGED_TREE_FINGERPRINT_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some(indexed.as_str())
+        );
+        assert_ne!(edited, indexed);
     }
 
     #[test]

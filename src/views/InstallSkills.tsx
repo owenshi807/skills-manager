@@ -42,6 +42,11 @@ const MARKET_SEARCH_DEBOUNCE_MS = 450;
 const MARKET_SEARCH_CACHE_TTL_MS = 120_000;
 const MARKET_SEARCH_CACHE_MAX_ENTRIES = 150;
 
+const discoveredGroupKey = (group: ScanResult["groups"][number]) => {
+  const primaryLocation = group.locations[0];
+  return `${group.name}:${primaryLocation?.id ?? group.fingerprint ?? group.found_at}`;
+};
+
 export function InstallSkills() {
   const { t } = useTranslation();
   const { refreshPresets, refreshManagedSkills, managedSkills, openSkillDetailById } = useApp();
@@ -600,7 +605,8 @@ export function InstallSkills() {
   };
 
   const scanGroups = scanResult?.groups ?? [];
-  const pendingGroups = scanGroups.filter((group) => !group.imported);
+  const readyGroups = scanGroups.filter((group) => group.import_state === "ready");
+  const discoverySummary = api.summarizeLocalDiscovery(scanResult);
   const sourceOptions = useMemo(
     () => Array.from(new Set(marketSkills.map((skill) => skill.source))),
     [marketSkills]
@@ -1279,7 +1285,7 @@ export function InstallSkills() {
                 </button>
                 <button
                   onClick={handleImportAllDiscovered}
-                  disabled={scanLoading || importingAll || pendingGroups.length === 0}
+                  disabled={scanLoading || importingAll || readyGroups.length === 0}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-accent-border bg-accent-dark px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-50"
                 >
                   {importingAll ? (
@@ -1287,10 +1293,20 @@ export function InstallSkills() {
                   ) : (
                     <DownloadCloud className="h-3.5 w-3.5" />
                   )}
-                  {t("install.scan.importAll")}
+                  {t("install.scan.importAll")} ({readyGroups.length})
                 </button>
               </div>
             </div>
+
+            {scanResult ? (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border-subtle px-4 py-2 text-[11px] text-muted">
+                <span>{t("install.scan.stats.detected")} {scanResult.groups_found}</span>
+                <span>{t("install.scan.stats.pending")} {discoverySummary.ready}</span>
+                <span>{t("mySkills.foundation.attention")} {discoverySummary.needsReview + discoverySummary.blocked}</span>
+                {discoverySummary.external > 0 ? <span>Plugin / Runtime {discoverySummary.external}</span> : null}
+                <span>{t("install.scan.stats.imported")} {discoverySummary.imported}</span>
+              </div>
+            ) : null}
 
             <div className="space-y-4 p-4">
               {scanLoading ? (
@@ -1315,8 +1331,18 @@ export function InstallSkills() {
                       const [primaryLocation, ...otherLocations] = group.locations;
                       const primaryPath = primaryLocation?.found_path;
                       const isImporting = !!primaryPath && importingPaths.has(primaryPath);
-                      const isRenaming = group.name in renameEditing;
-                      const importName = renameEditing[group.name] ?? group.name;
+                      const groupKey = discoveredGroupKey(group);
+                      const isRenaming = groupKey in renameEditing;
+                      const importName = renameEditing[groupKey] ?? group.name;
+                      const isUniqueRename =
+                        isRenaming &&
+                        importName.trim().length > 0 &&
+                        importName.trim() !== group.name;
+                      const canImport = group.import_state === "ready" ||
+                        (group.import_state === "needs_review" && isUniqueRename);
+                      const importReason = group.import_reason && group.import_reason !== "already_managed"
+                        ? t(`install.scan.reasons.${group.import_reason}`)
+                        : null;
                       const foundDate = new Date(group.found_at).toLocaleDateString(undefined, {
                         year: "numeric",
                         month: "short",
@@ -1324,22 +1350,22 @@ export function InstallSkills() {
                       });
 
                       return (
-                        <article key={group.name} className="border-b border-border-subtle last:border-b-0">
+                        <article key={groupKey} className="border-b border-border-subtle last:border-b-0">
                           <div className="flex items-start justify-between gap-3 px-3 py-2">
                             <div className="min-w-0 flex-1 space-y-1.5">
                               <div className="flex min-w-0 items-center gap-2">
                                 {isRenaming ? (
                                   <input
                                     autoFocus
-                                    value={renameEditing[group.name]}
+                                    value={renameEditing[groupKey]}
                                     onChange={(e) =>
-                                      setRenameEditing((prev) => ({ ...prev, [group.name]: e.target.value }))
+                                      setRenameEditing((prev) => ({ ...prev, [groupKey]: e.target.value }))
                                     }
                                     onBlur={() => {
-                                      if (!renameEditing[group.name]?.trim()) {
+                                      if (!renameEditing[groupKey]?.trim()) {
                                         setRenameEditing((prev) => {
                                           const next = { ...prev };
-                                          delete next[group.name];
+                                          delete next[groupKey];
                                           return next;
                                         });
                                       }
@@ -1348,7 +1374,7 @@ export function InstallSkills() {
                                       if (e.key === "Escape") {
                                         setRenameEditing((prev) => {
                                           const next = { ...prev };
-                                          delete next[group.name];
+                                          delete next[groupKey];
                                           return next;
                                         });
                                       } else if (e.key === "Enter") {
@@ -1362,10 +1388,10 @@ export function InstallSkills() {
                                     {group.name}
                                   </h3>
                                 )}
-                                {!group.imported && !isRenaming ? (
+                                {!group.imported && group.import_state !== "blocked" && !isRenaming ? (
                                   <button
                                     onClick={() =>
-                                      setRenameEditing((prev) => ({ ...prev, [group.name]: group.name }))
+                                      setRenameEditing((prev) => ({ ...prev, [groupKey]: group.name }))
                                     }
                                     className="shrink-0 rounded p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-secondary"
                                     title={t("install.scan.rename")}
@@ -1377,6 +1403,21 @@ export function InstallSkills() {
                                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[13px] font-semibold text-emerald-400">
                                     <Check className="h-3 w-3" />
                                     {t("install.scan.imported")}
+                                  </span>
+                                ) : null}
+                                {group.import_state === "needs_review" ? (
+                                  <span className="inline-flex shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                                    {t("mySkills.foundation.attention")}
+                                  </span>
+                                ) : null}
+                                {group.import_state === "blocked" && group.import_reason !== "external_source" ? (
+                                  <span className="inline-flex shrink-0 rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-300">
+                                    {t("mySkills.organization.issueDirectory.eventStates.blocked")}
+                                  </span>
+                                ) : null}
+                                {group.import_reason === "external_source" ? (
+                                  <span className="inline-flex shrink-0 rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
+                                    Plugin / Runtime
                                   </span>
                                 ) : null}
                                 <span className="shrink-0 rounded-full border border-border-subtle bg-surface px-2 py-0.5 text-[13px] text-muted">
@@ -1398,10 +1439,13 @@ export function InstallSkills() {
                                   </code>
                                 </div>
                               ) : null}
+                              {importReason ? (
+                                <p className="text-[11px] text-muted">{importReason}</p>
+                              ) : null}
                             </div>
 
                             <div className="flex shrink-0 items-start justify-end">
-                              {group.imported ? null : (
+                              {group.imported || !canImport ? null : (
                                 <button
                                   onClick={() => primaryPath && handleImportDiscovered(primaryPath, importName)}
                                   disabled={!primaryPath || isImporting}

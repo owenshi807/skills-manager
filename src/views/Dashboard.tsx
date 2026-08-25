@@ -40,10 +40,9 @@ export function Dashboard() {
       <div className="app-page-header">
         <h1 className="app-page-title">{t("dashboard.greeting")}</h1>
         <p className="app-page-subtitle text-tertiary">
-          {t("dashboard.summary", {
+          {t("dashboard.foundationSummary", {
             skills: totalSkills,
             agents: enabledAgents.length,
-            projects: projects.length,
           })}
         </p>
       </div>
@@ -96,7 +95,7 @@ export function Dashboard() {
       {/* Actions */}
       <div className="flex gap-3">
         <button
-          onClick={() => navigate("/install?tab=local")}
+          onClick={() => navigate("/my-skills")}
           className="app-button-primary flex-1"
         >
           <Download className="w-4 h-4" />

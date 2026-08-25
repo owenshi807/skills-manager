@@ -154,18 +154,18 @@ function cellTone(type: DiffRow["type"], side: "left" | "right") {
   if (type === "removed" && side === "left") {
     return {
       lineNoClass: "text-red-900 dark:text-red-200",
-      lineNoStyle: { backgroundColor: "#ffd7d5" },
+      lineNoStyle: { backgroundColor: "var(--color-diff-delete-line)" },
       codeClass: "text-red-950 dark:text-red-50",
-      codeStyle: { backgroundColor: "#ffebe9", boxShadow: "inset 3px 0 0 #cf222e" },
+      codeStyle: { backgroundColor: "var(--color-diff-delete-bg)", boxShadow: "inset 3px 0 0 var(--color-diff-delete-edge)" },
       markerClass: "text-red-700 dark:text-red-300",
     };
   }
   if (type === "added" && side === "right") {
     return {
       lineNoClass: "text-emerald-900 dark:text-emerald-200",
-      lineNoStyle: { backgroundColor: "#aceebb" },
+      lineNoStyle: { backgroundColor: "var(--color-diff-add-line)" },
       codeClass: "text-emerald-950 dark:text-emerald-50",
-      codeStyle: { backgroundColor: "#dafbe1", boxShadow: "inset 3px 0 0 #1a7f37" },
+      codeStyle: { backgroundColor: "var(--color-diff-add-bg)", boxShadow: "inset 3px 0 0 var(--color-diff-add-edge)" },
       markerClass: "text-emerald-700 dark:text-emerald-300",
     };
   }
@@ -229,7 +229,7 @@ export function DocumentDiffViewer({ original, updated, className }: DocumentDif
     <div className={cn("space-y-4", className)}>
       {hunks.map((hunk) => (
         <div key={hunk.id} className="overflow-hidden rounded-xl border border-border-subtle bg-bg-secondary">
-          <div className="grid grid-cols-2 border-b border-border-subtle" style={{ backgroundColor: "#ddf4ff" }}>
+          <div className="grid grid-cols-2 border-b border-border-subtle" style={{ backgroundColor: "var(--color-diff-hunk-bg)" }}>
             <div className="border-r border-border-subtle px-3 py-2 font-mono text-[11px] text-sky-800">
               @@ -{hunk.leftStart},{hunk.leftCount}
             </div>

@@ -170,7 +170,7 @@ export function CommandPalette() {
         kind: "action",
         label: t("commandPalette.scanImport"),
         icon: <FolderOpen className="h-3.5 w-3.5" />,
-        run: () => navigate("/install?tab=local"),
+        run: () => navigate("/my-skills"),
       },
       {
         id: "action:settings",

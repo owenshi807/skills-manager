@@ -32,6 +32,7 @@ export interface ManagedSkill {
   last_checked_at: number | null;
   last_check_error: string | null;
   central_path: string;
+  content_hash: string | null;
   enabled: boolean;
   created_at: number;
   updated_at: number;
@@ -57,6 +58,206 @@ export interface SkillToolToggle {
   installed: boolean;
   globally_enabled: boolean;
   enabled: boolean;
+}
+
+export interface OrganizationRefreshResult {
+  refreshed: number;
+  failed: string[];
+}
+
+export interface OrganizationAgentCapability {
+  key: "codex" | "claude_code" | "hermes";
+  display_name: string;
+  available: boolean;
+  version: string | null;
+  reason: string | null;
+}
+
+export interface OrganizationAgentCaseTask {
+  case_id: string;
+  case_revision: string;
+  issue_kind: string;
+  member_ids: string[];
+  evidence_scope?: "skill_md_snapshot" | "managed_directory_diff";
+}
+
+export interface OrganizationAssessmentEvidence {
+  strength: "strong" | "medium" | "weak";
+  claim: string;
+}
+
+export interface OrganizationAgentAssessment {
+  case_id: string;
+  case_revision: string;
+  relation_hypothesis: string;
+  difference_summary: string;
+  evidence: OrganizationAssessmentEvidence[];
+  counter_evidence: OrganizationAssessmentEvidence[];
+  unresolved_questions: string[];
+  behavior_eval_required: boolean;
+  suggested_actions: string[];
+  recommended_action: "archive_one" | "keep_both" | "needs_more_evidence";
+  recommended_keep_skill_id: string | null;
+  recommendation_reason: string;
+  confidence: number;
+  evidence_scope: "skill_md_snapshot" | "managed_directory_diff";
+}
+
+export interface OrganizationAgentTaskResult {
+  agent_key: string;
+  assessments: OrganizationAgentAssessment[];
+}
+
+export interface OrganizationFinalizedAssessmentResult {
+  assessment: OrganizationAgentAssessment | null;
+}
+
+export interface DeckSuggestionCard {
+  skill_id: string;
+  stage: string;
+  role: string;
+  reason: string;
+}
+
+export interface DeckSuggestion {
+  title: string;
+  summary: string;
+  cards: DeckSuggestionCard[];
+  gaps: string[];
+}
+
+export interface OrganizationAgentAssessmentRecord {
+  case_key: string;
+  case_revision: string;
+  method_version: string;
+  agent_key: string;
+  payload_json: string;
+  created_at: number;
+}
+
+export interface OrganizationHealthIssue {
+  code: string;
+  severity: "error" | "warning";
+  detail: string;
+}
+
+export interface OrganizationHealthInspection {
+  skill_id: string;
+  issues: OrganizationHealthIssue[];
+}
+
+export interface FormatRepairAgentRequest {
+  skill_id: string;
+  issue_codes: string[];
+}
+
+export interface FormatRepairPreview {
+  plan_id: string;
+  skill_id: string;
+  skill_name: string;
+  agent_key: "codex" | "claude_code";
+  summary: string;
+  changed_paths: string[];
+  resolved_codes: string[];
+  remaining_codes: string[];
+}
+
+export type OrganizationDecisionTier = "rule_diagnosed" | "needs_semantic" | "blocked";
+
+export interface OrganizationCaseRequest {
+  case_id: string;
+  issue_kind: string;
+  member_ids: string[];
+  verify_strict_artifact: boolean;
+}
+
+export interface OrganizationCaseEvidence {
+  case_id: string;
+  case_revision: string;
+  member_ids: string[];
+  issue_kind: string;
+  artifact: {
+    status: "verified_match" | "verified_different" | "not_checked" | "unknown";
+    digest_algorithm: string | null;
+    digest_by_member: Record<string, string>;
+    observed_at: number;
+    diagnostics: string[];
+  };
+  provenance: Array<{
+    skill_id: string;
+    source_type: string;
+    source_ref: string | null;
+    source_subpath: string | null;
+    source_revision: string | null;
+    completeness: "strong" | "partial" | "unknown";
+  }>;
+  decision: {
+    tier: OrganizationDecisionTier;
+    rule_id: string;
+    rule_version: string;
+    reason_codes: string[];
+    unresolved_gates: string[];
+  };
+}
+
+export type OrganizationDisposition =
+  | "intentional_distinct"
+  | "same_intent"
+  | "related"
+  | "defer"
+  | "dismissed";
+
+export interface OrganizationDecision {
+  case_key: string;
+  evidence_fingerprint: string;
+  disposition: OrganizationDisposition;
+  decided_at: number;
+  updated_at: number;
+}
+
+export interface OrganizationArchiveRequest {
+  case: OrganizationCaseRequest;
+  evidence_fingerprint: string;
+  keep_skill_id: string;
+  archive_skill_id: string;
+  ownership_revision?: string;
+}
+
+export interface OrganizationArchivePreview {
+  keep_skill_id: string;
+  keep_name: string;
+  archive_skill_id: string;
+  archive_name: string;
+  target_effects: Array<{
+    tool: string;
+    target_path: string;
+    action: "remove_redundant" | "rewire_to_keep";
+  }>;
+  source_effect: {
+    tool: string;
+    source_path: string;
+    action: "archive_and_rewire_to_keep";
+  } | null;
+  source_preserved: boolean;
+  ownership_revision: string;
+}
+
+export interface OrganizationOperationResult {
+  operation_id: string;
+  status: string;
+}
+
+export interface OrganizationOperationSummary {
+  operation_id: string;
+  kind: "archive_redundant" | "format_repair";
+  status: "planned" | "staged" | "complete" | "needs_recovery" | "undone";
+  keep_skill_id: string;
+  keep_name: string;
+  archive_skill_id: string;
+  archive_name: string;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface SkillDocument {
@@ -115,12 +316,71 @@ export interface DiscoveredGroup {
   locations: { id: string; tool: string; found_path: string }[];
   imported: boolean;
   found_at: number;
+  import_state: "imported" | "ready" | "needs_review" | "blocked";
+  import_reason:
+    | "already_managed"
+    | "same_name_managed"
+    | "same_name_discovered"
+    | "external_source"
+    | "content_unavailable"
+    | "unsafe_source"
+    | null;
 }
 
 export interface ScanResult {
   tools_scanned: number;
   skills_found: number;
+  observations_found: number;
+  groups_found: number;
   groups: DiscoveredGroup[];
+  diagnostics?: unknown[];
+}
+
+export interface LocalDiscoverySummary {
+  /** New, unique loose Skills that can be copied into the managed library now. */
+  ready: number;
+  /** Identity/name collisions that need a user or Agent decision before import. */
+  needsReview: number;
+  /** Plugin/runtime-owned Skills that remain managed by their external owner. */
+  external: number;
+  /** Sources that cannot be verified or copied safely until repaired. */
+  blocked: number;
+  imported: number;
+  /** Groups that still need an action in Skill Card Manager. External groups are informational. */
+  actionable: number;
+  observedAgents: number;
+}
+
+export function summarizeLocalDiscovery(result: ScanResult | null): LocalDiscoverySummary {
+  const summary: LocalDiscoverySummary = {
+    ready: 0,
+    needsReview: 0,
+    external: 0,
+    blocked: 0,
+    imported: 0,
+    actionable: 0,
+    observedAgents: 0,
+  };
+  if (!result) return summary;
+
+  const agents = new Set<string>();
+  for (const group of result.groups) {
+    for (const location of group.locations) agents.add(location.tool);
+    if (group.import_state === "imported") {
+      summary.imported += 1;
+    } else if (group.import_state === "ready") {
+      summary.ready += 1;
+    } else if (group.import_state === "needs_review") {
+      summary.needsReview += 1;
+    } else if (group.import_reason === "external_source") {
+      summary.external += 1;
+    } else {
+      summary.blocked += 1;
+    }
+  }
+  summary.actionable = summary.ready + summary.needsReview + summary.blocked;
+  summary.observedAgents = agents.size;
+  return summary;
 }
 
 export interface SkillsShSkill {
@@ -175,6 +435,23 @@ export interface ProjectSkill {
   in_center: boolean;
   sync_status: "project_only" | "in_sync" | "project_newer" | "center_newer" | "diverged";
   center_skill_id: string | null;
+  content_hash: string | null;
+}
+
+export interface AgentDuplicateAliasPreview {
+  agent: string;
+  skill_id: string;
+  keep_relative_path: string;
+  redundant_relative_path: string;
+  redundant_path: string;
+  source_destination: string;
+  central_copy_preserved: boolean;
+  reversible: boolean;
+}
+
+export interface AgentDuplicateAliasResult {
+  operation_id: string;
+  status: string;
 }
 
 export interface ProjectSkillDocument {
@@ -236,6 +513,75 @@ export const removeCustomTool = (key: string) =>
 
 export const getManagedSkills = () =>
   invoke<ManagedSkill[]>("get_managed_skills");
+
+export const refreshOrganizationFacts = (skillIds: string[]) =>
+  invoke<OrganizationRefreshResult>("refresh_organization_facts", { skillIds });
+
+export const inspectOrganizationHealth = (skillIds: string[]) =>
+  invoke<OrganizationHealthInspection[]>("inspect_organization_health", { skillIds });
+
+export const runFormatRepairAgentTask = (
+  agentKey: "codex",
+  request: FormatRepairAgentRequest,
+) => invoke<FormatRepairPreview>("run_format_repair_agent_task", { agentKey, request });
+
+export const applyFormatRepair = (planId: string, skillId: string) =>
+  invoke<OrganizationOperationResult>("apply_format_repair", {
+    request: { plan_id: planId, skill_id: skillId },
+  });
+
+export const undoFormatRepair = (operationId: string) =>
+  invoke<OrganizationOperationResult>("undo_format_repair", { operationId });
+
+export const inspectOrganizationCases = (cases: OrganizationCaseRequest[]) =>
+  invoke<OrganizationCaseEvidence[]>("inspect_organization_cases", { cases });
+
+export const getOrganizationDecisions = () =>
+  invoke<OrganizationDecision[]>("get_organization_decisions");
+
+export const getOrganizationOperations = () =>
+  invoke<OrganizationOperationSummary[]>("get_organization_operations");
+
+export const setOrganizationDecision = (
+  caseRequest: OrganizationCaseRequest,
+  evidenceFingerprint: string,
+  disposition: OrganizationDisposition,
+) => invoke<OrganizationDecision>("set_organization_decision", {
+  case: caseRequest,
+  evidenceFingerprint,
+  disposition,
+});
+
+export const clearOrganizationDecision = (caseKey: string) =>
+  invoke<void>("clear_organization_decision", { caseKey });
+
+export const previewOrganizationArchive = (request: OrganizationArchiveRequest) =>
+  invoke<OrganizationArchivePreview>("preview_organization_archive", { request });
+
+export const applyOrganizationArchive = (request: OrganizationArchiveRequest) =>
+  invoke<OrganizationOperationResult>("apply_organization_archive", { request });
+
+export const undoOrganizationArchive = (operationId: string) =>
+  invoke<OrganizationOperationResult>("undo_organization_archive", { operationId });
+
+export const getOrganizationAgentCapabilities = () =>
+  invoke<OrganizationAgentCapability[]>("get_organization_agent_capabilities");
+
+export const prepareOrganizationAgentPrompt = (cases: OrganizationAgentCaseTask[]) =>
+  invoke<{ prompt: string }>("prepare_organization_agent_prompt_cmd", { cases });
+
+export const runOrganizationAgentTask = (
+  agentKey: "codex" | "claude_code" | "hermes",
+  cases: OrganizationAgentCaseTask[],
+) => invoke<OrganizationAgentTaskResult>("run_organization_agent_task", { agentKey, cases });
+
+export const finalizeOrganizationDeepComparison = (caseTask: OrganizationAgentCaseTask) =>
+  invoke<OrganizationFinalizedAssessmentResult>("finalize_organization_deep_comparison", {
+    case: caseTask,
+  });
+
+export const getOrganizationAgentAssessments = () =>
+  invoke<OrganizationAgentAssessmentRecord[]>("get_organization_agent_assessments");
 
 export const getSkillsForPreset = (presetId: string) =>
   invoke<ManagedSkill[]>("get_skills_for_preset", {
@@ -405,6 +751,11 @@ export const getSettings = (key: string) =>
 
 export const setSettings = (key: string, value: string) =>
   invoke<void>("set_settings", { key, value });
+
+export const suggestDeckFromLibrary = (goal: string, agentKey: string) =>
+  invoke<DeckSuggestion>("suggest_deck_from_library", {
+    request: { goal, agent_key: agentKey },
+  });
 
 export const getCentralRepoPath = () =>
   invoke<string>("get_central_repo_path");
@@ -791,3 +1142,26 @@ export const updateGlobalLocalSkillFromCenter = (agent: string, skillRelativePat
 
 export const deleteGlobalLocalSkill = (agent: string, skillRelativePath: string) =>
   invoke<void>("delete_global_local_skill", { agent, skillRelativePath });
+
+export const previewAgentDuplicateAlias = (
+  agent: string,
+  skillId: string,
+  redundantRelativePath: string,
+) => invoke<AgentDuplicateAliasPreview>("preview_agent_duplicate_alias", {
+  agent,
+  skillId,
+  redundantRelativePath,
+});
+
+export const applyAgentDuplicateAlias = (
+  agent: string,
+  skillId: string,
+  redundantRelativePath: string,
+) => invoke<AgentDuplicateAliasResult>("apply_agent_duplicate_alias", {
+  agent,
+  skillId,
+  redundantRelativePath,
+});
+
+export const undoAgentDuplicateAlias = (operationId: string) =>
+  invoke<AgentDuplicateAliasResult>("undo_agent_duplicate_alias", { operationId });

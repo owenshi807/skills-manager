@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
 /// Current schema version. Bump this when adding a new migration.
-const LATEST_VERSION: u32 = 8;
+const LATEST_VERSION: u32 = 11;
 
 /// Run all pending migrations on the database.
 ///
@@ -55,6 +55,9 @@ fn migrate_step(conn: &Connection, from_version: u32) -> Result<()> {
         5 => migrate_v5_to_v6(conn),
         6 => migrate_v6_to_v7(conn),
         7 => migrate_v7_to_v8(conn),
+        8 => migrate_v8_to_v9(conn),
+        9 => migrate_v9_to_v10(conn),
+        10 => migrate_v10_to_v11(conn),
         _ => bail!("unknown migration version: {from_version}"),
     }
 }
@@ -338,6 +341,73 @@ fn migrate_v7_to_v8(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v8 → v9: remember a user's non-destructive judgment about one
+/// organization case. The evidence fingerprint makes the judgment stale as
+/// soon as any member or relevant evidence changes.
+fn migrate_v8_to_v9(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS organization_decisions (
+            case_key TEXT PRIMARY KEY,
+            evidence_fingerprint TEXT NOT NULL,
+            disposition TEXT NOT NULL,
+            decided_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        ",
+    )?;
+    Ok(())
+}
+
+/// v9 → v10: cache only validated Agent assessments. A case revision and
+/// method version are part of the key, so changed evidence never silently
+/// reuses an old judgment.
+fn migrate_v9_to_v10(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS organization_agent_assessments (
+            case_key TEXT NOT NULL,
+            case_revision TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            agent_key TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY(case_key, case_revision, method_version, agent_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_organization_agent_assessments_case
+            ON organization_agent_assessments(case_key, created_at DESC);
+        ",
+    )?;
+    Ok(())
+}
+
+/// v10 → v11: durable write-ahead journal for the first reversible
+/// organization action. The full before-state stays in payload_json so an
+/// interrupted archive can be diagnosed and a completed archive can be
+/// undone without guessing.
+fn migrate_v10_to_v11(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS organization_operations (
+            operation_id TEXT PRIMARY KEY,
+            case_key TEXT NOT NULL,
+            case_revision TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL,
+            keep_skill_id TEXT NOT NULL,
+            archive_skill_id TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            error TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_organization_operations_case
+            ON organization_operations(case_key, created_at DESC);
+        ",
+    )?;
+    Ok(())
+}
+
 // ── Helpers ──
 
 fn add_column_if_missing(
@@ -406,6 +476,9 @@ mod tests {
         assert!(tables.contains(&"skill_tags".to_string()));
         assert!(tables.contains(&"scenario_skill_tools".to_string()));
         assert!(tables.contains(&"audit_log".to_string()));
+        assert!(tables.contains(&"organization_decisions".to_string()));
+        assert!(tables.contains(&"organization_agent_assessments".to_string()));
+        assert!(tables.contains(&"organization_operations".to_string()));
         assert!(has_column(&conn, "discovered_skills", "owner_ref").unwrap());
         assert!(has_column(&conn, "discovered_skills", "digest_algorithm").unwrap());
         assert!(has_column(&conn, "discovered_skills", "content_error").unwrap());
@@ -424,6 +497,40 @@ mod tests {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
         assert_eq!(version, LATEST_VERSION);
+    }
+
+    #[test]
+    fn test_v9_database_upgrades_to_v10_with_agent_assessments() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA user_version = 9;").unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        let table: String = conn
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='organization_agent_assessments'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(table, "organization_agent_assessments");
+    }
+
+    #[test]
+    fn test_v10_database_upgrades_to_v11_with_operation_journal() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA user_version = 10;").unwrap();
+
+        run_migrations(&conn).unwrap();
+
+        let table: String = conn
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='organization_operations'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(table, "organization_operations");
     }
 
     #[test]

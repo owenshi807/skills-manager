@@ -1,0 +1,48 @@
+:root {
+  color-scheme: dark;
+  --bg: #0c0c0f;
+  --sidebar: #0f0f13;
+  --surface: #131317;
+  --surface-2: #17171e;
+  --surface-3: #1e1e28;
+  --line: #24242b;
+  --line-soft: #1c1c22;
+  --text: #f4f4f5;
+  --text-2: #d4d4d8;
+  --muted: #8e8e96;
+  --faint: #71717a;
+  --accent: #34d399;
+  --accent-strong: #10b981;
+  --accent-bg: rgba(16, 185, 129, 0.1);
+  --amber: #fbbf24;
+  --amber-bg: rgba(251, 191, 36, 0.08);
+  --red: #fb7185;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 1040px; background: #050507; color: var(--text); }
+button { font: inherit; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.accent { color: var(--accent); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.eyebrow { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.icon { width: 18px; height: 18px; display: inline-grid; place-items: center; }
+.button { height: 38px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 14px; background: var(--surface-2); color: var(--text-2); cursor: pointer; }
+.button:hover { background: var(--surface-3); color: var(--text); }
+.button.primary { border-color: rgba(52,211,153,.28); background: #087e5b; color: white; }
+.button.primary:hover { background: #0a926a; }
+.button.text { border-color: transparent; background: transparent; color: var(--muted); }
+.button.text:hover { color: var(--text); }
+.pill { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
+.pill.good { border-color: rgba(52,211,153,.22); background: var(--accent-bg); color: var(--accent); }
+.segmented { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface); }
+.segmented button { height: 34px; border: 0; border-radius: 7px; padding: 0 14px; background: transparent; color: var(--muted); cursor: pointer; }
+.segmented button:hover { color: var(--text-2); }
+.segmented button.active { background: var(--surface-3); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.28); }
+.panel { border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--surface); }

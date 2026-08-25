@@ -9,6 +9,7 @@ export interface AgentToggleItem {
   displayName: string;
   enabled: boolean;
   isAvailable: boolean;
+  skillCount?: number;
   disabled?: boolean;
   badgeLabel?: string | null;
 }
@@ -99,6 +100,7 @@ function AgentToggle({
   loading: boolean;
   onToggle: (key: string, enabled: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const disabled = Boolean(item.disabled || loading);
   return (
     <button
@@ -130,6 +132,14 @@ function AgentToggle({
       <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-secondary">
         {item.displayName}
       </span>
+      {typeof item.skillCount === "number" && (
+        <span
+          className="shrink-0 rounded-full bg-surface-hover px-1.5 py-0.5 text-[11px] tabular-nums text-muted"
+          title={t("mySkills.agentSkillCount", { count: item.skillCount })}
+        >
+          {item.skillCount}
+        </span>
+      )}
       {item.badgeLabel && (
         <span className="shrink-0 rounded-full border border-border-subtle bg-bg-secondary px-1.5 py-0.5 text-[11px] text-muted">
           {item.badgeLabel}

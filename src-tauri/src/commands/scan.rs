@@ -1,6 +1,7 @@
 use anyhow::{bail, Context};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
@@ -59,9 +60,49 @@ fn match_imported_skill_id(
 #[derive(Debug, Serialize)]
 pub struct ScanResultDto {
     pub tools_scanned: usize,
+    /// Number of grouped candidates that are safe to import immediately.
+    /// Kept under the legacy field name for frontend/backward compatibility.
     pub skills_found: usize,
-    pub groups: Vec<scanner::DiscoveredGroup>,
+    pub observations_found: usize,
+    pub groups_found: usize,
+    pub groups: Vec<ClassifiedDiscoveredGroup>,
     pub diagnostics: Vec<host_discovery::DiscoveryDiagnostic>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportState {
+    Imported,
+    Ready,
+    NeedsReview,
+    Blocked,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportReason {
+    AlreadyManaged,
+    SameNameManaged,
+    SameNameDiscovered,
+    ExternalSource,
+    ContentUnavailable,
+    UnsafeSource,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ClassifiedDiscoveredGroup {
+    #[serde(flatten)]
+    pub group: scanner::DiscoveredGroup,
+    pub import_state: ImportState,
+    pub import_reason: Option<ImportReason>,
+}
+
+impl Deref for ClassifiedDiscoveredGroup {
+    type Target = scanner::DiscoveredGroup;
+
+    fn deref(&self) -> &Self::Target {
+        &self.group
+    }
 }
 
 #[derive(Debug)]
@@ -71,48 +112,118 @@ struct PreparedBulkImport {
     resolved_name: String,
 }
 
-/// Resolve and validate the complete Bulk Import batch before the first write.
-///
-/// Discovery identity is intentionally richer than the legacy managed-library
-/// destination. If two candidates collapse to the same case/Unicode-folded
-/// destination name, choosing one owner or inventing a suffix would silently
-/// change identity. Fail the whole batch and let the user import explicitly.
+fn group_destination_key(group: &scanner::DiscoveredGroup) -> String {
+    sync_metadata::path_key(&group.name)
+}
+
+fn managed_destination_keys(
+    managed_skills: &[crate::core::skill_store::SkillRecord],
+) -> std::collections::HashSet<String> {
+    let mut keys = std::collections::HashSet::new();
+    for skill in managed_skills {
+        keys.insert(sync_metadata::path_key(&skill.name));
+        if let Some(file_name) = PathBuf::from(&skill.central_path).file_name() {
+            keys.insert(sync_metadata::path_key(&file_name.to_string_lossy()));
+        }
+    }
+
+    let skills_dir = crate::core::central_repo::skills_dir();
+    if let Ok(entries) = std::fs::read_dir(skills_dir) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                keys.insert(sync_metadata::path_key(
+                    &entry.file_name().to_string_lossy(),
+                ));
+            }
+        }
+    }
+    keys
+}
+
+fn classify_discovered_groups(
+    groups: Vec<scanner::DiscoveredGroup>,
+    managed_skills: &[crate::core::skill_store::SkillRecord],
+) -> Vec<ClassifiedDiscoveredGroup> {
+    let managed_keys = managed_destination_keys(managed_skills);
+    let mut discovered_key_counts = HashMap::<String, usize>::new();
+    for group in groups.iter().filter(|group| !group.imported) {
+        *discovered_key_counts
+            .entry(group_destination_key(group))
+            .or_default() += 1;
+    }
+
+    groups
+        .into_iter()
+        .map(|group| {
+            let key = group_destination_key(&group);
+            let has_external_source = group.locations.iter().any(|location| {
+                location.provenance.as_ref().is_some_and(|provenance| {
+                    provenance.source_kind != host_discovery::DiscoverySourceKind::Loose
+                })
+            });
+            let has_content_error = group
+                .locations
+                .iter()
+                .any(|location| location.content_error.is_some());
+            let source_is_unsafe = group.locations.first().is_none_or(|location| {
+                installer::preflight_copy_source(&PathBuf::from(&location.found_path)).is_err()
+            });
+
+            let (import_state, import_reason) = if group.imported {
+                (ImportState::Imported, Some(ImportReason::AlreadyManaged))
+            } else if has_external_source {
+                (ImportState::Blocked, Some(ImportReason::ExternalSource))
+            } else if has_content_error {
+                (ImportState::Blocked, Some(ImportReason::ContentUnavailable))
+            } else if source_is_unsafe {
+                (ImportState::Blocked, Some(ImportReason::UnsafeSource))
+            } else if managed_keys.contains(&key) {
+                (
+                    ImportState::NeedsReview,
+                    Some(ImportReason::SameNameManaged),
+                )
+            } else if discovered_key_counts.get(&key).copied().unwrap_or_default() > 1 {
+                (
+                    ImportState::NeedsReview,
+                    Some(ImportReason::SameNameDiscovered),
+                )
+            } else {
+                (ImportState::Ready, None)
+            };
+
+            ClassifiedDiscoveredGroup {
+                group,
+                import_state,
+                import_reason,
+            }
+        })
+        .collect()
+}
+
+/// Resolve the subset of a discovery scan that is safe to import without a
+/// human identity decision. Ambiguous or external-source groups remain visible
+/// in the scan result, but bulk import deliberately skips them.
 fn prepare_bulk_imports(
     groups: Vec<scanner::DiscoveredGroup>,
+    managed_skills: &[crate::core::skill_store::SkillRecord],
 ) -> anyhow::Result<Vec<PreparedBulkImport>> {
     let mut prepared = Vec::new();
-    let mut destinations: HashMap<String, String> = HashMap::new();
 
-    for group in groups {
-        if group.imported {
+    for classified in classify_discovered_groups(groups, managed_skills) {
+        if classified.import_state != ImportState::Ready {
             continue;
         }
+        let group = classified.group;
         let first = group
             .locations
             .first()
             .with_context(|| format!("Discovered group '{}' has no source location", group.name))?;
         let path = PathBuf::from(&first.found_path);
-        // This first pass protects whole-batch all-or-nothing validation.
-        // Installation intentionally repeats the source preflight immediately
-        // before destination mutation because the source may change meanwhile.
+        // Installation repeats the source preflight immediately before
+        // destination mutation because the source may change meanwhile.
         installer::preflight_copy_source(&path)
             .with_context(|| format!("Cannot import discovered Skill '{}'", group.name))?;
         let resolved_name = installer::resolve_local_skill_name(&path, Some(&group.name))?;
-        // Managed destinations and sync/merge metadata must share one exact
-        // case/Unicode identity contract or different devices can disagree.
-        let destination_key = sync_metadata::path_key(&resolved_name);
-
-        if let Some(existing_source) =
-            destinations.insert(destination_key.clone(), first.found_path.clone())
-        {
-            bail!(
-                "Bulk Import has multiple discovered owners for managed destination '{}': {} and {}. Import one explicitly.",
-                resolved_name,
-                existing_source,
-                first.found_path
-            );
-        }
-
         prepared.push(PreparedBulkImport {
             source_path: first.found_path.clone(),
             path,
@@ -126,7 +237,8 @@ fn prepare_bulk_imports(
 fn import_all_discovered_unlocked(store: &SkillStore) -> anyhow::Result<()> {
     let discovered = store.get_all_discovered()?;
     let groups = scanner::group_discovered(&discovered);
-    let pending = prepare_bulk_imports(groups)?;
+    let managed_skills = store.get_all_skills()?;
+    let pending = prepare_bulk_imports(groups, &managed_skills)?;
     let mut changed = false;
 
     for item in pending {
@@ -161,7 +273,10 @@ fn import_all_discovered_unlocked(store: &SkillStore) -> anyhow::Result<()> {
             last_checked_at: Some(now),
             last_check_error: None,
         };
-        store.insert_skill(&record)?;
+        if let Err(error) = store.insert_skill(&record) {
+            let _ = std::fs::remove_dir_all(&result.central_path);
+            return Err(error.into());
+        }
         changed = true;
     }
 
@@ -169,6 +284,105 @@ fn import_all_discovered_unlocked(store: &SkillStore) -> anyhow::Result<()> {
         sync_metadata::write_all_from_db_unlocked(store)?;
     }
     Ok(())
+}
+
+fn same_physical_path(left: &str, right: &str) -> bool {
+    canonicalize_lossy(left) == canonicalize_lossy(right)
+}
+
+fn import_existing_skill_unlocked(
+    store: &SkillStore,
+    source_path: &str,
+    name: Option<&str>,
+) -> anyhow::Result<()> {
+    let path = PathBuf::from(source_path);
+    let resolved_name = installer::resolve_local_skill_name(&path, name)?;
+    installer::preflight_copy_source(&path)?;
+
+    let discovered = store.get_all_discovered()?;
+    let groups = scanner::group_discovered(&discovered);
+    let requested_group = groups
+        .iter()
+        .find(|group| {
+            group
+                .locations
+                .iter()
+                .any(|location| same_physical_path(&location.found_path, source_path))
+        })
+        .with_context(|| {
+            format!("Skill source is no longer present in the latest scan: {source_path}")
+        })?;
+
+    if requested_group.imported {
+        return Ok(());
+    }
+    let requested_location = requested_group
+        .locations
+        .iter()
+        .find(|location| same_physical_path(&location.found_path, source_path))
+        .context("Discovered Skill source location disappeared")?;
+    if requested_location.content_error.is_some() {
+        bail!("Skill content cannot be verified and is blocked from import");
+    }
+    if requested_location
+        .provenance
+        .as_ref()
+        .is_some_and(|provenance| {
+            provenance.source_kind != host_discovery::DiscoverySourceKind::Loose
+        })
+    {
+        bail!("External runtime Skill sources are not copied into the managed library");
+    }
+
+    let destination_key = sync_metadata::path_key(&resolved_name);
+    let managed_skills = store.get_all_skills()?;
+    if managed_destination_keys(&managed_skills).contains(&destination_key) {
+        bail!("A managed Skill already uses this name; this relationship needs review");
+    }
+    if groups.iter().any(|group| {
+        !std::ptr::eq(group, requested_group)
+            && !group.imported
+            && sync_metadata::path_key(&group.name) == destination_key
+    }) {
+        bail!("Another discovered Skill uses this name; this relationship needs review");
+    }
+
+    let result = installer::install_from_local(&path, Some(&resolved_name))?;
+    if store
+        .get_skill_by_central_path(&result.central_path.to_string_lossy())?
+        .is_some()
+    {
+        bail!("Import destination became managed while the import was being prepared");
+    }
+
+    let now = chrono::Utc::now().timestamp_millis();
+    let id = uuid::Uuid::new_v4().to_string();
+    let record = crate::core::skill_store::SkillRecord {
+        id,
+        name: result.name,
+        description: result.description,
+        source_type: "import".to_string(),
+        source_ref: Some(source_path.to_string()),
+        source_ref_resolved: None,
+        source_subpath: None,
+        source_branch: None,
+        source_revision: None,
+        remote_revision: None,
+        central_path: result.central_path.to_string_lossy().to_string(),
+        content_hash: Some(result.content_hash),
+        enabled: true,
+        created_at: now,
+        updated_at: now,
+        status: "ok".to_string(),
+        update_status: "local_only".to_string(),
+        last_checked_at: Some(now),
+        last_check_error: None,
+    };
+    if let Err(error) = store.insert_skill(&record) {
+        let _ = std::fs::remove_dir_all(&result.central_path);
+        return Err(error.into());
+    }
+    sync_metadata::write_all_from_db_unlocked(store)
 }
 
 #[tauri::command]
@@ -193,13 +407,20 @@ pub async fn scan_local_skills(
         }
 
         let groups = scanner::group_discovered(&plan.discovered);
+        let groups = classify_discovered_groups(groups, &managed_skills);
+        let ready_count = groups
+            .iter()
+            .filter(|group| group.import_state == ImportState::Ready)
+            .count();
         store
             .replace_discovered(&plan.discovered)
             .map_err(AppError::db)?;
 
         Ok(ScanResultDto {
             tools_scanned: plan.tools_scanned,
-            skills_found: plan.skills_found,
+            skills_found: ready_count,
+            observations_found: plan.skills_found,
+            groups_found: groups.len(),
             groups,
             diagnostics: plan.diagnostics,
         })
@@ -216,46 +437,7 @@ pub async fn import_existing_skill(
     let store = store.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         sync_metadata::with_repo_lock("import existing skill", || {
-            let path = PathBuf::from(&source_path);
-            let resolved_name = installer::resolve_local_skill_name(&path, name.as_deref())?;
-
-            let result = installer::install_from_local(&path, Some(&resolved_name))?;
-
-            if store
-                .get_skill_by_central_path(&result.central_path.to_string_lossy())?
-                .is_some()
-            {
-                return Ok(());
-            }
-
-            let now = chrono::Utc::now().timestamp_millis();
-            let id = uuid::Uuid::new_v4().to_string();
-
-            let record = crate::core::skill_store::SkillRecord {
-                id: id.clone(),
-                name: result.name,
-                description: result.description,
-                source_type: "import".to_string(),
-                source_ref: Some(source_path),
-                source_ref_resolved: None,
-                source_subpath: None,
-                source_branch: None,
-                source_revision: None,
-                remote_revision: None,
-                central_path: result.central_path.to_string_lossy().to_string(),
-                content_hash: Some(result.content_hash),
-                enabled: true,
-                created_at: now,
-                updated_at: now,
-                status: "ok".to_string(),
-                update_status: "local_only".to_string(),
-                last_checked_at: Some(now),
-                last_check_error: None,
-            };
-
-            store.insert_skill(&record)?;
-
-            sync_metadata::write_all_from_db_unlocked(&store)
+            import_existing_skill_unlocked(&store, &source_path, name.as_deref())
         })
         .map_err(AppError::io)?;
 
@@ -280,7 +462,10 @@ pub async fn import_all_discovered(store: State<'_, Arc<SkillStore>>) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use super::{import_all_discovered_unlocked, match_imported_skill_id};
+    use super::{
+        classify_discovered_groups, import_all_discovered_unlocked, import_existing_skill_unlocked,
+        match_imported_skill_id, ImportState,
+    };
     use crate::core::{
         central_repo,
         host_discovery::{DiscoveryProvenance, DiscoverySourceKind},
@@ -390,6 +575,27 @@ mod tests {
         }
     }
 
+    fn plugin_discovered_with_id(
+        id: &str,
+        path: &Path,
+        name: &str,
+        fingerprint: &str,
+    ) -> DiscoveredSkillRecord {
+        let mut record = discovered_with_id(id, path, name, fingerprint);
+        record.provenance = Some(DiscoveryProvenance {
+            source_kind: DiscoverySourceKind::CodexPlugin,
+            owner_ref: "plugin@test".to_string(),
+            source_ref: path.to_string_lossy().to_string(),
+            source_version: Some("1.0.0".to_string()),
+            source_revision: Some("rev-1".to_string()),
+            source_subpath: Some(format!("skills/{name}")),
+            declared_repository: None,
+            provenance_basis: "test".to_string(),
+            digest_algorithm: "scm-dir-v2".to_string(),
+        });
+        record
+    }
+
     fn write_skill(path: &Path, name: &str, body: &str) {
         std::fs::create_dir_all(path).unwrap();
         std::fs::write(
@@ -480,9 +686,63 @@ mod tests {
         );
     }
 
+    #[test]
+    fn classifies_only_unique_loose_groups_as_ready_to_import() {
+        let env = BulkImportTestEnv::new();
+        let fresh = env.source("fresh");
+        let duplicate_a = env.source("duplicate-a");
+        let duplicate_b = env.source("duplicate-b");
+        let plugin = env.source("plugin");
+        let broken = env.source("broken");
+        for (path, name, body) in [
+            (&fresh, "fresh", "fresh"),
+            (&duplicate_a, "duplicate", "one"),
+            (&duplicate_b, "duplicate", "two"),
+            (&plugin, "plugin-skill", "plugin"),
+            (&broken, "broken", "broken"),
+        ] {
+            write_skill(path, name, body);
+        }
+
+        let mut broken_record = discovered_with_id("broken", &broken, "broken", "fp-broken");
+        broken_record.content_error = Some("content unavailable".to_string());
+        let records = vec![
+            discovered_with_id("fresh", &fresh, "fresh", "fp-fresh"),
+            discovered_with_id("dup-a", &duplicate_a, "duplicate", "fp-a"),
+            discovered_with_id("dup-b", &duplicate_b, "duplicate", "fp-b"),
+            plugin_discovered_with_id("plugin", &plugin, "plugin-skill", "fp-plugin"),
+            broken_record,
+        ];
+        let groups = crate::core::scanner::group_discovered(&records);
+        let classified = classify_discovered_groups(groups, &[]);
+
+        assert_eq!(
+            classified
+                .iter()
+                .filter(|group| group.import_state == ImportState::Ready)
+                .map(|group| group.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["fresh"]
+        );
+        assert_eq!(
+            classified
+                .iter()
+                .filter(|group| group.import_state == ImportState::NeedsReview)
+                .count(),
+            2
+        );
+        assert_eq!(
+            classified
+                .iter()
+                .filter(|group| group.import_state == ImportState::Blocked)
+                .count(),
+            2
+        );
+    }
+
     #[cfg(unix)]
     #[test]
-    fn bulk_import_symlink_preflight_happens_before_any_write() {
+    fn bulk_import_skips_unsafe_source_and_imports_ready_groups() {
         let env = BulkImportTestEnv::new();
 
         let valid = env.source("valid");
@@ -505,17 +765,18 @@ mod tests {
             ))
             .unwrap();
 
-        let error = import_all_discovered_unlocked(&env.store).unwrap_err();
-        let message = format!("{error:#}");
-        assert!(
-            message.contains("cannot preserve"),
-            "unexpected error: {message}"
-        );
-        assert_no_managed_imports(&env.store);
+        import_all_discovered_unlocked(&env.store).unwrap();
+
+        let imported = env.store.get_all_skills().unwrap();
+        assert_eq!(imported.len(), 1);
+        assert_eq!(imported[0].name, "valid");
+        assert!(Path::new(&imported[0].central_path)
+            .join("SKILL.md")
+            .is_file());
     }
 
     #[test]
-    fn bulk_import_destination_collision_happens_before_any_write() {
+    fn bulk_import_leaves_same_name_candidates_for_review() {
         let env = BulkImportTestEnv::new();
 
         let first = env.source("first");
@@ -529,16 +790,12 @@ mod tests {
             .insert_discovered(&discovered_with_id("second", &second, "duplicate", "fp-2"))
             .unwrap();
 
-        let error = import_all_discovered_unlocked(&env.store).unwrap_err();
-        assert!(
-            error.to_string().contains("multiple discovered owners"),
-            "unexpected error: {error}"
-        );
+        import_all_discovered_unlocked(&env.store).unwrap();
         assert_no_managed_imports(&env.store);
     }
 
     #[test]
-    fn bulk_import_case_and_unicode_folded_collision_happens_before_any_write() {
+    fn bulk_import_leaves_case_and_unicode_folded_collisions_for_review() {
         let env = BulkImportTestEnv::new();
 
         let first = env.source("first");
@@ -557,12 +814,43 @@ mod tests {
             ))
             .unwrap();
 
-        let error = import_all_discovered_unlocked(&env.store).unwrap_err();
-        assert!(
-            error.to_string().contains("multiple discovered owners"),
-            "unexpected error: {error}"
-        );
+        import_all_discovered_unlocked(&env.store).unwrap();
         assert_no_managed_imports(&env.store);
+    }
+
+    #[test]
+    fn single_import_refuses_managed_name_collision_before_mutating_library() {
+        let env = BulkImportTestEnv::new();
+        let central = central_repo::skills_dir().join("duplicate");
+        write_skill(&central, "duplicate", "managed body");
+        let source = env.source("incoming");
+        write_skill(&source, "duplicate", "incoming body");
+
+        let mut managed = managed_skill("managed", "duplicate", None, None, None);
+        managed.central_path = central.to_string_lossy().to_string();
+        env.store.insert_skill(&managed).unwrap();
+        env.store
+            .insert_discovered(&discovered_with_id(
+                "incoming",
+                &source,
+                "duplicate",
+                "fp-incoming",
+            ))
+            .unwrap();
+
+        let error = import_existing_skill_unlocked(
+            &env.store,
+            source.to_string_lossy().as_ref(),
+            Some("duplicate"),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("needs review"));
+        assert_eq!(
+            std::fs::read_to_string(central.join("SKILL.md")).unwrap(),
+            "---\nname: duplicate\n---\nmanaged body"
+        );
+        assert_eq!(env.store.get_all_skills().unwrap().len(), 1);
     }
 
     #[test]

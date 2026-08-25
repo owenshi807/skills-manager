@@ -19,6 +19,23 @@ const IGNORED: &[&str] = &[
 /// E0/B0 inventory code opts into this algorithm explicitly instead.
 pub const STRICT_DIRECTORY_DIGEST_ALGORITHM: &str = "scm-dir-v2";
 
+/// Complete, fail-closed directory digest used to prove that Card Master owns
+/// every entry before it removes or replaces a live directory.
+///
+/// Unlike [`STRICT_DIRECTORY_DIGEST_ALGORITHM`], this scope intentionally does
+/// not ignore `.git`, `.gitignore`, generated files, or empty directories. A
+/// content/update digest answers "is the Skill behavior the same?"; this one
+/// answers the stricter question "would deleting this tree discard anything?".
+pub const OWNERSHIP_DIRECTORY_DIGEST_ALGORITHM: &str = "scm-ownership-v2";
+
+/// Canonical digest of the tree produced by copy-mode deployment.
+///
+/// Copy mode deliberately omits `.git` directories and materializes file
+/// symlinks as ordinary files. This digest models those transformations for
+/// source/target comparison without weakening the complete ownership digest
+/// used to detect post-preview changes in the live target.
+pub const COPY_PROJECTION_DIGEST_ALGORITHM: &str = "scm-copy-projection-v2";
+
 const STRICT_HASH_BUFFER_SIZE: usize = 64 * 1024;
 
 /// True for names excluded from a skill's content scope: the exact-match
@@ -153,6 +170,20 @@ struct StrictContentEntry {
     link_target: Option<String>,
 }
 
+#[derive(Debug)]
+enum OwnershipEntryKind {
+    Directory,
+    File,
+    FileSymlink { target: String },
+}
+
+#[derive(Debug)]
+struct OwnershipEntry {
+    relative_path: String,
+    path: PathBuf,
+    kind: OwnershipEntryKind,
+}
+
 fn normalized_path_text(path: &Path, label: &str) -> Result<String> {
     let value = path
         .to_str()
@@ -185,6 +216,17 @@ fn strict_exec_bits(metadata: &std::fs::Metadata) -> u32 {
 fn strict_exec_bits(_metadata: &std::fs::Metadata) -> u32 {
     // Keep the encoding platform-neutral for ordinary files. A Unix file with
     // no executable bits and the same file on Windows must hash identically.
+    0
+}
+
+#[cfg(unix)]
+fn ownership_mode_bits(metadata: &std::fs::Metadata) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o7777
+}
+
+#[cfg(not(unix))]
+fn ownership_mode_bits(_metadata: &std::fs::Metadata) -> u32 {
     0
 }
 
@@ -378,6 +420,307 @@ pub fn hash_directory_strict_v2(dir: &Path) -> Result<String> {
     }
 
     Ok(hex::encode(hasher.finalize()))
+}
+
+fn ownership_entries(dir: &Path) -> Result<Vec<OwnershipEntry>> {
+    let root = std::fs::canonicalize(dir)
+        .with_context(|| format!("Failed to resolve ownership root {}", dir.display()))?;
+    if !std::fs::metadata(&root)
+        .with_context(|| format!("Failed to inspect ownership root {}", root.display()))?
+        .is_dir()
+    {
+        bail!("Ownership root is not a directory: {}", dir.display());
+    }
+
+    let mut entries = Vec::new();
+    for item in WalkDir::new(&root).follow_links(false) {
+        let entry = item.with_context(|| format!("Failed to walk {}", root.display()))?;
+        if entry.depth() == 0 {
+            continue;
+        }
+        let relative = entry.path().strip_prefix(&root).with_context(|| {
+            format!(
+                "Ownership path {} escaped root {}",
+                entry.path().display(),
+                root.display()
+            )
+        })?;
+        let relative_path = normalized_path_text(relative, "Relative ownership path")?;
+        let file_type = entry.file_type();
+        let kind = if file_type.is_dir() {
+            OwnershipEntryKind::Directory
+        } else if file_type.is_file() {
+            OwnershipEntryKind::File
+        } else if file_type.is_symlink() {
+            let target = std::fs::read_link(entry.path()).with_context(|| {
+                format!(
+                    "Failed to read ownership symlink {}",
+                    entry.path().display()
+                )
+            })?;
+            let target_text = normalized_path_text(&target, "Ownership symlink target")?;
+            let target_metadata = std::fs::metadata(entry.path()).with_context(|| {
+                format!(
+                    "Broken or unreadable ownership symlink {} -> {}",
+                    entry.path().display(),
+                    target.display()
+                )
+            })?;
+            if target_metadata.is_dir() {
+                bail!(
+                    "Directory symlinks are not supported by {}: {} -> {}",
+                    OWNERSHIP_DIRECTORY_DIGEST_ALGORITHM,
+                    entry.path().display(),
+                    target.display()
+                );
+            }
+            if !target_metadata.is_file() {
+                bail!(
+                    "Unsupported ownership symlink target: {} -> {}",
+                    entry.path().display(),
+                    target.display()
+                );
+            }
+            OwnershipEntryKind::FileSymlink {
+                target: target_text,
+            }
+        } else {
+            bail!(
+                "Unsupported filesystem entry in ownership tree: {}",
+                entry.path().display()
+            );
+        };
+        entries.push(OwnershipEntry {
+            relative_path,
+            path: entry.into_path(),
+            kind,
+        });
+    }
+    entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    Ok(entries)
+}
+
+/// Hash the complete live tree before a destructive ownership operation.
+///
+/// Every entry is framed with its kind and relative path. Directories are
+/// included so empty directories remain observable. Files include executable
+/// bits and exact bytes. File symlinks include their target text and target
+/// bytes; broken links, directory links, special entries, non-UTF-8 paths, and
+/// every walk/metadata/open/read error fail the digest closed.
+pub fn hash_directory_ownership_v1(dir: &Path) -> Result<String> {
+    let entries = ownership_entries(dir)?;
+    let mut hasher = Sha256::new();
+    strict_field(
+        &mut hasher,
+        b"format",
+        OWNERSHIP_DIRECTORY_DIGEST_ALGORITHM.as_bytes(),
+    );
+
+    for entry in entries {
+        strict_field(&mut hasher, b"entry", b"begin");
+        strict_field(&mut hasher, b"path", entry.relative_path.as_bytes());
+        match &entry.kind {
+            OwnershipEntryKind::Directory => {
+                let metadata = std::fs::symlink_metadata(&entry.path).with_context(|| {
+                    format!("Failed to inspect directory {}", entry.path.display())
+                })?;
+                if !metadata.is_dir() {
+                    bail!("Ownership directory changed: {}", entry.path.display());
+                }
+                strict_field(&mut hasher, b"kind", b"directory");
+                let mode_bits = ownership_mode_bits(&metadata);
+                strict_field(&mut hasher, b"mode-bits", &mode_bits.to_be_bytes());
+            }
+            OwnershipEntryKind::File | OwnershipEntryKind::FileSymlink { .. } => {
+                if let OwnershipEntryKind::FileSymlink {
+                    target: expected_target,
+                } = &entry.kind
+                {
+                    let current_target = std::fs::read_link(&entry.path).with_context(|| {
+                        format!(
+                            "Failed to re-read ownership symlink {}",
+                            entry.path.display()
+                        )
+                    })?;
+                    let current_target =
+                        normalized_path_text(&current_target, "Ownership symlink target")?;
+                    if current_target != *expected_target {
+                        bail!("Ownership symlink changed: {}", entry.path.display());
+                    }
+                    strict_field(&mut hasher, b"kind", b"file-symlink");
+                    strict_field(&mut hasher, b"link-target", expected_target.as_bytes());
+                } else {
+                    strict_field(&mut hasher, b"kind", b"file");
+                }
+                let metadata = std::fs::metadata(&entry.path).with_context(|| {
+                    format!("Failed to inspect ownership file {}", entry.path.display())
+                })?;
+                if !metadata.is_file() {
+                    bail!(
+                        "Ownership content is no longer a file: {}",
+                        entry.path.display()
+                    );
+                }
+                let mode_bits = ownership_mode_bits(&metadata);
+                strict_field(&mut hasher, b"mode-bits", &mode_bits.to_be_bytes());
+                hash_strict_file_contents(&mut hasher, &entry.path, metadata.len())?;
+            }
+        }
+        strict_field(&mut hasher, b"entry", b"end");
+    }
+
+    Ok(hex::encode(hasher.finalize()))
+}
+
+#[derive(Clone, Copy)]
+enum CopyProjectionView {
+    ExpectedSource,
+    ObservedTarget,
+}
+
+fn copy_projection_entries(
+    dir: &Path,
+    view: CopyProjectionView,
+) -> Result<Vec<OwnershipEntry>> {
+    let root = std::fs::canonicalize(dir)
+        .with_context(|| format!("Failed to resolve copy projection root {}", dir.display()))?;
+    if !std::fs::metadata(&root)
+        .with_context(|| format!("Failed to inspect copy projection root {}", root.display()))?
+        .is_dir()
+    {
+        bail!("Copy projection root is not a directory: {}", dir.display());
+    }
+
+    let walker = WalkDir::new(&root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
+            entry.depth() == 0
+                || !matches!(view, CopyProjectionView::ExpectedSource)
+                || !(entry.file_type().is_dir() && entry.file_name() == ".git")
+        });
+    let mut entries = Vec::new();
+    for item in walker {
+        let entry = item.with_context(|| format!("Failed to walk {}", root.display()))?;
+        if entry.depth() == 0 {
+            continue;
+        }
+        let relative = entry.path().strip_prefix(&root).with_context(|| {
+            format!(
+                "Copy projection path {} escaped root {}",
+                entry.path().display(),
+                root.display()
+            )
+        })?;
+        let relative_path = normalized_path_text(relative, "Relative copy projection path")?;
+        let file_type = entry.file_type();
+        let kind = if file_type.is_dir() {
+            OwnershipEntryKind::Directory
+        } else if file_type.is_file() {
+            OwnershipEntryKind::File
+        } else if file_type.is_symlink() {
+            let target = std::fs::read_link(entry.path()).with_context(|| {
+                format!(
+                    "Failed to read copy projection symlink {}",
+                    entry.path().display()
+                )
+            })?;
+            let target_metadata = std::fs::metadata(entry.path()).with_context(|| {
+                format!(
+                    "Broken or unreadable copy projection symlink {} -> {}",
+                    entry.path().display(),
+                    target.display()
+                )
+            })?;
+            if !target_metadata.is_file() {
+                bail!(
+                    "Copy projection symlink does not resolve to a file: {} -> {}",
+                    entry.path().display(),
+                    target.display()
+                );
+            }
+            match view {
+                // `std::fs::copy` follows a file symlink, so the deployed
+                // entry is an ordinary file containing the target bytes.
+                CopyProjectionView::ExpectedSource => OwnershipEntryKind::File,
+                CopyProjectionView::ObservedTarget => OwnershipEntryKind::FileSymlink {
+                    target: normalized_path_text(&target, "Copy projection symlink target")?,
+                },
+            }
+        } else {
+            bail!(
+                "Unsupported filesystem entry in copy projection: {}",
+                entry.path().display()
+            );
+        };
+        entries.push(OwnershipEntry {
+            relative_path,
+            path: entry.into_path(),
+            kind,
+        });
+    }
+    entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    Ok(entries)
+}
+
+fn hash_copy_projection_entries(entries: Vec<OwnershipEntry>) -> Result<String> {
+    let mut hasher = Sha256::new();
+    strict_field(
+        &mut hasher,
+        b"format",
+        COPY_PROJECTION_DIGEST_ALGORITHM.as_bytes(),
+    );
+    for entry in entries {
+        strict_field(&mut hasher, b"entry", b"begin");
+        strict_field(&mut hasher, b"path", entry.relative_path.as_bytes());
+        match &entry.kind {
+            OwnershipEntryKind::Directory => {
+                // `copy_dir_recursive` creates directories and does not copy
+                // their permission metadata. Their paths remain significant,
+                // including empty directories, but their mode does not.
+                strict_field(&mut hasher, b"kind", b"directory");
+            }
+            OwnershipEntryKind::File | OwnershipEntryKind::FileSymlink { .. } => {
+                if let OwnershipEntryKind::FileSymlink { target } = &entry.kind {
+                    strict_field(&mut hasher, b"kind", b"file-symlink");
+                    strict_field(&mut hasher, b"link-target", target.as_bytes());
+                } else {
+                    strict_field(&mut hasher, b"kind", b"file");
+                }
+                let metadata = std::fs::metadata(&entry.path).with_context(|| {
+                    format!("Failed to inspect copy projection file {}", entry.path.display())
+                })?;
+                if !metadata.is_file() {
+                    bail!(
+                        "Copy projection content is no longer a file: {}",
+                        entry.path.display()
+                    );
+                }
+                let mode_bits = ownership_mode_bits(&metadata);
+                strict_field(&mut hasher, b"mode-bits", &mode_bits.to_be_bytes());
+                hash_strict_file_contents(&mut hasher, &entry.path, metadata.len())?;
+            }
+        }
+        strict_field(&mut hasher, b"entry", b"end");
+    }
+    Ok(hex::encode(hasher.finalize()))
+}
+
+/// Digest the tree that copy-mode deployment is expected to create from a
+/// managed Skill source.
+pub fn hash_expected_copy_projection_v1(dir: &Path) -> Result<String> {
+    hash_copy_projection_entries(copy_projection_entries(
+        dir,
+        CopyProjectionView::ExpectedSource,
+    )?)
+}
+
+/// Digest the tree actually present at a copy-mode Agent target.
+pub fn hash_observed_copy_projection_v1(dir: &Path) -> Result<String> {
+    hash_copy_projection_entries(copy_projection_entries(
+        dir,
+        CopyProjectionView::ObservedTarget,
+    )?)
 }
 
 #[cfg(test)]
@@ -623,6 +966,111 @@ mod tests {
             hash_directory_strict_v2(first.path()).unwrap(),
             hash_directory_strict_v2(second.path()).unwrap()
         );
+        assert_ne!(
+            hash_directory_ownership_v1(first.path()).unwrap(),
+            hash_directory_ownership_v1(second.path()).unwrap()
+        );
+    }
+
+    #[test]
+    fn ownership_v1_includes_ignored_files_and_empty_directories() {
+        let first = tempdir().unwrap();
+        fs::write(first.path().join("SKILL.md"), "# demo").unwrap();
+
+        let second = tempdir().unwrap();
+        fs::write(second.path().join("SKILL.md"), "# demo").unwrap();
+        fs::write(second.path().join(".gitignore"), "private/\n").unwrap();
+        fs::create_dir(second.path().join("empty")).unwrap();
+
+        assert_eq!(
+            hash_directory_strict_v2(first.path()).unwrap(),
+            hash_directory_strict_v2(second.path()).unwrap()
+        );
+        assert_ne!(
+            hash_directory_ownership_v1(first.path()).unwrap(),
+            hash_directory_ownership_v1(second.path()).unwrap()
+        );
+    }
+
+    #[test]
+    fn ownership_v1_is_framed_against_path_content_collisions() {
+        let first = tempdir().unwrap();
+        fs::write(first.path().join("a"), "bc").unwrap();
+        let second = tempdir().unwrap();
+        fs::write(second.path().join("ab"), "c").unwrap();
+
+        assert_eq!(
+            hash_directory(first.path()).unwrap(),
+            hash_directory(second.path()).unwrap()
+        );
+        assert_ne!(
+            hash_directory_ownership_v1(first.path()).unwrap(),
+            hash_directory_ownership_v1(second.path()).unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_projection_digest_models_git_omission_and_symlink_materialization() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempdir().unwrap();
+        let source = tmp.path().join("source");
+        let target = tmp.path().join("target");
+        fs::create_dir_all(source.join(".git")).unwrap();
+        fs::create_dir_all(source.join("empty")).unwrap();
+        fs::create_dir_all(target.join("empty")).unwrap();
+        fs::write(source.join("SKILL.md"), "# demo\n").unwrap();
+        fs::copy(source.join("SKILL.md"), target.join("SKILL.md")).unwrap();
+        fs::write(source.join(".git/config"), "private metadata\n").unwrap();
+
+        let script_target = tmp.path().join("run-source.sh");
+        fs::write(&script_target, "#!/bin/sh\necho ok\n").unwrap();
+        fs::set_permissions(&script_target, fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink(&script_target, source.join("run.sh")).unwrap();
+        fs::copy(&script_target, target.join("run.sh")).unwrap();
+
+        assert_eq!(
+            hash_expected_copy_projection_v1(&source).unwrap(),
+            hash_observed_copy_projection_v1(&target).unwrap()
+        );
+        assert_ne!(
+            hash_directory_ownership_v1(&source).unwrap(),
+            hash_directory_ownership_v1(&target).unwrap()
+        );
+
+        // Extra target data is still visible even when it uses a name that is
+        // intentionally omitted from the source-side copy transformation.
+        fs::create_dir_all(target.join(".git")).unwrap();
+        fs::write(target.join(".git/config"), "unexpected\n").unwrap();
+        assert_ne!(
+            hash_expected_copy_projection_v1(&source).unwrap(),
+            hash_observed_copy_projection_v1(&target).unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ownership_and_copy_digests_include_full_unix_permission_bits() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("SKILL.md");
+        fs::write(&file, "# demo\n").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+
+        let ownership_before = hash_directory_ownership_v1(tmp.path()).unwrap();
+        let copy_before = hash_observed_copy_projection_v1(tmp.path()).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o600)).unwrap();
+
+        assert_ne!(
+            hash_directory_ownership_v1(tmp.path()).unwrap(),
+            ownership_before
+        );
+        assert_ne!(
+            hash_observed_copy_projection_v1(tmp.path()).unwrap(),
+            copy_before
+        );
     }
 
     #[cfg(unix)]
@@ -639,9 +1087,14 @@ mod tests {
         std::os::unix::fs::symlink(&first_target, &marker).unwrap();
 
         let original = hash_directory_strict_v2(&skill).unwrap();
+        let ownership_original = hash_directory_ownership_v1(&skill).unwrap();
         fs::write(&first_target, "changed bytes").unwrap();
         let content_changed = hash_directory_strict_v2(&skill).unwrap();
         assert_ne!(original, content_changed);
+        assert_ne!(
+            ownership_original,
+            hash_directory_ownership_v1(&skill).unwrap()
+        );
 
         fs::write(&first_target, "same bytes").unwrap();
         fs::remove_file(&marker).unwrap();
@@ -659,6 +1112,7 @@ mod tests {
         let broken = skill.join("SKILL.md");
         std::os::unix::fs::symlink(tmp.path().join("missing.md"), &broken).unwrap();
         assert!(hash_directory_strict_v2(&skill).is_err());
+        assert!(hash_directory_ownership_v1(&skill).is_err());
 
         fs::remove_file(&broken).unwrap();
         fs::write(skill.join("SKILL.md"), "# demo").unwrap();
@@ -670,6 +1124,8 @@ mod tests {
             error.to_string().contains("Directory symlinks"),
             "unexpected error: {error}"
         );
+
+        assert!(hash_directory_ownership_v1(&skill).is_err());
     }
 
     #[cfg(unix)]

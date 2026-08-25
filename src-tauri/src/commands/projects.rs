@@ -835,41 +835,41 @@ pub async fn import_project_skill_to_center(
 
         let source_path = PathBuf::from(&skill.path);
         let all_managed = store.get_all_skills().unwrap_or_default();
-        // Use the same matching logic as the UI (find_best_center_match) to
-        // stay consistent with sync-status display. After updating, bind
-        // source_ref so future imports match by exact path.
         if let Some(existing) = find_best_center_match(skill, &all_managed) {
-            let result = installer::install_from_local_to_destination(
-                &source_path,
-                Some(&existing.name),
-                Path::new(&existing.central_path),
-            )
-            .map_err(AppError::io)?;
-            store
-                .update_skill_after_install(
-                    &existing.id,
-                    &existing.name,
-                    result.description.as_deref(),
-                    existing.source_revision.as_deref(),
-                    existing.remote_revision.as_deref(),
-                    Some(&result.content_hash),
-                    "local_only",
-                )
-                .map_err(AppError::db)?;
-            // Only update source_ref when the match was already by source_ref
-            // path (not by hash or name). This avoids permanently rebinding
-            // unrelated center skills that merely share a name or content.
             let already_matched_by_ref = source_ref_matches_skill_path(
                 &skill.path,
                 std::fs::canonicalize(&skill.path).ok().as_ref(),
                 existing,
             );
-            if existing.source_type == "local" && already_matched_by_ref {
+            // Only an exact source relationship authorizes replacement of an
+            // existing managed copy. Name/content similarity is discovery
+            // evidence, not ownership; those candidates must remain distinct
+            // until the organization workflow resolves them.
+            if already_matched_by_ref {
+                let result = installer::install_from_local_to_destination(
+                    &source_path,
+                    Some(&existing.name),
+                    Path::new(&existing.central_path),
+                )
+                .map_err(AppError::io)?;
                 store
-                    .update_skill_source_ref(&existing.id, &skill.path)
+                    .update_skill_after_install(
+                        &existing.id,
+                        &existing.name,
+                        result.description.as_deref(),
+                        existing.source_revision.as_deref(),
+                        existing.remote_revision.as_deref(),
+                        Some(&result.content_hash),
+                        "local_only",
+                    )
                     .map_err(AppError::db)?;
+                if existing.source_type == "local" {
+                    store
+                        .update_skill_source_ref(&existing.id, &skill.path)
+                        .map_err(AppError::db)?;
+                }
+                return Ok(());
             }
-            return Ok(());
         }
 
         let result =

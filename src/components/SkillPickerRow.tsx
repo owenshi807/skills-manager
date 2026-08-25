@@ -10,6 +10,7 @@ interface Props {
   status: PickerStatus;
   allTags: string[];
   sourceLabel: string;
+  showTags?: boolean;
   selected: boolean;
   onToggle: () => void;
   busy?: boolean;
@@ -20,6 +21,7 @@ export function SkillPickerRow({
   status,
   allTags,
   sourceLabel,
+  showTags = true,
   selected,
   onToggle,
   busy,
@@ -81,7 +83,7 @@ export function SkillPickerRow({
         {skill.description && (
           <div className="mt-0.5 truncate text-[12px] text-muted">{skill.description}</div>
         )}
-        {skill.tags.length > 0 && (
+        {showTags && skill.tags.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {skill.tags.map((tag) => (
               <span

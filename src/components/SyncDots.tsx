@@ -41,6 +41,8 @@ interface Props {
   onToggle?: (toolKey: string, enabled: boolean) => void;
   /** Tool key currently performing a sync/unsync operation; shows a loader on that dot. */
   pendingKey?: string | null;
+  /** Only render agents that currently have a projection for this Skill. */
+  onlySynced?: boolean;
 }
 
 export function SyncDots({
@@ -52,6 +54,7 @@ export function SyncDots({
   includeOrphan = false,
   onToggle,
   pendingKey,
+  onlySynced = false,
 }: Props) {
   const { t } = useTranslation();
   const syncedKeys = new Set(skill.targets.map((t) => t.tool));
@@ -76,8 +79,9 @@ export function SyncDots({
     }
   }
 
-  const visible = typeof limit === "number" ? dots.slice(0, limit) : dots;
-  const hiddenCount = dots.length - visible.length;
+  const displayDots = onlySynced ? dots.filter((dot) => dot.state !== "available") : dots;
+  const visible = typeof limit === "number" ? displayDots.slice(0, limit) : displayDots;
+  const hiddenCount = displayDots.length - visible.length;
 
   const dim = size === "sm"
     ? "h-[16px] w-[16px] text-[8px]"

@@ -1132,7 +1132,7 @@ export function ProjectDetail() {
                             skill.enabledCount === skill.totalCount
                               ? "bg-accent-light shadow-[0_0_0_3px_var(--color-accent-bg)]"
                               : skill.enabledCount > 0
-                                ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)]"
+                                ? "bg-amber-500 shadow-[0_0_0_3px_var(--color-warning-bg)]"
                                 : "bg-surface-active"
                           )}
                           title={`${skill.enabledCount}/${skill.totalCount}`}
@@ -1283,7 +1283,7 @@ export function ProjectDetail() {
                         skill.enabledCount === skill.totalCount
                           ? "bg-accent-light shadow-[0_0_0_3px_var(--color-accent-bg)]"
                           : skill.enabledCount > 0
-                            ? "bg-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.15)]"
+                            ? "bg-amber-500 shadow-[0_0_0_3px_var(--color-warning-bg)]"
                             : "bg-surface-active"
                       )}
                       title={`${skill.enabledCount}/${skill.totalCount}`}

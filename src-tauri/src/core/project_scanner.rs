@@ -38,7 +38,10 @@ pub struct ProjectSkillInfo {
     pub center_skill_id: Option<String>,
     #[serde(skip_serializing)]
     pub last_modified_at: Option<i64>,
-    #[serde(skip_serializing)]
+    /// Strict directory digest used by the workspace anomaly UI. This is
+    /// already computed during the scan; exposing it avoids a second walk and
+    /// lets the UI distinguish exact copies from same-name collisions.
+    #[serde(default)]
     pub content_hash: Option<String>,
 }
 

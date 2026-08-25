@@ -55,6 +55,27 @@ pub fn initialize_cli_store() -> Result<Arc<SkillStore>> {
     initialize_store_inner(false).map(|(store, _)| store)
 }
 
+fn should_reindex_metadata(
+    skill_count: usize,
+    metadata_fingerprint: Option<&str>,
+    indexed_fingerprint: Option<&str>,
+    managed_tree_fingerprint: Option<&str>,
+    indexed_managed_tree_fingerprint: Option<&str>,
+) -> bool {
+    metadata_fingerprint.is_some()
+        && (skill_count == 0
+            || metadata_fingerprint != indexed_fingerprint
+            || managed_tree_fingerprint != indexed_managed_tree_fingerprint)
+}
+
+fn managed_tree_changed(
+    managed_tree_fingerprint: Option<&str>,
+    indexed_managed_tree_fingerprint: Option<&str>,
+) -> bool {
+    managed_tree_fingerprint.is_some()
+        && managed_tree_fingerprint != indexed_managed_tree_fingerprint
+}
+
 fn initialize_store_inner(
     apply_startup_default: bool,
 ) -> Result<(Arc<SkillStore>, StartupTimings)> {
@@ -78,8 +99,39 @@ fn initialize_store_inner(
 
     timings.skill_count = store.get_all_skills().map(|s| s.len()).unwrap_or(0);
 
-    if sync_metadata::metadata_exists() {
+    let metadata_fingerprint = sync_metadata::metadata_snapshot_fingerprint()
+        .context("Failed to inspect sync metadata")?;
+    let indexed_fingerprint = store
+        .get_setting(sync_metadata::METADATA_FINGERPRINT_SETTING)
+        .context("Failed to read sync metadata index state")?;
+    let managed_tree_fingerprint = sync_metadata::managed_tree_snapshot_fingerprint()
+        .context("Failed to inspect managed Skill tree")?;
+    let indexed_managed_tree_fingerprint = store
+        .get_setting(sync_metadata::MANAGED_TREE_FINGERPRINT_SETTING)
+        .context("Failed to read managed Skill tree index state")?;
+    let should_reindex = should_reindex_metadata(
+        timings.skill_count,
+        metadata_fingerprint.as_deref(),
+        indexed_fingerprint.as_deref(),
+        managed_tree_fingerprint.as_deref(),
+        indexed_managed_tree_fingerprint.as_deref(),
+    );
+    if should_reindex {
         let step = Instant::now();
+        // The managed tree fingerprint detects edits that the legacy
+        // directory content hash may alias. Clear Copy-mode skip hints before
+        // reindexing so startup must refresh those Agent projections. Do this
+        // before recording the new tree fingerprint: if reindexing fails, the
+        // next launch remains fail-safe and retries instead of blessing stale
+        // copies as current.
+        if managed_tree_changed(
+            managed_tree_fingerprint.as_deref(),
+            indexed_managed_tree_fingerprint.as_deref(),
+        ) {
+            store
+                .invalidate_copy_target_source_hashes()
+                .context("Failed to invalidate stale copy projections")?;
+        }
         sync_metadata::reindex_from_metadata(&store)
             .context("Failed to reindex from sync metadata")?;
         timings.reindex_from_metadata_ms = Some(step.elapsed().as_millis());
@@ -114,6 +166,52 @@ fn initialize_store_inner(
 
     timings.total_ms = total_start.elapsed().as_millis();
     Ok((store, timings))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{managed_tree_changed, should_reindex_metadata};
+
+    #[test]
+    fn metadata_reindex_only_runs_for_missing_or_changed_index() {
+        assert!(!should_reindex_metadata(
+            394,
+            Some("same"),
+            Some("same"),
+            Some("tree"),
+            Some("tree")
+        ));
+        assert!(should_reindex_metadata(
+            394,
+            Some("new"),
+            Some("old"),
+            Some("tree"),
+            Some("tree")
+        ));
+        assert!(should_reindex_metadata(
+            394,
+            Some("same"),
+            Some("same"),
+            Some("changed-tree"),
+            Some("old-tree")
+        ));
+        assert!(should_reindex_metadata(
+            0,
+            Some("same"),
+            Some("same"),
+            Some("tree"),
+            Some("tree")
+        ));
+        assert!(!should_reindex_metadata(394, None, None, Some("tree"), None));
+    }
+
+    #[test]
+    fn managed_tree_change_requires_copy_projection_refresh() {
+        assert!(!managed_tree_changed(Some("same"), Some("same")));
+        assert!(managed_tree_changed(Some("new"), Some("old")));
+        assert!(managed_tree_changed(Some("tree"), None));
+        assert!(!managed_tree_changed(None, Some("old")));
+    }
 }
 
 impl StartupTimings {
