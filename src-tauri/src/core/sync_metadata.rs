@@ -181,14 +181,13 @@ pub fn managed_tree_snapshot_fingerprint() -> Result<Option<String>> {
 
         #[cfg(not(unix))]
         {
-            use std::time::UNIX_EPOCH;
             let modified = metadata
                 .modified()
-                .with_context(|| format!("Failed to read modified time for {}", path.display()))?
-                .duration_since(UNIX_EPOCH)
-                .with_context(|| format!("Invalid modified time for {}", path.display()))?;
-            hasher.update(modified.as_secs().to_be_bytes());
-            hasher.update(modified.subsec_nanos().to_be_bytes());
+                .with_context(|| format!("Failed to read modified time for {}", path.display()))?;
+            let (direction, seconds, nanos) = signed_system_time_parts(modified);
+            hasher.update([direction]);
+            hasher.update(seconds.to_be_bytes());
+            hasher.update(nanos.to_be_bytes());
             hasher.update([u8::from(metadata.permissions().readonly())]);
             if file_type.is_file() {
                 hasher.update(b"content-sha256");
@@ -199,6 +198,17 @@ pub fn managed_tree_snapshot_fingerprint() -> Result<Option<String>> {
     }
 
     Ok(Some(format!("{:x}", hasher.finalize())))
+}
+
+#[cfg(any(not(unix), test))]
+fn signed_system_time_parts(value: std::time::SystemTime) -> (u8, u64, u32) {
+    match value.duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => (1, duration.as_secs(), duration.subsec_nanos()),
+        Err(error) => {
+            let duration = error.duration();
+            (0, duration.as_secs(), duration.subsec_nanos())
+        }
+    }
 }
 
 #[cfg(any(not(unix), test))]
@@ -971,6 +981,23 @@ mod tests {
             managed_file_content_digest(&original).unwrap(),
             managed_file_content_digest(&replacement).unwrap()
         );
+    }
+
+    #[test]
+    fn managed_tree_time_evidence_encodes_pre_epoch_values() {
+        let before_epoch = std::time::UNIX_EPOCH
+            .checked_sub(std::time::Duration::new(123, 456))
+            .unwrap();
+        let after_epoch = std::time::UNIX_EPOCH
+            .checked_add(std::time::Duration::new(789, 321))
+            .unwrap();
+
+        assert_eq!(signed_system_time_parts(before_epoch), (0, 123, 456));
+        assert_eq!(
+            signed_system_time_parts(std::time::UNIX_EPOCH),
+            (1, 0, 0)
+        );
+        assert_eq!(signed_system_time_parts(after_epoch), (1, 789, 321));
     }
 
     #[cfg(windows)]
