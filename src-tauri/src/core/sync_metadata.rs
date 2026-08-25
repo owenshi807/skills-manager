@@ -5,6 +5,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+#[cfg(any(not(unix), test))]
+use std::{fs::File, io::Read};
 use unicode_normalization::UnicodeNormalization;
 use walkdir::WalkDir;
 
@@ -110,12 +112,14 @@ pub(crate) fn write_all_from_db_unlocked(store: &SkillStore) -> Result<()> {
 
 /// Cheap, recursive fingerprint of the live managed Skill tree.
 ///
-/// This intentionally hashes filesystem identity/state rather than file bytes:
-/// path, kind, size, timestamps and Unix mode/inode metadata. Normal file edits
-/// therefore invalidate the startup index without re-reading a multi-gigabyte
-/// library on every launch. The `.skills-manager` control directory is covered
-/// separately by [`metadata_snapshot_fingerprint`] and must not make the Skill
-/// tree fingerprint self-invalidating when metadata is rewritten.
+/// Unix filesystems expose inode and ctime evidence that cannot be restored by
+/// an ordinary content edit, so their fingerprint remains metadata-only and
+/// avoids re-reading a multi-gigabyte library on every launch. Other platforms
+/// (currently Windows) lack equivalent change evidence in stable `std`, so
+/// regular files additionally contribute a streaming content digest. The
+/// `.skills-manager` control directory is covered separately by
+/// [`metadata_snapshot_fingerprint`] and must not make the Skill tree
+/// fingerprint self-invalidating when metadata is rewritten.
 pub fn managed_tree_snapshot_fingerprint() -> Result<Option<String>> {
     let root = central_repo::skills_dir();
     if !root.exists() {
@@ -134,7 +138,10 @@ pub fn managed_tree_snapshot_fingerprint() -> Result<Option<String>> {
     entries.sort_by(|a, b| a.path().cmp(b.path()));
 
     let mut hasher = Sha256::new();
-    hasher.update(b"scm-managed-tree-state-v1");
+    // v2 adds content evidence on non-Unix platforms. Changing the domain
+    // deliberately invalidates every stored v1 fingerprint once so startup
+    // reindexes before trusting legacy copy-projection hashes.
+    hasher.update(b"scm-managed-tree-state-v2");
     for entry in entries {
         let path = entry.path();
         let relative = path.strip_prefix(&root)?;
@@ -183,11 +190,37 @@ pub fn managed_tree_snapshot_fingerprint() -> Result<Option<String>> {
             hasher.update(modified.as_secs().to_be_bytes());
             hasher.update(modified.subsec_nanos().to_be_bytes());
             hasher.update([u8::from(metadata.permissions().readonly())]);
+            if file_type.is_file() {
+                hasher.update(b"content-sha256");
+                hasher.update(managed_file_content_digest(path)?);
+            }
         }
         hasher.update([0xff]);
     }
 
     Ok(Some(format!("{:x}", hasher.finalize())))
+}
+
+#[cfg(any(not(unix), test))]
+fn managed_file_content_digest(path: &Path) -> Result<[u8; 32]> {
+    let mut file = File::open(path)
+        .with_context(|| format!("Failed to open managed file {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .with_context(|| format!("Failed to read managed file {}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    let digest = hasher.finalize();
+    let mut bytes = [0_u8; 32];
+    bytes.copy_from_slice(&digest);
+    Ok(bytes)
 }
 
 pub fn metadata_snapshot_fingerprint() -> Result<Option<String>> {
@@ -920,6 +953,45 @@ mod tests {
         )
         .unwrap();
         assert_ne!(managed_tree_snapshot_fingerprint().unwrap().unwrap(), current);
+    }
+
+    #[test]
+    fn managed_file_content_evidence_distinguishes_same_size_replacement() {
+        let tmp = tempdir().unwrap();
+        let original = tmp.path().join("original.bin");
+        let replacement = tmp.path().join("replacement.bin");
+        fs::write(&original, b"same-size-a").unwrap();
+        fs::write(&replacement, b"same-size-b").unwrap();
+
+        assert_eq!(
+            fs::metadata(&original).unwrap().len(),
+            fs::metadata(&replacement).unwrap().len()
+        );
+        assert_ne!(
+            managed_file_content_digest(&original).unwrap(),
+            managed_file_content_digest(&replacement).unwrap()
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_managed_tree_fingerprint_detects_same_size_edit_with_restored_mtime() {
+        let _repo = test_repo();
+        let skill_dir = write_skill_dir("windows-content-fingerprint");
+        let behavior_file = skill_dir.join("behavior.txt");
+        fs::write(&behavior_file, b"same-size-a").unwrap();
+        let original_mtime = filetime::FileTime::from_last_modification_time(
+            &fs::metadata(&behavior_file).unwrap(),
+        );
+        let before = managed_tree_snapshot_fingerprint().unwrap().unwrap();
+
+        fs::write(&behavior_file, b"same-size-b").unwrap();
+        filetime::set_file_mtime(&behavior_file, original_mtime).unwrap();
+
+        assert_ne!(
+            managed_tree_snapshot_fingerprint().unwrap().unwrap(),
+            before
+        );
     }
 
     #[test]
