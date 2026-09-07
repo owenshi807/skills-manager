@@ -14,6 +14,7 @@ const AGENT_ICON_FILES: Record<string, string> = {
   crush: "crush.png",
   cursor: "cursor.png",
   deepagents: "deepagents.png",
+  deepseek_harness: "deepseek_harness.svg",
   droid: "droid.svg",
   firebender: "firebender.svg",
   gemini_cli: "gemini_cli.svg",
@@ -45,7 +46,9 @@ const AGENT_ICON_FILES: Record<string, string> = {
   trae_cn: "trae_cn.svg",
   warp: "warp.svg",
   windsurf: "windsurf.svg",
+  workbuddy: "workbuddy.png",
   zencoder: "zencoder.png",
+  zcode: "zcode.svg",
 };
 
 // Monochrome line-art icons that render black (no fill / `currentColor`) and

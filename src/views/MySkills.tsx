@@ -20,7 +20,10 @@ import {
   Square,
   GripVertical,
   CircleSlash,
+  Circle,
   Pencil,
+  Share2,
+  Tag,
   Trash2,
   Link2,
   Copy,
@@ -42,6 +45,7 @@ import { SkillAgentAssignment } from "../components/SkillAgentAssignment";
 import { AgentIcon } from "../components/AgentIcon";
 import { MultiSelectToolbar } from "../components/MultiSelectToolbar";
 import { BatchTagDialog } from "../components/BatchTagDialog";
+import { BatchSyncAgentDialog } from "../components/BatchSyncAgentDialog";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { CardActionMenu } from "../components/CardActionMenu";
 import { SkillIssuesView, SkillProcessedView } from "../components/SkillOrganizationViews";
@@ -194,6 +198,7 @@ export function MySkills() {
     refreshLocalDiscovery,
     refreshPresets,
     refreshManagedSkills,
+    refreshTools,
     detailSkillId,
     openSkillDetailById,
     closeSkillDetail,
@@ -235,6 +240,8 @@ export function MySkills() {
   const refreshAfterDeleteRef = useRef<number | null>(null);
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
+  const [batchSyncDialogOpen, setBatchSyncDialogOpen] = useState(false);
+  const [batchToggling, setBatchToggling] = useState(false);
   const [checkingAll, setCheckingAll] = useState(false);
   const [checkingSkillId, setCheckingSkillId] = useState<string | null>(null);
   const [updatingSkillId, setUpdatingSkillId] = useState<string | null>(null);
@@ -612,6 +619,14 @@ export function MySkills() {
     filtered,
     getKey: (s) => s.id,
     isItemActive: (s) => viewedPreset ? s.preset_ids.includes(viewedPreset.id) : true,
+    filterSignal: JSON.stringify([
+      search,
+      [...sourceFilters].sort(),
+      [...tagFilters].sort(),
+      visibilityFilter,
+      viewedPreset?.id ?? null,
+    ]),
+    escapeEnabled: !batchTagDialogOpen && !batchSyncDialogOpen && !batchDeleteConfirm,
   });
 
   const selectedSkill = useMemo(
@@ -902,35 +917,61 @@ export function MySkills() {
   };
 
   const handleBatchTogglePreset = async () => {
-    if (!viewedPreset) return;
-    const selectedSkillsList = skills.filter((s) => selectedIds.has(s.id));
+    if (!viewedPreset || batchToggling) return;
     const enabling = anyDisabled;
     let count = 0;
     let failed = 0;
-    for (const skill of selectedSkillsList) {
-      try {
-        const enabledInPreset = skill.preset_ids.includes(viewedPreset.id);
-        if (enabling && !enabledInPreset) {
-          await api.addSkillToPreset(skill.id, viewedPreset.id);
+    setBatchToggling(true);
+    try {
+      for (const skill of togglableSelectedSkills) {
+        try {
+          if (enabling) {
+            await api.addSkillToPreset(skill.id, viewedPreset.id);
+          } else {
+            await api.removeSkillFromPreset(skill.id, viewedPreset.id);
+          }
           count++;
-        } else if (!enabling && enabledInPreset) {
-          await api.removeSkillFromPreset(skill.id, viewedPreset.id);
-          count++;
+        } catch {
+          failed++;
+          // continue with remaining
         }
-      } catch {
-        failed++;
-        // continue with remaining
+      }
+      if (count > 0) {
+        toast.success(enabling
+          ? t("mySkills.batchEnabled", { count })
+          : t("mySkills.batchDisabled", { count }));
+      }
+      if (failed > 0) {
+        toast.error(t("mySkills.batchToggleFailed", { count: failed }));
+      }
+      await Promise.all([refreshManagedSkills(), refreshPresets()]);
+    } finally {
+      setBatchToggling(false);
+    }
+  };
+
+  const handleBatchSyncAgents = async (agentKeys: string[]) => {
+    const selectedSkillsList = skills.filter((s) => selectedIds.has(s.id));
+    let synced = 0;
+    let failed = 0;
+    for (const skill of selectedSkillsList) {
+      for (const agentKey of agentKeys) {
+        if (skill.targets.some((target) => target.tool === agentKey)) continue;
+        try {
+          await api.syncSkillToTool(skill.id, agentKey);
+          synced++;
+        } catch {
+          failed++;
+        }
       }
     }
-    if (count > 0) {
-      toast.success(enabling
-        ? t("mySkills.batchEnabled", { count })
-        : t("mySkills.batchDisabled", { count }));
+    if (synced > 0) {
+      toast.success(t("mySkills.batchSynced", { count: synced }));
     }
     if (failed > 0) {
-      toast.error(t("mySkills.batchToggleFailed", { count: failed }));
+      toast.error(t("mySkills.batchSyncFailed", { count: failed }));
     }
-    await Promise.all([refreshManagedSkills(), refreshPresets()]);
+    await Promise.all([refreshManagedSkills(), refreshTools()]);
   };
 
   const handleBatchRefresh = async () => {
@@ -946,6 +987,14 @@ export function MySkills() {
       if (result.unchanged > 0) {
         toast.info(t("mySkills.batchAlreadyUpToDate", { count: result.unchanged }));
       }
+      if (result.held_back.length > 0) {
+        toast.warning(
+          t("mySkills.batchHeldBack", {
+            count: result.held_back.length,
+            names: result.held_back.slice(0, 3).join("、"),
+          })
+        );
+      }
       if (result.failed.length > 0) {
         toast.error(t("mySkills.batchUpdateFailed", { count: result.failed.length }));
       }
@@ -956,6 +1005,16 @@ export function MySkills() {
       setBatchUpdating(false);
     }
   };
+
+  /** The update the user has been asked to confirm, and what it would remove. */
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    skill: ManagedSkill;
+    removals: api.PendingRemoval[];
+    approval: string | null;
+    /** Set when the pending replacement is a relink, so confirming re-uses the
+     *  directory the user already chose instead of asking for it again. */
+    relinkSource?: string;
+  } | null>(null);
 
   const handleUpdateAvailableSkills = async () => {
     const updatableSkills = skills.filter(
@@ -971,6 +1030,14 @@ export function MySkills() {
       }
       if (result.unchanged > 0) {
         toast.info(t("mySkills.batchAlreadyUpToDate", { count: result.unchanged }));
+      }
+      if (result.held_back.length > 0) {
+        toast.warning(
+          t("mySkills.batchHeldBack", {
+            count: result.held_back.length,
+            names: result.held_back.slice(0, 3).join("、"),
+          })
+        );
       }
       if (result.failed.length > 0) {
         toast.error(t("mySkills.batchUpdateFailed", { count: result.failed.length }));
@@ -1022,14 +1089,32 @@ export function MySkills() {
     }
   };
 
-  const handleRefreshSkill = async (skill: ManagedSkill) => {
+  const handleRefreshSkill = async (skill: ManagedSkill, approvedRemovals?: string) => {
     setUpdatingSkillId(skill.id);
     try {
       if (skill.source_type === "local" || skill.source_type === "import") {
-        await api.reimportLocalSkill(skill.id);
+        const result = await api.reimportLocalSkill(skill.id, approvedRemovals);
+        if (result.pending_removals.length > 0) {
+          setPendingRemoval({
+            skill,
+            removals: result.pending_removals,
+            approval: result.removal_approval,
+          });
+          return;
+        }
         toast.success(t("mySkills.updateActions.reimported"));
       } else {
-        const result = await api.updateSkill(skill.id);
+        const result = await api.updateSkill(skill.id, approvedRemovals);
+        // Nothing was changed: the update would have taken away files the new
+        // version does not have. Show them and let the user decide (#256).
+        if (result.pending_removals.length > 0) {
+          setPendingRemoval({
+            skill,
+            removals: result.pending_removals,
+            approval: result.removal_approval,
+          });
+          return;
+        }
         if (result.content_changed) {
           toast.success(t("mySkills.updateActions.updated"));
         } else {
@@ -1045,13 +1130,31 @@ export function MySkills() {
     }
   };
 
-  const handleRelinkSource = async (skill: ManagedSkill) => {
-    const selected = await dialogOpen({ directory: true, multiple: false });
+  const handleRelinkSource = async (
+    skill: ManagedSkill,
+    presetSource?: string,
+    approvedRemovals?: string,
+  ) => {
+    const selected =
+      presetSource ?? (await dialogOpen({ directory: true, multiple: false }));
     if (!selected || Array.isArray(selected)) return;
 
     setUpdatingSkillId(skill.id);
     try {
-      await api.relinkLocalSkillSource(skill.id, selected);
+      const result = await api.relinkLocalSkillSource(
+        skill.id,
+        selected,
+        approvedRemovals,
+      );
+      if (result.pending_removals.length > 0) {
+        setPendingRemoval({
+          skill,
+          removals: result.pending_removals,
+          approval: result.removal_approval,
+          relinkSource: selected,
+        });
+        return;
+      }
       toast.success(t("mySkills.updateActions.relinked"));
       await refreshManagedSkills();
     } catch (error: unknown) {
@@ -1279,6 +1382,18 @@ export function MySkills() {
     () => skills.filter((skill) => selectedIds.has(skill.id) && canRefresh(skill)).length,
     [skills, selectedIds]
   );
+  /**
+   * Only the selected skills the toggle would actually change — a mixed selection
+   * enables the ones that are off, so the button must not count the rest.
+   */
+  const togglableSelectedSkills = useMemo(() => {
+    if (!viewedPreset) return [];
+    const enabling = anyDisabled;
+    return skills.filter((skill) => {
+      if (!selectedIds.has(skill.id)) return false;
+      return skill.preset_ids.includes(viewedPreset.id) !== enabling;
+    });
+  }, [skills, selectedIds, viewedPreset, anyDisabled]);
 
   const sourceTypeLabel = (skill: ManagedSkill) =>
     skill.source_type === "skillssh" ? "skills.sh" : skill.source_type;
@@ -2209,28 +2324,62 @@ Edit only this managed Skill directory. Do not modify its external source, other
         <MultiSelectToolbar
           selectedCount={selectedIds.size}
           isAllSelected={isAllSelected}
-          anyDisabled={viewedPreset ? anyDisabled : false}
-          anyUpdatable={anyRefreshableSelected}
-          showToggle={!!viewedPreset}
-          updating={batchUpdating}
+          actions={[
+            ...(viewedPreset && togglableSelectedSkills.length > 0
+              ? [{
+                  key: "toggle",
+                  tone: "primary" as const,
+                  label: anyDisabled
+                    ? t("mySkills.batchEnable", { count: togglableSelectedSkills.length })
+                    : t("mySkills.batchDisable", { count: togglableSelectedSkills.length }),
+                  icon: anyDisabled
+                    ? <CheckCircle2 className="h-3.5 w-3.5" />
+                    : <Circle className="h-3.5 w-3.5" />,
+                  busy: batchToggling,
+                  onSelect: handleBatchTogglePreset,
+                }]
+              : []),
+            {
+              key: "sync",
+              label: t("mySkills.batchSyncAgents", { count: selectedIds.size }),
+              icon: <Share2 className="h-3.5 w-3.5" />,
+              onSelect: () => setBatchSyncDialogOpen(true),
+            },
+            ...(CARD_MASTER_PRODUCT_SURFACE.tags ? [{
+              key: "tags",
+              label: t("mySkills.batchEditTags", { count: selectedIds.size }),
+              icon: <Tag className="h-3.5 w-3.5" />,
+              onSelect: () => setBatchTagDialogOpen(true),
+            }] : []),
+          ]}
+          overflowActions={[
+            ...(anyRefreshableSelected
+              ? [{
+                  key: "update",
+                  label: t("mySkills.batchUpdate", { count: refreshableSelectedCount }),
+                  icon: <RotateCcw className="h-3.5 w-3.5" />,
+                  busy: batchUpdating,
+                  onSelect: handleBatchRefresh,
+                }]
+              : []),
+            {
+              key: "delete",
+              tone: "danger" as const,
+              label: t("mySkills.deleteSelected", { count: selectedIds.size }),
+              icon: <Trash2 className="h-3.5 w-3.5" />,
+              onSelect: () => setBatchDeleteConfirm(true),
+            },
+          ]}
           labels={{
             hint: t("mySkills.selectHint"),
             selected: t("mySkills.selectedCount", { count: selectedIds.size }),
-            update: t("mySkills.batchUpdate", { count: refreshableSelectedCount }),
-            delete: t("mySkills.deleteSelected", { count: selectedIds.size }),
-            enable: t("mySkills.batchEnable", { count: selectedIds.size }),
-            disable: t("mySkills.batchDisable", { count: selectedIds.size }),
             selectAll: t("mySkills.selectAll"),
             deselectAll: t("mySkills.deselectAll"),
             cancel: t("common.cancel"),
-            editTags: t("mySkills.batchEditTags", { count: selectedIds.size }),
+            more: t("mySkills.moreActions"),
           }}
-          onUpdate={handleBatchRefresh}
-          onDelete={() => setBatchDeleteConfirm(true)}
-          onToggle={handleBatchTogglePreset}
           onSelectAll={handleSelectAll}
           onCancel={exitMultiSelect}
-          onEditTags={CARD_MASTER_PRODUCT_SURFACE.tags ? () => setBatchTagDialogOpen(true) : undefined}
         />
       )}
 
@@ -2828,6 +2977,34 @@ Edit only this managed Skill directory. Do not modify its external source, other
       />
 
       <ConfirmDialog
+        open={pendingRemoval !== null}
+        tone="warning"
+        title={t("mySkills.updateActions.removalTitle")}
+        message={t("mySkills.updateActions.removalMessage", {
+          name: pendingRemoval?.skill.name ?? "",
+          count: pendingRemoval?.removals.length ?? 0,
+        })}
+        // Every path, never a truncated sample: recognising one's own file is
+        // the whole point, and it might be the twenty-first.
+        details={pendingRemoval?.removals.map((r) =>
+          r.location === "library" ? r.path : `${r.location}: ${r.path}`
+        )}
+        confirmLabel={t("mySkills.updateActions.removalConfirm")}
+        onClose={() => setPendingRemoval(null)}
+        onConfirm={async () => {
+          const target = pendingRemoval?.skill;
+          const approval = pendingRemoval?.approval ?? undefined;
+          const relinkSource = pendingRemoval?.relinkSource;
+          setPendingRemoval(null);
+          if (!target) return;
+          if (relinkSource) {
+            await handleRelinkSource(target, relinkSource, approval);
+          } else {
+            await handleRefreshSkill(target, approval);
+          }
+        }}
+      />
+      <ConfirmDialog
         open={batchDeleteConfirm}
         message={t("mySkills.batchDeleteConfirm", { count: selectedIds.size })}
         onClose={() => setBatchDeleteConfirm(false)}
@@ -2901,6 +3078,14 @@ Edit only this managed Skill directory. Do not modify its external source, other
         onClose={() => setBatchTagDialogOpen(false)}
         onApply={handleBatchEditTags}
       />}
+
+      <BatchSyncAgentDialog
+        open={batchSyncDialogOpen}
+        skills={skills.filter((s) => selectedIds.has(s.id))}
+        tools={tools}
+        onClose={() => setBatchSyncDialogOpen(false)}
+        onApply={handleBatchSyncAgents}
+      />
     </div>
   );
 }

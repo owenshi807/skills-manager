@@ -777,6 +777,31 @@ pub fn set_tray_icon_enabled(app: &tauri::AppHandle, enabled: bool) -> Result<()
 /// catastrophic and not worth the convenience of auto-cleaning a stray
 /// `tauri dev` vite process.
 pub fn quit_app(app: &tauri::AppHandle) {
+    teardown_before_exit(app);
+    app.exit(0);
+}
+
+/// Restart the process, running the same teardown `quit_app` does.
+///
+/// Called after an in-app update has replaced the bundle on disk. Reuses
+/// `teardown_before_exit` rather than restarting outright: skipping it would
+/// drop the exit-time local backup commit, so a user who restarts instead of
+/// quitting would silently lose it.
+///
+/// `request_restart`, not `restart`: on the main thread the latter spawns the
+/// replacement process and exits without ever emitting `RunEvent::Exit`, and
+/// `tauri-plugin-single-instance` removes its socket only on that event. The
+/// old process usually exits before the new one gets far enough to connect —
+/// leaving a stale socket file the next launch cleans up on `ConnectionRefused`
+/// — but nothing enforces that ordering, and losing the race means the new
+/// instance sees a live singleton and exits immediately, taking the app down
+/// instead of restarting it. Going through the exit event closes the window.
+pub fn restart_app(app: &tauri::AppHandle) {
+    teardown_before_exit(app);
+    app.request_restart();
+}
+
+fn teardown_before_exit(app: &tauri::AppHandle) {
     QUITTING.store(true, Ordering::SeqCst);
     if let Some(w) = app.get_webview_window("main") {
         if let Err(err) = w.destroy() {
@@ -788,7 +813,6 @@ pub fn quit_app(app: &tauri::AppHandle) {
     if let Some(store) = app.try_state::<Arc<core::skill_store::SkillStore>>() {
         core::auto_backup::commit_on_exit(&store);
     }
-    app.exit(0);
 }
 
 #[cfg(test)]
@@ -896,6 +920,22 @@ pub fn run() {
                         step.elapsed().as_millis()
                     );
                 }
+            });
+
+            // Publish the CLI that ships in this bundle to a fixed path so
+            // agents can drive Skills Manager without it being on PATH. A
+            // ~15 MB copy plus one `--version` run, so never on the UI thread.
+            // The crate version, not `tauri.conf.json`'s: it is what the CLI
+            // reports about itself, and the bridge verifies the copy by asking
+            // it. Reading the app config here would silently disable the
+            // bridge for everyone if the two ever drifted apart.
+            tauri::async_runtime::spawn_blocking(|| {
+                let step = Instant::now();
+                core::cli_bridge::ensure_bridge(env!("CARGO_PKG_VERSION"));
+                log::info!(
+                    "startup: cli bridge step done in {} ms",
+                    step.elapsed().as_millis()
+                );
             });
 
             let step = Instant::now();
@@ -1019,6 +1059,8 @@ pub fn run() {
             commands::skills::get_skill_source_diff,
             commands::skills::delete_managed_skill,
             commands::skills::delete_managed_skills,
+            commands::agent_control::authorize_agent_control,
+            commands::agent_control::agent_control_version,
             commands::skills::install_local,
             commands::skills::install_git,
             commands::skills::preview_git_install,
@@ -1059,6 +1101,7 @@ pub fn run() {
             commands::settings::set_central_repo_path,
             commands::settings::open_central_repo_folder,
             commands::settings::check_app_update,
+            commands::settings::update_install_blocker,
             commands::settings::get_diagnostic_info,
             commands::settings::get_recent_log_excerpt,
             commands::settings::export_logs_zip,
@@ -1066,6 +1109,7 @@ pub fn run() {
             commands::settings::check_last_panic,
             commands::settings::clear_last_panic,
             commands::settings::app_exit,
+            commands::settings::restart_app,
             commands::settings::hide_to_tray,
             // Git Backup
             commands::git_backup::git_backup_fetch,

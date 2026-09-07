@@ -507,8 +507,18 @@ fn ownership_entries(dir: &Path) -> Result<Vec<OwnershipEntry>> {
 /// bits and exact bytes. File symlinks include their target text and target
 /// bytes; broken links, directory links, special entries, non-UTF-8 paths, and
 /// every walk/metadata/open/read error fail the digest closed.
+pub fn ownership_snapshot(dir: &Path) -> Result<std::collections::BTreeMap<String, String>> {
+    ownership_entries(dir)?.into_iter().map(|entry| {
+        let path = entry.relative_path.clone();
+        hash_ownership_entries(vec![entry]).map(|digest| (path, digest))
+    }).collect()
+}
+
 pub fn hash_directory_ownership_v1(dir: &Path) -> Result<String> {
-    let entries = ownership_entries(dir)?;
+    hash_ownership_entries(ownership_entries(dir)?)
+}
+
+fn hash_ownership_entries(entries: Vec<OwnershipEntry>) -> Result<String> {
     let mut hasher = Sha256::new();
     strict_field(
         &mut hasher,

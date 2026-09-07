@@ -555,6 +555,13 @@ fn import_agent_local_skill_to_center(
     agent: &str,
     skill_relative_path: &str,
 ) -> Result<(), AppError> {
+    let _lock = crate::core::repo_lock::RepoLock::acquire_foreground("Foundation collect Agent skill").map_err(AppError::db)?;
+    let outcome = import_agent_local_skill_to_center_unlocked(store, agent, skill_relative_path);
+    crate::core::sync_metadata::write_all_from_db_unlocked(store).map_err(AppError::db)?;
+    outcome
+}
+
+fn import_agent_local_skill_to_center_unlocked(store: &SkillStore, agent: &str, skill_relative_path: &str) -> Result<(), AppError> {
     let adapter = adapter_for_agent(store, agent)?;
     let skill = find_agent_skill(&adapter, skill_relative_path)?;
 
@@ -580,6 +587,7 @@ fn import_agent_local_skill_to_center(
         });
 
         if already_matched_by_ref {
+            crate::core::foundation_write::ensure_unchanged(store, existing)?;
             let result = installer::install_from_local_to_destination(
                 &source_path,
                 Some(&existing.name),
@@ -602,7 +610,7 @@ fn import_agent_local_skill_to_center(
                     .update_skill_source_ref(&existing.id, &skill.path)
                     .map_err(AppError::db)?;
             }
-            scenario_service::sync_single_skill_to_tool(store, &existing.id, agent)?;
+            scenario_service::sync_single_skill_to_tool(store, &existing.id, agent, scenario_service::DeployIntent::AdoptExisting)?;
             return Ok(());
         }
 
@@ -619,40 +627,26 @@ fn import_agent_local_skill_to_center(
         }
     }
 
-    let result =
-        installer::install_from_local(&source_path, Some(&skill.name)).map_err(AppError::io)?;
-    let now = chrono::Utc::now().timestamp_millis();
-    let id = uuid::Uuid::new_v4().to_string();
-    let skill_record = SkillRecord {
-        id,
-        name: result.name.clone(),
-        description: result.description.clone(),
-        source_type: "local".to_string(),
-        source_ref: Some(skill.path.clone()),
-        source_ref_resolved: None,
-        source_subpath: None,
-        source_branch: None,
-        source_revision: None,
-        remote_revision: None,
-        central_path: result.central_path.to_string_lossy().to_string(),
-        content_hash: Some(result.content_hash.clone()),
-        enabled: true,
-        created_at: now,
-        updated_at: now,
-        status: "ok".to_string(),
-        update_status: "local_only".to_string(),
-        last_checked_at: Some(now),
-        last_check_error: None,
+    let metadata = super::skills::InstallSourceMetadata {
+        source_type: "local".into(), source_ref: Some(skill.path.clone()),
+        source_ref_resolved: None, source_subpath: None, source_branch: None,
+        source_revision: None, remote_revision: None, update_status: "local_only".into(),
     };
-
-    store.insert_skill(&skill_record).map_err(AppError::db)?;
+    let (id, _, _) = super::skills::install_directory_unlocked(store, &source_path, Some(&skill.name), None, &metadata)?;
+    let skill_record = store.get_skill_by_id(&id).map_err(AppError::db)?
+        .ok_or_else(|| AppError::not_found("Collected skill missing"))?;
     // Register the managed sync target (see note above). On failure, drop the
     // just-inserted skill row (which cascades to any target) so we never leave
     // an orphaned, button-less skill behind. We deliberately do NOT delete the
     // central directory: `install_from_local` may have de-duplicated onto a
     // directory shared with another skill, and removing it could corrupt that
     // skill — an orphaned dir is harmless by comparison.
-    if let Err(err) = scenario_service::sync_single_skill_to_tool(store, &skill_record.id, agent) {
+    if let Err(err) = scenario_service::sync_single_skill_to_tool(
+        store,
+        &skill_record.id,
+        agent,
+        scenario_service::DeployIntent::AdoptExisting,
+    ) {
         let _ = store.delete_skill(&skill_record.id);
         return Err(err);
     }
@@ -804,6 +798,13 @@ pub fn backfill_stranded_agent_targets(store: &SkillStore) -> usize {
         if !adapter.is_installed() || disabled.contains(&adapter.key) {
             continue;
         }
+        // Only scan roots that can contain a recorded stranded source. A
+        // repair for one custom Agent must not hash every installed Agent.
+        let root = adapter.skills_dir();
+        if !all_managed.iter().any(|skill| skill.source_ref.as_deref()
+            .is_some_and(|source| Path::new(source).starts_with(&root))) {
+            continue;
+        }
         let targets = store.get_all_targets().unwrap_or_default();
 
         for skill in read_agent_local_skills(adapter) {
@@ -864,7 +865,15 @@ pub fn backfill_stranded_agent_targets(store: &SkillStore) -> usize {
                 continue;
             }
 
-            match scenario_service::sync_single_skill_to_tool(store, &matched.id, &adapter.key) {
+            // AdoptExisting: this repairs a target row that was never written,
+            // so no record vouches for the directory. The hash equality check
+            // above is what makes overwriting it safe.
+            match scenario_service::sync_single_skill_to_tool(
+                store,
+                &matched.id,
+                &adapter.key,
+                scenario_service::DeployIntent::AdoptExisting,
+            ) {
                 Ok(()) => {
                     repaired += 1;
                     log::info!(
@@ -945,7 +954,16 @@ fn update_agent_local_skill_from_center(
     let source = PathBuf::from(&managed.central_path);
     let configured_mode = store.get_setting("sync_mode").map_err(AppError::db)?;
     let mode = sync_engine::sync_mode_for_tool(agent, configured_mode.as_deref());
-    sync_engine::sync_skill(&source, &target_path, mode).map_err(AppError::io)?;
+    // UserConfirmed: an explicit "update this agent copy from center" on a
+    // skill the user picked, already guarded by the project_newer check above.
+    // The target is a discovered agent skill dir, which carries no target row.
+    sync_engine::sync_skill(
+        &source,
+        &target_path,
+        mode,
+        sync_engine::ReplacePolicy::UserConfirmed,
+    )
+    .map_err(AppError::io)?;
     Ok(())
 }
 
@@ -1042,6 +1060,7 @@ mod tests {
             &installed.central_path,
             &managed_target,
             sync_engine::SyncMode::Symlink,
+            sync_engine::ReplacePolicy::NoClobber,
         )
         .unwrap();
         let legacy_alias = skills_root.join("gstack-autoplan");
@@ -1789,6 +1808,17 @@ mod tests {
             "---\nname: local-tool\ndescription: Agent copy\n---\nagent newer\n",
         )
         .unwrap();
+        // "Newer" has to be true on disk. Both copies are written in the same
+        // instant here, and the guard compares real mtimes on both sides — a
+        // stale `updated_at` on the center row no longer stands in for age.
+        let local_file = std::fs::File::options()
+            .write(true)
+            .open(skill_dir.join("SKILL.md"))
+            .unwrap();
+        let newer = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        local_file
+            .set_times(std::fs::FileTimes::new().set_modified(newer))
+            .unwrap();
 
         store
             .set_setting(

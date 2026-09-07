@@ -281,6 +281,7 @@ pub fn reindex_from_metadata(store: &SkillStore) -> Result<()> {
 }
 
 pub(crate) fn reindex_from_metadata_unlocked(store: &SkillStore) -> Result<()> {
+    super::foundation_write::preserve_committed_evidence(store)?;
     if !metadata_exists() {
         return Ok(());
     }

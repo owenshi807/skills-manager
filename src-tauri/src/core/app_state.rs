@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result};
 
-use super::{central_repo, scenario_service, skill_store::SkillStore, sync_metadata, tool_service};
+use super::{central_repo, skill_store::SkillStore, sync_metadata, tool_service};
 
 /// Per-stage timings collected during `initialize_store`. The struct is
 /// returned to the caller so the log lines can be emitted once
@@ -137,32 +137,9 @@ fn initialize_store_inner(
         timings.reindex_from_metadata_ms = Some(step.elapsed().as_millis());
     }
 
-    let step = Instant::now();
-    let changed = scenario_service::restore_all_skills_sync_included(&store)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))
-        .context("Failed to restore skill sync inclusion")?;
-    timings.restore_sync_included_ms = step.elapsed().as_millis();
-    timings.restore_sync_included_changed = changed;
-    if changed {
-        let step = Instant::now();
-        sync_metadata::write_all_from_db(&store)
-            .context("Failed to persist restored skill sync inclusion")?;
-        timings.write_all_from_db_ms = Some(step.elapsed().as_millis());
-    }
-
-    let step = Instant::now();
-    if apply_startup_default {
-        scenario_service::ensure_default_startup_scenario(&store)
-            .map_err(|e| anyhow::anyhow!(e.to_string()))
-            .context("Failed to initialize startup scenario")?;
-        timings.apply_scenario_kind = "default_startup";
-    } else {
-        scenario_service::ensure_cli_scenario_state(&store)
-            .map_err(|e| anyhow::anyhow!(e.to_string()))
-            .context("Failed to initialize CLI scenario state")?;
-        timings.apply_scenario_kind = "cli";
-    }
-    timings.apply_scenario_ms = step.elapsed().as_millis();
+    // Foundation deployments are explicit. Hidden legacy presets remain in
+    // storage but opening either the App or CLI must never apply them.
+    timings.apply_scenario_kind = if apply_startup_default { "foundation_app" } else { "foundation_cli" };
 
     timings.total_ms = total_start.elapsed().as_millis();
     Ok((store, timings))
@@ -257,4 +234,17 @@ impl StartupTimings {
             self.skill_count
         );
     }
+}
+
+/// Refresh the observable index after external writes without applying hidden presets.
+pub fn refresh_external_index(store: &SkillStore) -> Result<()> {
+    let _lock = super::repo_lock::RepoLock::acquire_foreground("refresh external index")?;
+    let metadata = sync_metadata::metadata_snapshot_fingerprint()?;
+    let tree = sync_metadata::managed_tree_snapshot_fingerprint()?;
+    if should_reindex_metadata(store.get_all_skills()?.len(), metadata.as_deref(),
+        store.get_setting(sync_metadata::METADATA_FINGERPRINT_SETTING)?.as_deref(),
+        tree.as_deref(), store.get_setting(sync_metadata::MANAGED_TREE_FINGERPRINT_SETTING)?.as_deref()) {
+        sync_metadata::reindex_from_metadata_unlocked(store)?;
+    }
+    Ok(())
 }

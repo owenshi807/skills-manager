@@ -128,7 +128,8 @@ function SkillDetailPanelContent({
   const contentTabPillRef = useRef<HTMLSpanElement | null>(null);
   const skillId = skill.id;
   const supportsSourceDiff =
-    skill.source_type === "git"
+    skill.source_type === "builtin"
+    || skill.source_type === "git"
     || skill.source_type === "skillssh"
     || ((skill.source_type === "local" || skill.source_type === "import") && !!skill.source_ref);
   const [sourceLoading, setSourceLoading] = useState(supportsSourceDiff);
@@ -216,7 +217,7 @@ function SkillDetailPanelContent({
     }
   };
 
-  const sourceTypeLabel = (type: string) => (type === "skillssh" ? "skills.sh" : type);
+  const sourceTypeLabel = (type: string) => (type === "builtin" ? t("mySkills.contentSource.kind.builtin") : type === "skillssh" ? "skills.sh" : type);
 
   const sourceKindLabel = (type: string) => {
     switch (type) {

@@ -110,13 +110,13 @@ fn decide_emit(relevant: bool, mute: MuteVerdict, debounced: bool) -> EmitAction
         return EmitAction::Skip;
     }
     match mute {
-        // The frontend already refreshed after the user action that caused
-        // our write; its echo is pure redundant work (#248).
-        MuteVerdict::SelfWrite => EmitAction::Skip,
+        // Path and timing cannot prove authorship: an external editor may write
+        // the same directory during this window. Coalesce, never discard.
+        MuteVerdict::SelfWrite => EmitAction::Defer,
         MuteVerdict::Foreign => EmitAction::Defer,
         MuteVerdict::Live => {
             if debounced {
-                EmitAction::Skip
+                EmitAction::Defer
             } else {
                 EmitAction::Emit
             }
@@ -391,7 +391,7 @@ mod tests {
         // Our own write echo is the thing the mute exists to swallow (#248).
         assert_eq!(
             decide_emit(true, MuteVerdict::SelfWrite, false),
-            EmitAction::Skip
+            EmitAction::Defer
         );
         // A real foreign change during the window must survive as a deferred
         // emit — never vanish — regardless of debounce.
@@ -408,7 +408,7 @@ mod tests {
             decide_emit(true, MuteVerdict::Live, false),
             EmitAction::Emit
         );
-        assert_eq!(decide_emit(true, MuteVerdict::Live, true), EmitAction::Skip);
+        assert_eq!(decide_emit(true, MuteVerdict::Live, true), EmitAction::Defer);
         // Irrelevant events never emit or defer, muted or not.
         assert_eq!(
             decide_emit(false, MuteVerdict::Foreign, false),

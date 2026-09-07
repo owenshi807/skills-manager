@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
 /// Current schema version. Bump this when adding a new migration.
-const LATEST_VERSION: u32 = 11;
+const LATEST_VERSION: u32 = 12;
 
 /// Run all pending migrations on the database.
 ///
@@ -58,6 +58,7 @@ fn migrate_step(conn: &Connection, from_version: u32) -> Result<()> {
         8 => migrate_v8_to_v9(conn),
         9 => migrate_v9_to_v10(conn),
         10 => migrate_v10_to_v11(conn),
+        11 => migrate_v11_to_v12(conn),
         _ => bail!("unknown migration version: {from_version}"),
     }
 }
@@ -716,4 +717,16 @@ mod tests {
             "unexpected error: {msg}"
         );
     }
+}
+
+// Upstream v8 cleanup follows Foundation v8–v11 without renumbering them.
+fn migrate_v11_to_v12(conn: &Connection) -> Result<()> {
+    // Upstream v8 is a different schema: repair additive Foundation tables.
+    migrate_v7_to_v8(conn)?;
+    migrate_v8_to_v9(conn)?;
+    migrate_v9_to_v10(conn)?;
+    migrate_v10_to_v11(conn)?;
+    let has_settings: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'settings')", [], |row| row.get(0))?;
+    if has_settings { conn.execute("DELETE FROM settings WHERE key = 'project_default_export_agents'", [])?; }
+    Ok(())
 }

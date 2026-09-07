@@ -776,6 +776,8 @@ impl SkillStore {
                 skill.last_check_error,
             ],
         )?;
+        drop(conn);
+        super::foundation_write::remember(self, skill)?;
         Ok(())
     }
 
@@ -1000,6 +1002,8 @@ impl SkillStore {
                 id
             ],
         )?;
+        drop(conn);
+        if let Some(skill) = self.get_skill_by_id(id)? { super::foundation_write::remember(self, &skill)?; }
         Ok(())
     }
 
@@ -1053,6 +1057,8 @@ impl SkillStore {
                 id
             ],
         )?;
+        drop(conn);
+        if let Some(skill) = self.get_skill_by_id(id)? { super::foundation_write::remember(self, &skill)?; }
         Ok(())
     }
 
@@ -1095,6 +1101,13 @@ impl SkillStore {
                 target.source_hash,
             ],
         )?;
+        drop(conn);
+        if target.mode == "copy" && std::path::Path::new(&target.target_path).is_dir() {
+            let digest = super::content_hash::hash_directory_strict_v2(std::path::Path::new(&target.target_path))?;
+            self.set_setting(&format!("foundation_target_digest:{}", target.target_path), &digest)?;
+            self.set_setting(&format!("foundation_target_entries:{}", target.target_path), &serde_json::to_string(
+                &super::content_hash::ownership_snapshot(std::path::Path::new(&target.target_path))?)?)?;
+        }
         Ok(())
     }
 
