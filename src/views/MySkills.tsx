@@ -49,6 +49,9 @@ import { BatchSyncAgentDialog } from "../components/BatchSyncAgentDialog";
 import { ToggleSwitch } from "../components/ToggleSwitch";
 import { CardActionMenu } from "../components/CardActionMenu";
 import { SkillIssuesView, SkillProcessedView } from "../components/SkillOrganizationViews";
+import { LibraryPublishHistory, VersionDecisionCard, VersionDecisions, type LibraryGovernanceSnapshot } from "../components/SkillLibraryGovernance";
+import { filterVersionGroups, reconcileLibraryGovernance } from "../lib/libraryGovernance";
+import * as publishing from "../lib/skillPublishing";
 import type {
   OrganizationExecutionMode,
   OrganizationExecutionOption,
@@ -225,6 +228,51 @@ export function MySkills() {
   const [organizationCaseEvidence, setOrganizationCaseEvidence] = useState<OrganizationCaseEvidence[]>([]);
   const [organizationDecisions, setOrganizationDecisions] = useState<OrganizationDecision[]>([]);
   const [organizationOperations, setOrganizationOperations] = useState<OrganizationOperationSummary[]>([]);
+  const [governance, setGovernance] = useState<LibraryGovernanceSnapshot | null>(null);
+  const [governanceError, setGovernanceError] = useState<string | null>(null);
+  const governanceRequest = useRef(0);
+  const publishFingerprint = useRef<string | null>(null);
+  const refreshGovernance = useCallback(async () => {
+    const request = ++governanceRequest.current;
+    try {
+      const [[library, groups], changes] = await Promise.all([
+        publishing.getSkillLibrary(), publishing.getSkillPublishHistory(null, 30),
+      ]);
+      if (request !== governanceRequest.current) return;
+      setGovernance({ library, groups, changes });
+      setGovernanceError(null);
+      publishFingerprint.current = changes.map((entry) => entry.id).join(",");
+    } catch (error) {
+      if (request !== governanceRequest.current) return;
+      setGovernance(null);
+      setGovernanceError(getErrorMessage(error, "无法读取版本与发布记录"));
+    }
+  }, []);
+  useEffect(() => {
+    void refreshGovernance();
+    return () => { governanceRequest.current += 1; };
+  }, [skills, refreshGovernance]);
+  useEffect(() => {
+    let cancelled = false;
+    let polling = false;
+    const poll = async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        const changes = await publishing.getSkillPublishHistory(null, 30);
+        const fingerprint = changes.map((entry) => entry.id).join(",");
+        if (!cancelled && publishFingerprint.current !== null && fingerprint !== publishFingerprint.current) {
+          await refreshManagedSkills();
+          if (!cancelled) await refreshGovernance();
+        }
+      } catch { /* The next poll retries; the visible refresh reports errors. */ }
+      finally { polling = false; }
+    };
+    const focus = () => { void refreshGovernance(); };
+    const timer = window.setInterval(() => void poll(), 15_000);
+    window.addEventListener("focus", focus);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("focus", focus); };
+  }, [refreshGovernance, refreshManagedSkills]);
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set());
   const [tagFilters, setTagFilters] = useState<Set<string>>(new Set());
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>("all");
@@ -396,7 +444,7 @@ export function MySkills() {
     () => new Map(organizationCaseEvidence.map((evidence) => [evidence.case_id, evidence])),
     [organizationCaseEvidence],
   );
-  const resolvedOrganizationIds = useMemo(() => new Set(
+  const storedResolvedOrganizationIds = useMemo(() => new Set(
     organizationDecisions
       .filter((decision) => {
         const evidence = evidenceByCaseId.get(decision.case_key);
@@ -405,18 +453,24 @@ export function MySkills() {
       })
       .map((decision) => decision.case_key),
   ), [evidenceByCaseId, organizationDecisions]);
-  const organizationIssues = useMemo(
+  const rawOrganizationIssues = useMemo(
     () => buildSkillIssues(skills, relationGroups, conflictIds, organizationHealth, organizationCaseEvidence),
     [skills, relationGroups, conflictIds, organizationHealth, organizationCaseEvidence],
   );
+  const reconciledGovernance = useMemo(() => reconcileLibraryGovernance(
+    rawOrganizationIssues, governance?.groups ?? [], storedResolvedOrganizationIds,
+  ), [rawOrganizationIssues, governance, storedResolvedOrganizationIds]);
+  const organizationIssues = reconciledGovernance.issues;
+  const resolvedOrganizationIds = reconciledGovernance.resolvedIds;
   const unresolvedOrganizationCount = useMemo(
-    () => organizationIssues.filter((issue) => !resolvedOrganizationIds.has(issue.id)).length,
-    [organizationIssues, resolvedOrganizationIds],
+    () => organizationIssues.filter((issue) => !resolvedOrganizationIds.has(issue.id)).length
+      + reconciledGovernance.pendingGroups.length,
+    [organizationIssues, resolvedOrganizationIds, reconciledGovernance.pendingGroups.length],
   );
   const processedOrganizationCount = useMemo(
     () => organizationIssues.filter((issue) => resolvedOrganizationIds.has(issue.id)).length
-      + organizationOperations.length,
-    [organizationIssues, organizationOperations.length, resolvedOrganizationIds],
+      + organizationOperations.length + reconciledGovernance.confirmedGroups.length,
+    [organizationIssues, organizationOperations.length, resolvedOrganizationIds, reconciledGovernance.confirmedGroups.length],
   );
   const organizationExecutionOptions = useMemo<OrganizationExecutionOption[]>(() => {
     const descriptionByKey: Record<string, string> = {
@@ -1964,9 +2018,12 @@ Edit only this managed Skill directory. Do not modify its external source, other
   }, [organizationOperations, refreshManagedSkills, reloadOrganizationOperations, t]);
 
   const refreshOrganizationFacts = useCallback(async () => {
-    const affectedIds = [...new Set(organizationIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)))];
+    const affectedIds = [...new Set([
+      ...organizationIssues.flatMap((issue) => issue.skills.map((skill) => skill.id)),
+      ...reconciledGovernance.pendingGroups.flatMap((group) => group.members.map((member) => member.skill.id)),
+    ])];
     if (affectedIds.length === 0) {
-      toast.success(t("mySkills.organization.noIssues"));
+      await refreshGovernance();
       return;
     }
     setRefreshingOrganization(true);
@@ -1974,6 +2031,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
     try {
       const result = await api.refreshOrganizationFacts(affectedIds);
       await refreshManagedSkills();
+      await refreshGovernance();
       toast.success(t("mySkills.organization.refreshDone", {
         count: result.refreshed,
         failed: result.failed.length,
@@ -1983,7 +2041,7 @@ Edit only this managed Skill directory. Do not modify its external source, other
     } finally {
       setRefreshingOrganization(false);
     }
-  }, [organizationIssues, refreshManagedSkills, t]);
+  }, [organizationIssues, reconciledGovernance.pendingGroups, refreshGovernance, refreshManagedSkills, t]);
 
   return (
     <div className="app-page">
@@ -2383,8 +2441,17 @@ Edit only this managed Skill directory. Do not modify its external source, other
         />
       )}
 
+      {governanceError && !organizationReviewMode && <div className="app-panel flex items-center justify-between gap-3 p-3 text-[12px] text-amber-600 dark:text-amber-400"><span>{governanceError}，版本判断暂不可用。</span><button type="button" className="app-button-secondary h-8" onClick={() => void refreshGovernance()}>重试</button></div>}
+      {libraryView === "all" && governance && <LibraryPublishHistory entries={governance.changes} library={governance.library} onOpenSkill={openSkillDetailById} title="全库近期更新" />}
+
       {libraryView === "issues" ? (
         <SkillIssuesView
+          pendingVersionCount={filterVersionGroups(reconciledGovernance.pendingGroups, search).length}
+          pendingVersionContent={<VersionDecisions groups={reconciledGovernance.pendingGroups} search={search} confirmed={false} onOpenSkill={openSkillDetailById} onChanged={refreshGovernance} />}
+          renderVersionDecision={(issue) => {
+            const group = reconciledGovernance.groupsByIssue.get(issue.id);
+            return group ? <div className="border-b border-border-subtle bg-bg-secondary/40"><VersionDecisionCard key={JSON.stringify(group)} group={group} onOpenSkill={openSkillDetailById} onChanged={refreshGovernance} /></div> : null;
+          }}
           skills={skills}
           issues={organizationIssues}
           resolvedIds={resolvedOrganizationIds}
@@ -2418,6 +2485,9 @@ Edit only this managed Skill directory. Do not modify its external source, other
         />
       ) : libraryView === "processed" ? (
         <SkillProcessedView
+          confirmedVersionCount={filterVersionGroups(reconciledGovernance.confirmedGroups, search).length}
+          confirmedVersionContent={<VersionDecisions groups={reconciledGovernance.confirmedGroups} search={search} confirmed onOpenSkill={openSkillDetailById} onChanged={refreshGovernance} />}
+          historyContent={governance && <LibraryPublishHistory entries={governance.changes} library={governance.library} onOpenSkill={openSkillDetailById} title="全库近期更新" />}
           issues={organizationIssues}
           resolvedIds={resolvedOrganizationIds}
           operations={organizationOperations}
@@ -2974,6 +3044,9 @@ Edit only this managed Skill directory. Do not modify its external source, other
         onProjectsChanged={CARD_MASTER_PRODUCT_SURFACE.projects ? refreshProjects : undefined}
         showTags={CARD_MASTER_PRODUCT_SURFACE.tags}
         readOnly={libraryView !== "all"}
+        governance={governance ?? undefined}
+        onGovernanceChanged={refreshGovernance}
+        onOpenSkill={openSkillDetailById}
       />
 
       <ConfirmDialog

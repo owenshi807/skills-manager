@@ -61,10 +61,10 @@ export const getSceneOverview = () => invoke<SceneOverview>("get_skill_scene_ove
 export const getSceneAgentCapabilities = () => invoke<SceneAgentCapability[]>("get_skill_scene_agent_capabilities");
 export const classifySkillScenes = (agentKey: string, skillIds?: string[]) =>
   sceneMutation(invoke<SceneApplyResult>("classify_skill_scenes", { agentKey, skillIds: skillIds ?? null }));
-export const upsertSkillScene = (sceneId: string | null, name: string, description?: string) =>
-  sceneMutation(invoke<SkillScene>("upsert_skill_scene", { sceneId, name, description: description || null }));
-export const setSkillSceneAssignment = (skillId: string, sceneId: string, assigned: boolean, reason?: string) =>
-  sceneMutation(invoke<void>("set_skill_scene_assignment", { skillId, sceneId, assigned, reason: reason || null }));
+export const upsertSkillScene = (sceneId: string | null, name: string, description?: string, pendingCombinationId?: string) =>
+  sceneMutation(invoke<SkillScene>("upsert_skill_scene", { sceneId, name, description: description || null, pendingCombinationId: pendingCombinationId ?? null }));
+export const setSkillSceneAssignment = (skillId: string, sceneId: string, assigned: boolean, reason?: string, preserveExisting = false) =>
+  sceneMutation(invoke<void>("set_skill_scene_assignment", { skillId, sceneId, assigned, reason: reason || null, preserveExisting }));
 export const setSkillScenePreferences = (autoClassifyEnabled: boolean, preferredAgent: string | null) =>
   sceneMutation(invoke<void>("set_skill_scene_preferences", { autoClassifyEnabled, preferredAgent }));
 export const setSkillScenePriorities = (skillIds: string[], priority: boolean) =>

@@ -16,7 +16,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   ManagedSkill,
@@ -43,6 +43,9 @@ interface SharedProps {
 }
 
 interface IssuesProps extends SharedProps {
+  pendingVersionContent?: ReactNode;
+  pendingVersionCount?: number;
+  renderVersionDecision?: (issue: SkillIssue) => ReactNode;
   issues: SkillIssue[];
   resolvedIds: Set<string>;
   executionMode: OrganizationExecutionMode;
@@ -68,6 +71,9 @@ interface IssuesProps extends SharedProps {
 }
 
 interface ProcessedProps {
+  confirmedVersionContent?: ReactNode;
+  confirmedVersionCount?: number;
+  historyContent?: ReactNode;
   issues: SkillIssue[];
   resolvedIds: Set<string>;
   operations: OrganizationOperationSummary[];
@@ -348,6 +354,9 @@ function formatRepairGuidance(code: string, t: ReturnType<typeof useTranslation>
 }
 
 export function SkillIssuesView({
+  pendingVersionContent,
+  pendingVersionCount = 0,
+  renderVersionDecision,
   skills,
   issues,
   resolvedIds,
@@ -734,7 +743,7 @@ export function SkillIssuesView({
                 {t("mySkills.organization.issueDirectory.scanComplete")}
               </div>
               <h2 className="mt-2 text-[22px] font-semibold tracking-tight text-primary">
-                {t("mySkills.organization.issueDirectory.scanResult", { count: unresolvedIssues.length })}
+                {t("mySkills.organization.issueDirectory.scanResult", { count: unresolvedIssues.length + pendingVersionCount })}
               </h2>
               <p className="mt-1 max-w-[680px] text-[12px] leading-5 text-muted">
                 {t("mySkills.organization.issueDirectory.scanHint", {
@@ -755,7 +764,9 @@ export function SkillIssuesView({
             </button>
           </section>
 
-          {categories.length === 0 ? (
+          {pendingVersionContent}
+
+          {categories.length === 0 ? pendingVersionCount > 0 ? null : (
             <div className="py-16 text-center">
               <CheckCircle2 className="mx-auto mb-3 h-9 w-9 text-emerald-500" />
               <div className="text-[14px] font-semibold text-primary">{t("mySkills.organization.noIssues")}</div>
@@ -1270,6 +1281,7 @@ export function SkillIssuesView({
                 : t("mySkills.organization.issueDirectory.eventSummaries.waiting"));
             return (
               <article key={issue.id} className="overflow-hidden">
+                {renderVersionDecision?.(issue)}
                 <div className={cn("flex items-start p-4", isSameNameReview ? "gap-0" : "gap-4")}>
                   {!isSameNameReview && <div className={cn(
                     "mt-0.5 rounded-lg p-2",
@@ -1801,6 +1813,9 @@ export function SkillIssuesView({
 }
 
 export function SkillProcessedView({
+  confirmedVersionContent,
+  confirmedVersionCount = 0,
+  historyContent,
   issues,
   resolvedIds,
   operations,
@@ -1819,7 +1834,7 @@ export function SkillProcessedView({
     operation.archive_name,
     operation.status,
   ].some((value) => value.toLocaleLowerCase().includes(query)));
-  const processedCount = resolvedIssues.length + visibleOperations.length;
+  const processedCount = resolvedIssues.length + visibleOperations.length + confirmedVersionCount;
   const categoryDefinitions = [
     { id: "duplicate" as const, icon: Copy, tone: "text-emerald-500 bg-emerald-500/10" },
     { id: "same_name" as const, icon: GitCompareArrows, tone: "text-amber-500 bg-amber-500/10" },
@@ -1857,6 +1872,9 @@ export function SkillProcessedView({
           </div>
         </div>
       </section>
+
+      {confirmedVersionContent}
+      {historyContent}
 
       <section className="rounded-xl bg-bg-secondary p-4">
         <div className="flex items-start gap-3">

@@ -119,10 +119,18 @@ export interface DeckSuggestionCard {
   reason: string;
 }
 
+export interface DeckSuggestionStage {
+  name: string;
+  purpose: string;
+  handoff: string;
+  done_when: string;
+}
+
 export interface DeckSuggestion {
   title: string;
   summary: string;
   cards: DeckSuggestionCard[];
+  stages?: DeckSuggestionStage[];
   gaps: string[];
 }
 
@@ -793,9 +801,9 @@ export const getSettings = (key: string) =>
 export const setSettings = (key: string, value: string) =>
   invoke<void>("set_settings", { key, value });
 
-export const suggestDeckFromLibrary = (goal: string, agentKey: string) =>
+export const suggestDeckFromLibrary = (goal: string, agentKey: string, skillIds?: string[]) =>
   invoke<DeckSuggestion>("suggest_deck_from_library", {
-    request: { goal, agent_key: agentKey },
+    request: { goal, agent_key: agentKey, skill_ids: skillIds ?? null },
   });
 
 export const getCentralRepoPath = () =>

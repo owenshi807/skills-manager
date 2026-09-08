@@ -16,7 +16,6 @@ import {
   Link2,
   ChevronDown,
   ChevronRight,
-  PanelsTopLeft,
   Tags,
   Bot,
 } from "lucide-react";
@@ -34,6 +33,8 @@ import type { SyncHealth, ToolCategory, ToolInfo } from "../lib/tauri";
 import { getPresetIconOption } from "../lib/presetIcons";
 import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
 import { getSceneOverview, type SceneOverview } from "../lib/skillScenes";
+
+import { useSceneCapabilityGroups } from "../hooks/useSceneCapabilityGroups";
 
 const SCENE_DOT_COLORS = ["bg-blue-400", "bg-emerald-400", "bg-amber-400", "bg-pink-400", "bg-violet-400", "bg-cyan-400"];
 function sceneDotColor(id: string) {
@@ -87,6 +88,9 @@ export function Sidebar() {
   const [sceneOverview, setSceneOverview] = useState<SceneOverview | null>(null);
   const [sceneLoadError, setSceneLoadError] = useState(false);
   const selectedSceneId = location.pathname === "/scenes" ? new URLSearchParams(location.search).get("scene") : null;
+  const selectedCapabilityId = new URLSearchParams(location.search).get("capability");
+  const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
+  const { groups: sceneGroups } = useSceneCapabilityGroups(sceneOverview, managedSkills);
   const sceneCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const memberships of Object.values(sceneOverview?.assignments ?? {})) {
@@ -99,7 +103,7 @@ export function Sidebar() {
     localStorage.setItem("skill-manager:scenes-expanded", String(scenesOpen));
   }, [scenesOpen]);
   useEffect(() => {
-    if (selectedSceneId) setScenesOpen(true);
+    if (selectedSceneId) { setScenesOpen(true); setExpandedScenes((previous) => new Set(previous).add(selectedSceneId)); }
   }, [selectedSceneId]);
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +219,6 @@ export function Sidebar() {
     { name: t("sidebar.dashboard"), path: "/", icon: LayoutDashboard },
     { name: t("sidebar.mySkills"), path: "/my-skills", icon: Layers },
     { name: "使用场景", path: "/scenes", icon: Tags },
-    { name: t("sidebar.decks"), path: "/decks", icon: PanelsTopLeft },
     { name: "连接助手", path: "/assistants", icon: Bot },
     { name: t("sidebar.installSkills"), path: "/install", icon: Download },
     { name: t("sidebar.backup"), path: "/backup", icon: CloudUpload },
@@ -463,11 +466,23 @@ export function Sidebar() {
                     : sceneOverview.scenes.length === 0 ? <Link to="/scenes" className="block px-2 py-2 text-[11px] text-muted hover:text-primary">AI 整理后，场景会显示在这里</Link>
                     : sceneOverview.scenes.map((scene) => {
                       const active = selectedSceneId === scene.id;
-                      return <Link key={scene.id} to={`/scenes?scene=${encodeURIComponent(scene.id)}`} title={scene.description || scene.name} aria-current={active ? "page" : undefined} className={cn("my-0.5 flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", active ? "bg-surface-active font-medium text-primary" : "text-tertiary hover:bg-surface-hover hover:text-secondary")}>
-                        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", sceneDotColor(scene.id))} aria-hidden="true" />
-                        <span className="min-w-0 flex-1 truncate">{scene.name}</span>
-                        <span className={cn("text-[11px] tabular-nums", active ? "text-accent-light" : "text-faint")}>{sceneCounts.get(scene.id) ?? 0}</span>
-                      </Link>;
+                      const capabilities = sceneGroups.get(scene.id)?.capabilities.filter((item) => !item.missing && !item.excludedFromDeck) ?? [];
+                      const expanded = expandedScenes.has(scene.id);
+                      return <div key={scene.id}>
+                        <div className="flex min-w-0 items-center">
+                          <button type="button" disabled={capabilities.length === 0} aria-label={`${expanded ? "收起" : "展开"}${scene.name}的能力`} aria-expanded={expanded} onClick={() => setExpandedScenes((previous) => { const next = new Set(previous); if (next.has(scene.id)) next.delete(scene.id); else next.add(scene.id); return next; })} className="shrink-0 rounded p-1 text-faint hover:text-primary focus-visible:ring-2 focus-visible:ring-accent disabled:invisible">{expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}</button>
+                          <Link to={`/scenes?scene=${encodeURIComponent(scene.id)}`} title={scene.description || scene.name} aria-current={active && !selectedCapabilityId ? "page" : undefined} className={cn("my-0.5 flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", active && !selectedCapabilityId ? "bg-surface-active font-medium text-primary" : "text-tertiary hover:bg-surface-hover hover:text-secondary")}>
+                            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", sceneDotColor(scene.id))} aria-hidden="true" />
+                            <span className="min-w-0 flex-1 truncate">{scene.name}</span>
+                            <span className="text-[10px] tabular-nums text-faint">{sceneCounts.get(scene.id) ?? 0}</span>
+                          </Link>
+                        </div>
+                        {expanded && capabilities.length > 0 && <div className="ml-3 border-l border-border-subtle pl-2" aria-label={`${scene.name}中的能力`}>{capabilities.map((capability) => {
+                          const title = capability.titleKey ? t(capability.titleKey) : capability.title || "场景能力";
+                          const selected = active && selectedCapabilityId === capability.id;
+                          return <Link key={capability.id} to={`/scenes?scene=${encodeURIComponent(scene.id)}&capability=${encodeURIComponent(capability.id)}`} title={title} aria-current={selected ? "page" : undefined} className={cn("my-0.5 block truncate rounded px-2 py-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-accent", selected ? "bg-accent-bg text-accent-light" : "text-muted hover:bg-surface-hover hover:text-primary")}>{title}</Link>;
+                        })}</div>}
+                      </div>;
                     })}
                 </div>}
               </div>;

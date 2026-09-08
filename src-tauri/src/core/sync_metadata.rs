@@ -311,28 +311,20 @@ pub(crate) fn reindex_from_metadata_unlocked(store: &SkillStore) -> Result<()> {
     let now = chrono::Utc::now().timestamp_millis();
     let skills_root = central_repo::skills_dir();
 
-    let metadata_ids: HashSet<String> = skills.iter().map(|m| m.skill_id.clone()).collect();
-    for existing in store.get_all_skills()? {
-        if !metadata_ids.contains(&existing.id) {
-            store.delete_skill(&existing.id)?;
-        }
-    }
-
     let existing_by_id: HashMap<String, SkillRecord> = store
         .get_all_skills()?
         .into_iter()
         .map(|skill| (skill.id.clone(), skill))
         .collect();
 
-    // Every surviving row gets its central_path rewritten below; park them
-    // on placeholders first so path reassignments between skills (renames or
-    // merge collision reshuffles) cannot trip the UNIQUE constraint mid-loop.
-    store.park_central_paths_for_reindex()?;
+    // Prepare paths/content before touching the live index. Installing this
+    // batch under one DB transaction keeps temporary path swaps invisible to
+    // readers and rolls back the entire batch on a failed write.
+    let mut records = Vec::with_capacity(skills.len());
 
     for meta in skills {
         let skill_dir = skills_root.join(&meta.path);
         if !skill_dir.is_dir() {
-            store.delete_skill(&meta.skill_id)?;
             continue;
         }
 
@@ -382,9 +374,9 @@ pub(crate) fn reindex_from_metadata_unlocked(store: &SkillStore) -> Result<()> {
             last_checked_at: previous.and_then(|s| s.last_checked_at),
             last_check_error: previous.and_then(|s| s.last_check_error.clone()),
         };
-        store.upsert_skill(&record)?;
-        store.set_tags_for_skill(&meta.skill_id, &meta.tags)?;
+        records.push((record, meta.tags));
     }
+    store.replace_skills_from_metadata(&records)?;
 
     if has_complete_scenario_snapshot {
         store.replace_scenarios_from_metadata(&scenarios)?;
@@ -1091,6 +1083,105 @@ mod tests {
                 .unwrap(),
             vec!["tag-a".to_string(), "tag-b".to_string()]
         );
+    }
+
+    #[test]
+    fn reindex_swaps_active_paths_without_modifying_archived_paths() {
+        let repo = test_repo();
+        let first_path = write_skill_dir("first");
+        let second_path = write_skill_dir("second");
+        repo.store.insert_skill(&sample_skill("skill-a", &first_path)).unwrap();
+        repo.store.insert_skill(&sample_skill("skill-b", &second_path)).unwrap();
+        let archive_path = central_repo::base_dir().join("archived/old-skill");
+        let mut archived = sample_skill("archived-id", &archive_path);
+        archived.status = "archived".into();
+        repo.store.insert_skill(&archived).unwrap();
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        let mut records = read_skill_files().unwrap();
+        for meta in &mut records {
+            meta.path = if meta.skill_id == "skill-a" { "second" } else { "first" }.into();
+            meta.path_key = path_key(&meta.path);
+            atomic_write_json(&metadata_dir().join("skills").join(format!("{}.json", meta.skill_id)), meta).unwrap();
+        }
+        reindex_from_metadata_unlocked(&repo.store).unwrap();
+        assert_eq!(repo.store.get_skill_by_id("skill-a").unwrap().unwrap().central_path, second_path.to_string_lossy());
+        assert_eq!(repo.store.get_skill_by_id("skill-b").unwrap().unwrap().central_path, first_path.to_string_lossy());
+        assert_eq!(repo.store.get_skill_by_id("archived-id").unwrap().unwrap().central_path, archive_path.to_string_lossy());
+    }
+
+    #[test]
+    fn failed_reindex_rolls_back_paths_tags_and_deletions() {
+        let repo = test_repo();
+        for id in ["skill-a", "skill-b", "removed-from-metadata"] {
+            let path = write_skill_dir(id);
+            repo.store.insert_skill(&sample_skill(id, &path)).unwrap();
+            repo.store.set_tags_for_skill(id, &["original".into()]).unwrap();
+        }
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        fs::remove_file(metadata_dir().join("skills/removed-from-metadata.json")).unwrap();
+        for mut meta in read_skill_files().unwrap() {
+            meta.tags = vec!["replacement".into()];
+            atomic_write_json(&metadata_dir().join("skills").join(format!("{}.json", meta.skill_id)), &meta).unwrap();
+        }
+        let before = serde_json::to_value(repo.store.get_all_skills().unwrap()).unwrap();
+        let before_tags = repo.store.get_tags_map().unwrap();
+        let observer = rusqlite::Connection::open(central_repo::base_dir().join("test.db")).unwrap();
+        observer.execute_batch("CREATE TRIGGER fail_reindex BEFORE UPDATE OF central_path ON skills
+            WHEN NEW.id = 'skill-b' AND NEW.central_path NOT LIKE 'sm-reindex-parked://%'
+            BEGIN SELECT RAISE(ABORT, 'simulated reindex write failure'); END;").unwrap();
+        let error = reindex_from_metadata_unlocked(&repo.store).unwrap_err();
+        assert!(error.to_string().contains("simulated reindex write failure"));
+        assert_eq!(serde_json::to_value(repo.store.get_all_skills().unwrap()).unwrap(), before);
+        assert_eq!(repo.store.get_tags_map().unwrap(), before_tags);
+    }
+
+    #[test]
+    fn concurrent_reader_never_observes_reindex_placeholder_after_managed_edit() {
+        use std::sync::{Arc, Barrier, atomic::{AtomicBool, Ordering}};
+        let repo = test_repo();
+        let target = write_skill_dir("codex-review-loop-2");
+        let mut record = sample_skill("stable-review-loop-id", &target);
+        record.name = "codex-review-loop".into();
+        record.source_ref = Some("/external/codex/skills/codex-review-loop".into());
+        repo.store.insert_skill(&record).unwrap();
+        for index in 0..60 {
+            let path = write_skill_dir(&format!("other-skill-{index}"));
+            repo.store.insert_skill(&sample_skill(&format!("other-id-{index}"), &path)).unwrap();
+        }
+        write_all_from_db_unlocked(&repo.store).unwrap();
+        // A publication changes the managed tree while preserving stable ID,
+        // original import source, and a collision-suffixed central directory.
+        fs::write(target.join("SKILL.md"), "---\nname: codex-review-loop\n---\nPublished update\n").unwrap();
+        let db_path = central_repo::base_dir().join("test.db");
+        let barrier = Arc::new(Barrier::new(2));
+        let finished = Arc::new(AtomicBool::new(false));
+        let reader_barrier = barrier.clone();
+        let reader_finished = finished.clone();
+        let expected_path = target.to_string_lossy().to_string();
+        let reader = std::thread::spawn(move || {
+            let connection = rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            let mut reads = 0;
+            let mut invalid = Vec::new();
+            reader_barrier.wait();
+            loop {
+                let path: String = connection.query_row("SELECT central_path FROM skills WHERE id = 'stable-review-loop-id'", [], |row| row.get(0)).unwrap();
+                reads += 1;
+                if path != expected_path { invalid.push(path); }
+                if reader_finished.load(Ordering::Acquire) { break; }
+            }
+            (reads, invalid)
+        });
+        barrier.wait();
+        let result = reindex_from_metadata_unlocked(&repo.store);
+        finished.store(true, Ordering::Release);
+        let (reads, invalid) = reader.join().unwrap();
+        result.unwrap();
+        assert!(reads > 0);
+        assert!(invalid.is_empty(), "reader observed intermediate central paths: {invalid:?}");
+        let after = repo.store.get_skill_by_id("stable-review-loop-id").unwrap().unwrap();
+        assert_eq!(after.central_path, target.to_string_lossy());
+        assert_eq!(after.source_ref, record.source_ref);
+        assert!(fs::read_to_string(Path::new(&after.central_path).join("SKILL.md")).unwrap().contains("Published update"));
     }
 
     #[test]
