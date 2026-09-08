@@ -10,6 +10,17 @@ export function sceneCombinationTitle(title: string): string {
   return [...title.replace(/[\r\n]+/g, " ")].slice(0, 80).join("");
 }
 
+/** An unfinished import still owns unassigned cards; existing-scene edits do not. */
+export function sceneCombinationSkillIds(
+  managedSkillIds: string[],
+  sceneSkillIds: string[] | undefined,
+  saveMode: SceneCustomCombination["sceneSaveMode"],
+): string[] {
+  if (sceneSkillIds === undefined || saveMode === "new-scene-import") return managedSkillIds;
+  const members = new Set(sceneSkillIds);
+  return managedSkillIds.filter((id) => members.has(id));
+}
+
 /** Retains the original custom-deck record so older saved plans remain usable. */
 export interface SceneCustomCombination {
   id: string;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applySceneCustomCombination, parseSceneCustomCombinations, saveCombinationAsScene,
-  removeSkillFromCombination, restoreSkillToCombination, sceneCombinationExcludedSkillIds, sceneCombinationTitle,
+  removeSkillFromCombination, restoreSkillToCombination, sceneCombinationExcludedSkillIds, sceneCombinationTitle, sceneCombinationSkillIds,
   type SceneCombinationSaveDependencies, type SceneCustomCombination,
 } from "../src/lib/sceneCustomCombinations.ts";
 import type { SceneCapabilityGroup } from "../src/lib/sceneCapabilities.ts";
@@ -137,6 +137,22 @@ test("a partial assignment failure retains the scene ID and resumes it without r
   assert.equal(state.creates(), 1);
   assert.deepEqual(state.records()[1], previous);
   assert.deepEqual(state.assignments, ["interview", "interview", "decision"]);
+});
+
+test("scene-scoped import recovery keeps unassigned managed cards after zero or partial assignment", async () => {
+  for (const partialMembers of [[], ["interview"]]) {
+    const pending = { ...plan, sceneId: "scene-1", sceneSaveMode: "new-scene-import" as const, sceneImportStatus: "pending" as const };
+    const state = fixture([pending]);
+    const managed = ["interview", "decision"];
+    const eligible = sceneCombinationSkillIds(managed, partialMembers, pending.sceneSaveMode);
+    assert.equal(pending.cards.filter((card) => !eligible.includes(card.skill_id)).length, 0);
+    const saved = await saveCombinationAsScene(pending, eligible, () => undefined, state.deps);
+    assert.equal(saved.sceneImportStatus, "complete");
+    assert.deepEqual(state.assignments, managed);
+    assert.equal(state.creates(), 0);
+    // Ordinary scene editing still excludes members removed from this scene.
+    assert.deepEqual(sceneCombinationSkillIds(managed, partialMembers, "existing-scene"), partialMembers);
+  }
 });
 
 test("preview removals remain excluded through regeneration, saved plans, and copied instructions", async () => {

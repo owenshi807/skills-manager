@@ -7,7 +7,7 @@ import type { OrganizationAgentCapability } from "../lib/tauri";
 import { getErrorMessage } from "../lib/error";
 import type { SkillScene } from "../lib/skillScenes";
 import {
-  groupCombinationCards, loadSceneCustomCombinations, saveCombinationAsScene, sceneCombinationTitle,
+  groupCombinationCards, loadSceneCustomCombinations, saveCombinationAsScene, sceneCombinationTitle, sceneCombinationSkillIds,
   removeSkillFromCombination, restoreSkillToCombination, latestSceneCustomCombination, sceneCombinationExcludedSkillIds,
   SCENE_COMBINATIONS_CHANGED_EVENT, type SceneCustomCombination,
 } from "../lib/sceneCustomCombinations";
@@ -38,7 +38,7 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
   const skillNames = useMemo(() => new Map(managedSkills.map((skill) => [skill.id, skill.name])), [managedSkills]);
   const pendingPlans = plans.filter((row) => scene ? row.sceneId === scene.id && row.sceneImportStatus === "pending" : !row.sceneId || row.sceneImportStatus === "pending");
   const stages = useMemo(() => groupCombinationCards(plan?.cards ?? []), [plan]);
-  const allowed = new Set(scene ? skillIds ?? [] : managedSkills.map((skill) => skill.id));
+  const allowed = new Set(sceneCombinationSkillIds(managedSkills.map((skill) => skill.id), scene ? skillIds ?? [] : undefined, plan?.sceneSaveMode));
   const unavailable = plan?.cards.filter((card) => !skillNames.has(card.skill_id) || !allowed.has(card.skill_id)).length ?? 0;
   const effectiveExcluded = sceneCombinationExcludedSkillIds(scene?.id, plans, excludedSkillIds, plan ?? undefined)
     .filter((id) => allowed.has(id) && skillNames.has(id));
@@ -133,7 +133,7 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
     busyRef.current = true; setBusy("save"); setError("");
     try {
       const scope = scopeRef.current;
-      const currentIds = skillsRef.current.filter((skill) => !scope.scene || scope.skillIds?.includes(skill.id)).map((skill) => skill.id);
+      const currentIds = sceneCombinationSkillIds(skillsRef.current.map((skill) => skill.id), scope.scene ? scope.skillIds ?? [] : undefined, planRef.current.sceneSaveMode);
       const currentPlan = { ...planRef.current, excludedSkillIds: [...new Set([
         ...(planRef.current.excludedSkillIds ?? []), ...scope.excludedSkillIds,
       ])].filter((id) => !planRef.current?.restoredSkillIds?.includes(id)) };
