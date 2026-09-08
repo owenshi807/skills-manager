@@ -78,6 +78,7 @@ pub fn tools() -> Vec<Value> {
         tool("skills_agents", "List available Agent distribution targets registered in Manager.", json!({}), &[], true),
         tool("skills_canonical_groups", "Inspect same-name variants and explicit canonical choices. Distinct platform/custom variants are preserved; an unresolved alternative is not an equivalent duplicate.", json!({}), &[], true),
         tool("skills_select_canonical", "Record which Skill is the canonical choice for a named group with a reason. Does not delete, merge, or replace other variants.", json!({"request":object_schema(json!({"skill_id":string_schema("Chosen stable ID"),"reason":string_schema("Why this variant should be the canonical choice")}), &["skill_id","reason"])}), &["request"], false),
+        tool("skills_resolve_platform_variants", "Record explicit routing for same-name Skills that are platform variants. Each target Agent key points to exactly one supplied variant. This does not select a universal canonical Skill and does not change deployments or overwrite files.", json!({"request":object_schema(json!({"group_name":string_schema("Shared normalized Skill name for these variants"),"variants":{"type":"array","minItems":2,"items":object_schema(json!({"skill_id":string_schema("Managed stable Skill ID"),"agent_keys":{"type":"array","minItems":1,"items":string_schema("Registered Agent key routed to this variant")}}), &["skill_id","agent_keys"])},"reason":string_schema("Why the variants route to their target Agent platforms")}), &["group_name","variants","reason"])}), &["request"], false),
         tool("skills_begin_edit", "Begin a managed edit of an existing Skill ID or create a new named Skill. Supply exactly one of skill_id or new_name. Returns isolated workspace and stage ID. Edit only that workspace, then preview and publish through Manager.", json!({"request":object_schema(json!({"skill_id":string_schema("Existing stable ID, omit for new Skill"),"new_name":string_schema("New Skill name, omit for editing"),"actor":string_schema("Assistant and session label")}), &[])}), &["request"], false),
         tool("skills_stage_write", "Write UTF-8 content only inside a managed edit workspace, never into the live library. Preview again after every edit.", json!({"stage_id":string_schema("Managed edit stage ID"),"relative_path":string_schema("Relative file path"),"content":string_schema("Complete UTF-8 file content")}), &["stage_id","relative_path","content"], false),
         tool("skills_preview_publish", "Compare an edit workspace to its original. Returns the candidate digest needed for publish, affected files, and stale/conflict status.", json!({"stage_id":string_schema("Managed edit stage ID")}), &["stage_id"], true),
@@ -288,6 +289,10 @@ fn dispatch_tool(store: &SkillStore, name: &str, args: Value) -> Result<Value, A
         )?),
         "skills_canonical_groups" => encode(skill_publish::list_library(store)?.1),
         "skills_select_canonical" => encode(skill_publish::select_canonical(
+            store,
+            decode(args["request"].clone())?,
+        )?),
+        "skills_resolve_platform_variants" => encode(skill_publish::resolve_platform_variants(
             store,
             decode(args["request"].clone())?,
         )?),

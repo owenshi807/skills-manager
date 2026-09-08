@@ -76,3 +76,21 @@ Selecting a canonical Skill is an explicit, reasoned pointer among same-name
 alternatives. It preserves every alternative, including platform and custom
 variants. If the selected Skill changes later, revisit the selection rather
 than treating the old choice as proof that alternatives are interchangeable.
+
+## Platform variants over MCP
+
+Before editing or deploying a same-name Skill, query `skills_canonical_groups`.
+A `variants_confirmed` group has reviewed runtime-specific implementations,
+not a universal interchangeable file. Select the member whose
+`platform_agent_keys` contains the requested Agent key. A missing, stale,
+or ambiguous routing decision needs review; never guess from a `-2` suffix.
+
+Use `skills_resolve_platform_variants` only after inspecting every member and
+its runtime contract. Supply every group member with explicit `agent_keys`
+and a reason. One Agent must route to only one member. The Manager snapshots
+content digests and invalidates the resolution when members or bytes change.
+This changes metadata only; existing deployments and all variants remain.
+
+For genuinely competing same-runtime versions, use `skills_select_canonical`
+instead. Canonical and platform-variant decisions replace one another; do not
+use a universal canonical choice merely to hide required platform adapters.

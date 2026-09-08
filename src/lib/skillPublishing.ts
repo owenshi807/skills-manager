@@ -50,6 +50,7 @@ export interface LibrarySkillView {
   canonical_name: string;
   deployments: DeploymentView[];
   canonical: CanonicalSelection | null;
+  platform_agent_keys?: string[];
 }
 
 export interface CanonicalGroup {
@@ -57,6 +58,10 @@ export interface CanonicalGroup {
   members: LibrarySkillView[];
   selected_skill_id: string | null;
   canonical_status: "confirmed" | "stale" | "missing" | "unselected" | string;
+  platform_resolution?: {
+    reason: string;
+    variants: { skill_id: string; agent_keys: string[] }[];
+  } | null;
   selection_reason: string | null;
   unresolved_alternatives: string[];
   divergent: boolean;

@@ -4,7 +4,7 @@ Status: in progress. Base: `8504432`. Goal: implement all four user requirements
 
 ## Requirements and acceptance
 
-- [x] R1: query all managed Skills with source and actual Agent deployment status; identify divergent duplicates and persist an explicit canonical choice without deleting variants or guessing equivalence.
+- [x] R1: query all managed Skills with source and actual Agent deployment status; resolve divergent same-name groups through an explicit canonical choice or verified per-platform routing, without deleting variants or guessing equivalence.
 - [x] R2: an Agent in another session can create/edit in a Manager-owned workspace and publish back; Manager records and displays the result, refreshes content facts, and updates selected managed deployments. Stale edits cannot overwrite newer work. Direct external edits remain discoverable.
 - [x] R3: AI discovers named usage scenes from the whole library, persists multi-scene assignments with reasons, allows user correction, and incrementally classifies new/changed Skills. Scene metadata is independent of deployment Presets. Partial/unknown results remain visible.
 - [ ] R4: a real stdio MCP server shares the same library and services; Claude Code/Codex can query, organize, inspect distribution/canonical choices, and publish via conversation. App provides an enable switch and working connection setup.
@@ -86,3 +86,23 @@ Evidence outside the application repository: `_knowledge_base/reviews/product-se
 - Scene module regression suite: 11 passed. TypeScript/ESLint/build pass; actual native Rust Luna probe: 2 applied, no stale/unknown/errors.
 - Actual deployment target count remains 671. Codex and Claude global configuration bytes still match their backups. Persistent connection remains pending the separate access confirmation.
 - Stable receipts and database/app rollback are under `_local_backups/before-scenes-mcp-20260908-104549/luna-classification`; human-readable evidence JSON is `_knowledge_base/reviews/product-selection-audit-20260907/real-luna-classification.json` outside the app repository.
+
+## Completion audit follow-up (2026-09-08)
+
+- Prior goal turn made real progress: installed Luna classification, applied 430 real entries, verified native scenes and automatic preferences.
+- Fresh authoritative MCP audit finds **72 divergent same-name groups, all unselected**. R1 was checked prematurely at capability level; reopened until actual canonical decisions are recorded. 71 groups are GSD pairs; the remaining group is docx. Read-only per-group difference analysis is in progress.
+- Fresh native `codex mcp get skill-manager --json` and `claude mcp get skill-manager` both report no such server. Manager MCP itself is available/enabled with writes enabled, but persistent assistant registration still awaits the action-time access confirmation required by the earlier automatic approval rejection. The GPT snippet permission does not resolve that separate condition.
+
+## Real same-name resolution (2026-09-08)
+
+- [x] Audited all 72 divergent groups in the real library, including actual file contents and runtime adapter evidence.
+- [x] 71 GSD pairs are Claude/Codex platform renders of release 1.9.1; preserved both and saved explicit unique Agent → Skill ID routing. No universal canonical was invented. `gsd-surface` includes a platform state binding, accounted for in its reason.
+- [x] The docx pair has byte-identical 60 shared ancillary files; root SKILL.md differs only by the explicit 1.0.1 version, with one additional installation marker in the other copy. Selected the explicit-version managed record, retaining both originals and deployments.
+- [x] Applied all 71 platform resolutions through the installed Manager MCP. Verified 71 `variants_confirmed`, one `confirmed`, zero pending/stale groups, all 431 Skill records/deployments unchanged, and 142 reviewed SKILL.md SHA256 values unchanged.
+- [x] Scene overview is exactly unchanged by resolution: 61 scenes, 430 classified, 40/40 priorities.
+- [x] Native installed UI shows “71 组平台适配 · 1 组主版本 · 0 组待核对”; clicking a Codex variant shows its actual recorded deployment independently of the recommended target platform.
+- [x] Stored routing expires on changed content, changed members, or removed/renamed custom Agent keys. Canonical and platform decisions clear each other in a single database transaction. Regression suite: 15 publishing tests pass.
+- [x] Final installed binary after the custom-Agent invalidation fix: the packaged MCP reads the real 72 persisted decisions and 61 scenes; the stable bridge matches the installed binary. Release builds correctly reject the debug-only isolated EVAL_ROOT override, so the full synthetic lifecycle fixture runs against a freshly built debug binary. Assistant configs remain byte-identical to their pre-rollout backups.
+- [ ] R4 remains pending persistent Codex/Claude registration; prior automatic approval rejection requires separate action-time confirmation. This is distinct from the authorized model evidence transfer.
+
+Metadata mutation receipts and the immediate pre-mutation DB/app backup are under `_local_backups/before-scenes-mcp-20260908-104549/before-platform-variants-124558`. Durable summary: `_knowledge_base/reviews/product-selection-audit-20260907/real-platform-variants.json`.

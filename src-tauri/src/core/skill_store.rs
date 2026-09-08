@@ -1343,6 +1343,33 @@ impl SkillStore {
         Ok(())
     }
 
+    /// Atomically replace a small related set of settings. Callers use this
+    /// when two metadata records form one logical state and a partially saved
+    /// pair would be misleading after an interrupted write.
+    pub fn set_settings_atomic(&self, settings: &[(&str, &str)]) -> Result<()> {
+        let stored: Vec<(&str, String)> = settings
+            .iter()
+            .map(|(key, value)| {
+                let value = if SENSITIVE_KEYS.contains(key) {
+                    crypto::encrypt(&self.secret_key, value)?
+                } else {
+                    (*value).to_string()
+                };
+                Ok((*key, value))
+            })
+            .collect::<Result<_>>()?;
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        for (key, value) in stored {
+            tx.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                params![key, value],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn remap_tool_key_references(&self, old_key: &str, new_key: &str) -> Result<()> {
         if old_key == new_key {
             return Ok(());

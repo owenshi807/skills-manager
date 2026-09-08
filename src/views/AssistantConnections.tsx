@@ -20,8 +20,8 @@ async function copy(value: string) {
 
 function Status({ status }: { status: string }) {
   const stale = status === "stale" || status === "needs_sync" || status === "rolled_back";
-  const ok = status === "confirmed" || status === "current" || status === "published";
-  return <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", ok ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : stale ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-surface-active text-muted")}>{status === "needs_sync" ? "需同步" : status === "confirmed" ? "已确认" : status === "current" ? "当前" : status === "stale" ? "内容已变化" : status === "rolled_back" ? "已回滚" : status}</span>;
+  const ok = status === "variants_confirmed" || status === "confirmed" || status === "current" || status === "published";
+  return <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", ok ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : stale ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-surface-active text-muted")}>{status === "variants_confirmed" ? "平台适配已确认" : status === "unselected" ? "待确认" : status === "needs_sync" ? "需同步" : status === "confirmed" ? "已确认" : status === "current" ? "当前" : status === "stale" ? "内容已变化" : status === "rolled_back" ? "已回滚" : status}</span>;
 }
 
 export function AssistantConnections() {
@@ -115,7 +115,45 @@ export function AssistantConnections() {
 
     <section className="app-panel p-4"><div className="flex items-center justify-between gap-3"><div><h2 className="text-[13px] font-semibold text-primary">Desktop 配置</h2><p className="mt-1 text-[11px] text-muted">适用于支持标准 MCP JSON 配置的桌面客户端。</p></div><button type="button" className="app-button-secondary h-8" onClick={() => control && void copyConfiguration(JSON.stringify(control.desktop_config, null, 2), "配置")}><Clipboard className="h-3.5 w-3.5" />复制 JSON</button></div><pre className="mt-3 overflow-x-auto rounded-lg bg-bg-secondary p-3 text-[11px] text-muted">{JSON.stringify(control?.desktop_config ?? {}, null, 2)}</pre></section>
 
-    <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"><div className="app-panel overflow-hidden"><div className="border-b border-border-subtle px-4 py-3"><h2 className="text-[13px] font-semibold text-primary">同名变体与主版本</h2><p className="mt-1 text-[11px] text-muted">同名不代表等价。选择只保存理由和指针，不删除平台版或自定义版。</p></div><div className="divide-y divide-border-subtle">{groups.length === 0 ? <p className="p-4 text-[12px] text-muted">没有需要选择的同名变体。</p> : groups.map((group) => { const candidateId = canonicalCandidateByGroup[group.normalized_name] ?? group.selected_skill_id ?? group.members[0]?.skill.id; return <div key={group.normalized_name} className="p-4"><div className="flex flex-wrap items-center gap-2"><span className="text-[12px] font-medium text-primary">{group.normalized_name}</span><Status status={group.canonical_status} />{group.divergent && <span className="text-[10px] text-amber-600 dark:text-amber-400">内容不同</span>}</div>{group.selection_reason && <p className="mt-1 text-[11px] text-muted">已选理由：{group.selection_reason}</p>}{group.canonical_status === "stale" && <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400"><CircleAlert className="h-3 w-3" />所选内容已变，需重新确认。</p>}<div className="mt-3 flex flex-wrap gap-2">{group.members.map((member) => <button key={member.skill.id} type="button" onClick={() => { setSelectedSkillId(member.skill.id); setCanonicalCandidateByGroup((current) => ({ ...current, [group.normalized_name]: member.skill.id })); }} className={cn("rounded border px-2 py-1 text-[11px]", candidateId === member.skill.id ? "border-accent/40 bg-accent-bg text-accent-light" : "border-border-subtle text-secondary hover:bg-surface-hover")}>{member.skill.name}</button>)}</div><div className="mt-3 flex gap-2"><input className="app-input h-8 flex-1 text-[11px]" value={reasonByGroup[group.normalized_name] ?? ""} onChange={(event) => setReasonByGroup((current) => ({ ...current, [group.normalized_name]: event.target.value }))} placeholder="为什么这个变体应作为主版本？" /><button type="button" className="app-button-secondary h-8 shrink-0" disabled={!reasonByGroup[group.normalized_name]?.trim()} onClick={() => { if (candidateId) void chooseCanonical(group, candidateId); }}><Check className="h-3.5 w-3.5" />确认选择</button></div></div>; })}</div></div>
+    <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="app-panel overflow-hidden">
+        <div className="border-b border-border-subtle px-4 py-3">
+          <h2 className="text-[13px] font-semibold text-primary">同名变体与主版本</h2>
+          <p className="mt-1 text-[11px] text-muted">按目标助手选择已确认的平台适配；同一平台的竞争版本需要明确主版本。</p>
+          <p className="mt-2 text-[11px] text-secondary">{groups.filter((group) => group.canonical_status === "variants_confirmed").length} 组平台适配 · {groups.filter((group) => group.canonical_status === "confirmed").length} 组主版本 · {groups.filter((group) => !["variants_confirmed", "confirmed"].includes(group.canonical_status)).length} 组待核对</p>
+        </div>
+        <div className="max-h-[640px] divide-y divide-border-subtle overflow-y-auto">
+          {groups.length === 0 ? <p className="p-4 text-[12px] text-muted">没有需要选择的同名变体。</p> : groups.map((group) => {
+            const candidateId = canonicalCandidateByGroup[group.normalized_name] ?? group.selected_skill_id ?? group.members[0]?.skill.id;
+            const platformResolution = group.platform_resolution;
+            const decisionReason = platformResolution?.reason ?? group.selection_reason;
+            return <div key={group.normalized_name} className="p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-medium text-primary">{group.normalized_name}</span>
+                <Status status={group.canonical_status} />
+                {group.divergent && !platformResolution && <span className="text-[10px] text-amber-600 dark:text-amber-400">内容不同</span>}
+              </div>
+              {decisionReason && <p className="mt-1 text-[11px] text-muted">确认依据：{decisionReason}</p>}
+              {group.canonical_status === "stale" && <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400"><CircleAlert className="h-3 w-3" />该组的内容或成员已变，需要重新核对。</p>}
+              {platformResolution && <p className="mt-2 text-[11px] text-muted">{group.canonical_status === "variants_confirmed" ? "不同助手使用各自适配版本。点击版本可查看实际部署。" : "请让助手重新核对平台适配关系，确认前不沿用旧路由。"}</p>}
+              <div className="mt-3 flex flex-wrap gap-2">{group.members.map((member) => {
+                const agentKeys = member.platform_agent_keys ?? [];
+                const deploymentKeys = [...new Set(member.deployments.map((deployment) => deployment.tool))];
+                return <button key={member.skill.id} type="button" onClick={() => {
+                  setSelectedSkillId(member.skill.id);
+                  if (!platformResolution) setCanonicalCandidateByGroup((current) => ({ ...current, [group.normalized_name]: member.skill.id }));
+                }} className={cn("rounded border px-2 py-1 text-[11px]", (platformResolution ? selectedSkillId : candidateId) === member.skill.id ? "border-accent/40 bg-accent-bg text-accent-light" : "border-border-subtle text-secondary hover:bg-surface-hover")}>
+                  {member.skill.name}{(agentKeys.length > 0 || deploymentKeys.length > 0) && <span className="ml-2 text-muted">{agentKeys.length > 0 ? "适配：" : "已部署："}{(agentKeys.length > 0 ? agentKeys : deploymentKeys).map((key) => key === "claude_code" ? "Claude Code" : key === "codex" ? "Codex" : key).join(" / ")}</span>}
+                </button>;
+              })}</div>
+              {!platformResolution && <div className="mt-3 flex gap-2">
+                <input className="app-input h-8 flex-1 text-[11px]" value={reasonByGroup[group.normalized_name] ?? ""} onChange={(event) => setReasonByGroup((current) => ({ ...current, [group.normalized_name]: event.target.value }))} placeholder="为什么这个变体应作为主版本？" />
+                <button type="button" className="app-button-secondary h-8 shrink-0" disabled={!reasonByGroup[group.normalized_name]?.trim()} onClick={() => { if (candidateId) void chooseCanonical(group, candidateId); }}><Check className="h-3.5 w-3.5" />确认选择</button>
+              </div>}
+            </div>;
+          })}
+        </div>
+      </div>
 
       <div className="app-panel overflow-hidden"><div className="border-b border-border-subtle px-4 py-3"><h2 className="text-[13px] font-semibold text-primary">选中 Skill 的实际部署</h2><p className="mt-1 text-[11px] text-muted">基于受管目标的当前磁盘状态。</p></div><div className="divide-y divide-border-subtle">{selected ? <><div className="p-4"><select className="app-input h-8 w-full text-[12px]" value={selected.skill.id} onChange={(event) => setSelectedSkillId(event.target.value)}>{library.map((item) => <option key={item.skill.id} value={item.skill.id}>{item.skill.name}</option>)}</select><p className="mt-2 text-[11px] text-muted">{selected.skill.description ?? "无说明"}</p></div>{selected.deployments.length ? selected.deployments.map((deployment) => <div key={`${deployment.tool}:${deployment.target_path}`} className="p-4"><div className="flex items-center justify-between gap-2"><span className="text-[12px] font-medium text-primary">{deployment.tool}</span><Status status={deployment.actual_status} /></div><p className="mt-1 break-all font-mono text-[10px] text-muted">{deployment.target_path}</p><p className="mt-1 text-[10px] text-faint">{deployment.mode} · 记录状态 {deployment.recorded_status}</p></div>) : <p className="p-4 text-[12px] text-muted">尚未选择 Agent 部署。</p>}</> : <p className="p-4 text-[12px] text-muted">库中没有可显示的 Skill。</p>}</div></div></section>
 

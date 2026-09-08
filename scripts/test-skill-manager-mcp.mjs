@@ -58,6 +58,12 @@ function permissions(enabled, writes) {
   assert.equal(result.status, 0, result.stderr);
 }
 const skillText = (name, body) => `---\nname: ${name}\ndescription: Evidence-backed customer research and interview synthesis\n---\n${body}\n`;
+async function publishNewSkill(client, newName, content) {
+  const stage = await client.tool('skills_begin_edit', { request: { new_name: newName, actor: 'platform-variant-fixture' } });
+  await client.tool('skills_stage_write', { stage_id: stage.stage_id, relative_path: 'SKILL.md', content });
+  const preview = await client.tool('skills_preview_publish', { stage_id: stage.stage_id });
+  return client.tool('skills_publish', { request: { stage_id: stage.stage_id, candidate_digest: preview.stage_digest } });
+}
 
 try {
   const a = client();
@@ -65,7 +71,7 @@ try {
   assert.equal((await a.initialize()).result.protocolVersion, '2025-06-18');
   a.notify('notifications/initialized');
   const catalog = (await a.request('tools/list')).result.tools;
-  assert.equal(new Set(catalog.map(t => t.name)).size, 19);
+  assert.equal(new Set(catalog.map(t => t.name)).size, 20);
   assert.equal((await a.tool('skills_manager_status')).enabled, false);
   await a.tool('skills_list', {}, false);
   permissions(true, false);
@@ -80,10 +86,51 @@ try {
   const preview = await a.tool('skills_preview_publish', { stage_id: stage.stage_id });
   const published = await a.tool('skills_publish', { request: { stage_id: stage.stage_id, candidate_digest: preview.stage_digest } });
   const id = published.skill_id;
+
+  const codexVariant = await publishNewSkill(a, 'gsd-review-codex', skillText('gsd-review-codex', 'Review a GSD plan through the Codex platform adapter.'));
+  const claudeVariant = await publishNewSkill(a, 'gsd-review-claude', skillText('gsd-review-claude', 'Review a GSD plan through the Claude Code platform adapter.'));
+  const fixtureSkills = (await a.tool('skills_list', { limit: 10 })).skills;
+  for (const [variant, body] of [[codexVariant, 'Review a GSD plan through the Codex platform adapter.'], [claudeVariant, 'Review a GSD plan through the Claude Code platform adapter.']]) {
+    const skill = fixtureSkills.find(item => item.skill.id === variant.skill_id).skill;
+    writeFileSync(join(skill.central_path, 'SKILL.md'), skillText('gsd-review', body));
+  }
+  permissions(true, false);
+  const platformResolution = await a.tool('skills_resolve_platform_variants', { request: {
+    group_name: 'gsd-review',
+    variants: [
+      { skill_id: codexVariant.skill_id, agent_keys: ['codex'] },
+      { skill_id: claudeVariant.skill_id, agent_keys: ['claude_code'] },
+    ],
+    reason: 'The reviewed workflows are equivalent but their host adapters target different Agent platforms.',
+  } });
+  assert.equal(platformResolution.variants.length, 2);
+  const routedAgents = new Map();
+  for (const variant of platformResolution.variants) {
+    for (const agentKey of variant.agent_keys) {
+      assert(!routedAgents.has(agentKey), `Agent ${agentKey} must route to one variant only`);
+      routedAgents.set(agentKey, variant.skill_id);
+    }
+  }
+  assert.equal(routedAgents.get('codex'), codexVariant.skill_id);
+  assert.equal(routedAgents.get('claude_code'), claudeVariant.skill_id);
+  const variantGroup = (await a.tool('skills_canonical_groups')).items.find(group => group.normalized_name === 'gsd-review');
+  assert.equal(variantGroup.selected_skill_id, null, 'platform routing must not invent a universal canonical Skill');
+  assert.equal(variantGroup.platform_resolution.variants.length, 2);
+  await a.tool('skills_resolve_platform_variants', { request: {
+    group_name: 'gsd-review',
+    variants: [{ skill_id: codexVariant.skill_id, agent_keys: ['codex'] }, { skill_id: 'missing-skill', agent_keys: ['claude_code'] }],
+    reason: 'must reject unknown members',
+  } }, false);
+  await a.tool('skills_resolve_platform_variants', { request: {
+    group_name: 'gsd-review',
+    variants: [{ skill_id: codexVariant.skill_id, agent_keys: ['codex'] }, { skill_id: claudeVariant.skill_id, agent_keys: ['codex'] }],
+    reason: 'must reject an Agent key routed to two variants',
+  } }, false);
+  permissions(true, true);
   assert.deepEqual((await a.tool('scenes_set_priorities', { skill_ids: [id], priority: true })).prioritySkillIds, [id]);
   await a.tool('scenes_set_priorities', { skill_ids: ['not-managed'], priority: true }, false);
-  assert.equal((await a.tool('skills_list', { limit: 1 })).total, 1);
-  assert.equal((await a.tool('skills_list', { limit: 1 })).next_cursor, null);
+  assert.equal((await a.tool('skills_list', { query: 'mcp-research', limit: 1 })).total, 1);
+  assert.equal((await a.tool('skills_list', { query: 'mcp-research', limit: 1 })).next_cursor, null);
   assert.equal((await a.tool('skills_list', { query: 'absent' })).total, 0);
   await a.tool('skills_list', { limit: 0 }, false);
   assert((await a.tool('skills_read', { skill_id: id })).content.includes('Version 1'));
@@ -111,12 +158,12 @@ try {
   const stalePreview = await b.tool('skills_preview_publish', { stage_id: editB.stage_id });
   assert.equal(stalePreview.base_current, false);
   await b.tool('skills_publish', { request: { stage_id: editB.stage_id, candidate_digest: stalePreview.stage_digest } }, false);
-  assert.equal((await b.tool('skills_changes')).items.length, 2);
+  assert.equal((await b.tool('skills_changes', { skill_id: id })).items.length, 2);
   await a.tool('skills_undeploy', { skill_ids: [id], agents: ['codex'] });
   permissions(false, false);
   await b.tool('scenes_list', {}, false);
   assert.equal((await b.tool('skills_manager_status')).enabled, false);
-  console.log('MCP integration passed: protocol/permissions → create → bounded read → scene proposal/correction → deploy → two-session publish → stale rejection → history → revocation.');
+  console.log('MCP integration passed: protocol/permissions → create → platform variants → bounded read → scene proposal/correction → deploy → two-session publish → stale rejection → history → revocation.');
 } finally {
   for (const process of clients) { process.stdin.end(); process.kill(); }
   rmSync(root, { recursive: true, force: true });

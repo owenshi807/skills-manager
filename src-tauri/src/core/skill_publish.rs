@@ -9,7 +9,7 @@ use super::{
     repo_lock::RepoLock,
     skill_metadata,
     skill_store::{SkillRecord, SkillStore, SkillTargetRecord},
-    sync_engine, sync_metadata,
+    sync_engine, sync_metadata, tool_adapters,
 };
 use crate::commands::skills::{self, InstallSourceMetadata};
 use crate::core::error::AppError;
@@ -21,6 +21,7 @@ use std::path::{Component, Path, PathBuf};
 const STAGE_PREFIX: &str = "skill_publish:stage:";
 const HISTORY_PREFIX: &str = "skill_publish:history:";
 const CANONICAL_PREFIX: &str = "skill_publish:canonical:";
+const PLATFORM_RESOLUTION_PREFIX: &str = "skill_publish:platform_variants:";
 const MAX_DOCUMENT_BYTES: usize = 256 * 1024;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -113,6 +114,9 @@ pub struct LibrarySkillView {
     pub canonical_name: String,
     pub deployments: Vec<DeploymentView>,
     pub canonical: Option<CanonicalSelection>,
+    /// Explicit platform routes from a confirmed-or-stale platform resolution.
+    /// The group status tells callers whether this recorded routing is current.
+    pub platform_agent_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -132,6 +136,9 @@ pub struct CanonicalGroup {
     /// since that choice was made. Surface this for a fresh human decision;
     /// never silently promote another same-name variant.
     pub selected_content_changed: bool,
+    /// An explicit partition of same-name members by Agent runtime. This is
+    /// distinct from selecting one member as a universal canonical version.
+    pub platform_resolution: Option<PlatformVariantResolution>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,6 +156,35 @@ pub struct CanonicalSelection {
 pub struct CanonicalSelectionRequest {
     pub skill_id: String,
     pub reason: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PlatformVariantInput {
+    pub skill_id: String,
+    pub agent_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ResolvePlatformVariantsRequest {
+    pub group_name: String,
+    pub variants: Vec<PlatformVariantInput>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResolvedPlatformVariant {
+    pub skill_id: String,
+    pub agent_keys: Vec<String>,
+    /// Strict directory digest read at the moment this route was confirmed.
+    pub digest: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlatformVariantResolution {
+    pub normalized_name: String,
+    pub variants: Vec<ResolvedPlatformVariant>,
+    pub reason: String,
+    pub resolved_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -185,6 +221,9 @@ fn history_key(id: &str) -> String {
 }
 fn canonical_key(name: &str) -> String {
     format!("{CANONICAL_PREFIX}{name}")
+}
+fn platform_resolution_key(name: &str) -> String {
+    format!("{PLATFORM_RESOLUTION_PREFIX}{name}")
 }
 fn stage_root() -> PathBuf {
     central_repo::base_dir().join(".publish-staging")
@@ -225,6 +264,82 @@ fn selection_status(choice: &CanonicalSelection, selected: Option<&SkillRecord>)
         }
         Some(_) => "confirmed".into(),
     }
+}
+
+fn load_canonical_selection(
+    store: &SkillStore,
+    name: &str,
+) -> Result<Option<CanonicalSelection>, AppError> {
+    let Some(raw) = store.get_setting(&canonical_key(name)).map_err(AppError::db)? else {
+        return Ok(None);
+    };
+    serde_json::from_str::<Option<CanonicalSelection>>(&raw).map_err(AppError::db)
+}
+
+fn load_platform_resolution(
+    store: &SkillStore,
+    name: &str,
+) -> Result<Option<PlatformVariantResolution>, AppError> {
+    let Some(raw) = store
+        .get_setting(&platform_resolution_key(name))
+        .map_err(AppError::db)?
+    else {
+        return Ok(None);
+    };
+    serde_json::from_str::<Option<PlatformVariantResolution>>(&raw).map_err(AppError::db)
+}
+
+/// Resolve an explicit platform routing only when it still describes every
+/// same-name member and every member's exact bytes. This intentionally does
+/// not inspect, write, or resync agent deployment directories.
+fn platform_resolution_status(
+    store: &SkillStore,
+    resolution: &PlatformVariantResolution,
+    members: &[LibrarySkillView],
+) -> String {
+    let member_ids: BTreeSet<_> = members.iter().map(|member| member.skill.id.as_str()).collect();
+    let resolution_ids: BTreeSet<_> = resolution
+        .variants
+        .iter()
+        .map(|variant| variant.skill_id.as_str())
+        .collect();
+    if member_ids.len() != members.len()
+        || resolution_ids.len() != resolution.variants.len()
+        || member_ids != resolution_ids
+    {
+        return "stale".into();
+    }
+
+    // Agent registrations are mutable (especially custom adapters). A saved
+    // route to a removed or renamed key is no longer a usable confirmation.
+    let known_agents: BTreeSet<_> = tool_adapters::all_tool_adapters(store)
+        .into_iter()
+        .map(|adapter| adapter.key)
+        .collect();
+    let mut routed_agents = BTreeSet::new();
+    for variant in &resolution.variants {
+        if variant.agent_keys.is_empty()
+            || variant.agent_keys.iter().any(|key| key.trim().is_empty())
+            || variant.agent_keys.iter().any(|key| !known_agents.contains(key))
+            || variant.agent_keys.iter().any(|key| !routed_agents.insert(key))
+        {
+            return "stale".into();
+        }
+        let Some(member) = members
+            .iter()
+            .find(|member| member.skill.id == variant.skill_id)
+        else {
+            return "stale".into();
+        };
+        if content_hash::hash_directory_strict_v2(Path::new(&member.skill.central_path))
+            .ok()
+            .as_deref()
+            != Some(variant.digest.as_str())
+        {
+            return "stale".into();
+        }
+    }
+    "variants_confirmed".into()
 }
 
 fn load_stage(store: &SkillStore, id: &str) -> Result<PublishStage, AppError> {
@@ -315,18 +430,36 @@ pub fn list_library(
 ) -> Result<(Vec<LibrarySkillView>, Vec<CanonicalGroup>), AppError> {
     let skills = store.get_all_skills().map_err(AppError::db)?;
     let targets = store.get_all_targets().map_err(AppError::db)?;
+    let names: BTreeSet<_> = skills.iter().map(canonical_identity).collect();
+    let mut choices_by_name = BTreeMap::new();
+    let mut resolutions_by_name = BTreeMap::new();
+    for name in names {
+        if let Some(choice) = load_canonical_selection(store, &name)? {
+            choices_by_name.insert(name.clone(), choice);
+        }
+        if let Some(resolution) = load_platform_resolution(store, &name)? {
+            resolutions_by_name.insert(name, resolution);
+        }
+    }
     let mut views = Vec::with_capacity(skills.len());
     for skill in skills {
         let canonical_name = canonical_identity(&skill);
-        let choice = store
-            .get_setting(&canonical_key(&canonical_name))
-            .map_err(AppError::db)?
-            .and_then(|raw| serde_json::from_str::<CanonicalSelection>(&raw).ok());
+        // A platform partition is mutually exclusive with a universal choice.
+        // Prefer it even if an interrupted legacy write left both records.
+        let choice = if resolutions_by_name.contains_key(&canonical_name) {
+            None
+        } else {
+            choices_by_name.get(&canonical_name).cloned()
+        };
         views.push(LibrarySkillView {
             canonical_name,
             deployments: target_views(&skill, &targets),
             skill,
             canonical: choice,
+            // Filled only after the whole group (all member IDs and strict
+            // live hashes) verifies below. A stale saved route is audit data,
+            // never a usable routing hint for a caller.
+            platform_agent_keys: Vec::new(),
         });
     }
     // Compute choice state against the selected member once per declared name,
@@ -359,9 +492,42 @@ pub fn list_library(
             .or_default()
             .push(view.clone());
     }
+    let mut platform_status_by_name = BTreeMap::new();
+    let mut confirmed_agent_keys_by_skill = BTreeMap::new();
+    for (name, members) in &grouped {
+        if let Some(resolution) = resolutions_by_name.get(name) {
+            let status = platform_resolution_status(store, resolution, members);
+            if status == "variants_confirmed" {
+                for variant in &resolution.variants {
+                    confirmed_agent_keys_by_skill
+                        .insert(variant.skill_id.clone(), variant.agent_keys.clone());
+                }
+            }
+            platform_status_by_name.insert(name.clone(), status);
+        }
+    }
+    for view in &mut views {
+        view.platform_agent_keys = confirmed_agent_keys_by_skill
+            .get(&view.skill.id)
+            .cloned()
+            .unwrap_or_default();
+    }
+    // Rebuild after status gating so groups and the flat library response
+    // agree: stale resolutions retain their audit record but expose no route.
+    let mut grouped: BTreeMap<String, Vec<LibrarySkillView>> = BTreeMap::new();
+    for view in &views {
+        grouped
+            .entry(view.canonical_name.clone())
+            .or_default()
+            .push(view.clone());
+    }
     let mut groups = Vec::new();
     for (name, members) in grouped {
-        if members.len() < 2 {
+        let platform_resolution = resolutions_by_name.get(&name).cloned();
+        // A deleted or renamed platform member must leave visible stale audit
+        // state, even when only one same-name member remains. Normal single
+        // Skills still do not need a duplicate/canonical group card.
+        if members.len() < 2 && platform_resolution.is_none() {
             continue;
         }
         let selected = members.first().and_then(|member| member.canonical.clone());
@@ -369,19 +535,26 @@ pub fn list_library(
             .as_ref()
             .filter(|choice| members.iter().any(|m| m.skill.id == choice.skill_id))
             .map(|choice| choice.skill_id.clone());
-        let canonical_status = selected
-            .as_ref()
-            .map(|choice| {
-                selection_status(
-                    choice,
-                    members
-                        .iter()
-                        .find(|member| member.skill.id == choice.skill_id)
-                        .map(|member| &member.skill),
-                )
-            })
-            .unwrap_or_else(|| "unselected".into());
-        let selected_content_changed = canonical_status == "stale";
+        let canonical_status = if let Some(resolution) = &platform_resolution {
+            platform_status_by_name
+                .get(&name)
+                .cloned()
+                .unwrap_or_else(|| platform_resolution_status(store, resolution, &members))
+        } else {
+            selected
+                .as_ref()
+                .map(|choice| {
+                    selection_status(
+                        choice,
+                        members
+                            .iter()
+                            .find(|member| member.skill.id == choice.skill_id)
+                            .map(|member| &member.skill),
+                    )
+                })
+                .unwrap_or_else(|| "unselected".into())
+        };
+        let selected_content_changed = platform_resolution.is_none() && canonical_status == "stale";
         let hashes: BTreeSet<_> = members
             .iter()
             .map(|m| {
@@ -391,20 +564,35 @@ pub fn list_library(
                     .unwrap_or_else(|| "missing".into())
             })
             .collect();
-        let unresolved = members
-            .iter()
-            .filter(|m| Some(&m.skill.id) != selected_id.as_ref())
-            .map(|m| m.skill.id.clone())
-            .collect();
+        let unresolved = match canonical_status.as_str() {
+            "variants_confirmed" => Vec::new(),
+            "stale" if platform_resolution.is_some() => {
+                members.iter().map(|member| member.skill.id.clone()).collect()
+            }
+            _ => members
+                .iter()
+                .filter(|m| Some(&m.skill.id) != selected_id.as_ref())
+                .map(|m| m.skill.id.clone())
+                .collect(),
+        };
         groups.push(CanonicalGroup {
             normalized_name: name,
             members,
-            selected_skill_id: selected_id,
+            selected_skill_id: if platform_resolution.is_some() {
+                None
+            } else {
+                selected_id
+            },
             canonical_status,
-            selection_reason: selected.as_ref().map(|s| s.reason.clone()),
+            selection_reason: if platform_resolution.is_some() {
+                None
+            } else {
+                selected.as_ref().map(|s| s.reason.clone())
+            },
             unresolved_alternatives: unresolved,
             divergent: hashes.len() > 1,
             selected_content_changed,
+            platform_resolution,
         });
     }
     Ok((views, groups))
@@ -448,13 +636,118 @@ pub fn select_canonical(
         selected_at: now(),
         status: "confirmed".into(),
     };
+    let canonical_setting = canonical_key(&name);
+    let platform_setting = platform_resolution_key(&name);
+    let choice_json = serde_json::to_string(&choice).map_err(AppError::db)?;
+    // A universal canonical choice supersedes a recorded platform partition.
+    // Settings has no public delete operation; JSON null is deliberately read
+    // as `None` by the typed loader above and preserves a harmless audit tombstone.
     store
-        .set_setting(
-            &canonical_key(&name),
-            &serde_json::to_string(&choice).map_err(AppError::db)?,
-        )
+        .set_settings_atomic(&[(&canonical_setting, &choice_json), (&platform_setting, "null")])
         .map_err(AppError::db)?;
     Ok(choice)
+}
+
+/// Record an explicit Agent-to-variant partition for a same-name group.
+/// This is metadata only: no central Skill tree, deployment target, or sync
+/// record is changed. The caller must enumerate every current member so that
+/// future additions and content changes make the resolution visibly stale.
+pub fn resolve_platform_variants(
+    store: &SkillStore,
+    request: ResolvePlatformVariantsRequest,
+) -> Result<PlatformVariantResolution, AppError> {
+    let _lock =
+        RepoLock::acquire_foreground("resolve platform Skill variants").map_err(AppError::db)?;
+    let name = normalized_name(request.group_name.trim());
+    if name.is_empty() {
+        return Err(AppError::invalid_input("A platform resolution requires a group name"));
+    }
+    let reason = request.reason.trim();
+    if reason.is_empty() {
+        return Err(AppError::invalid_input(
+            "A platform resolution requires a reason",
+        ));
+    }
+    let members: Vec<SkillRecord> = store
+        .get_all_skills()
+        .map_err(AppError::db)?
+        .into_iter()
+        .filter(|skill| canonical_identity(skill) == name)
+        .collect();
+    if members.len() < 2 {
+        return Err(AppError::invalid_input(
+            "Platform resolution requires at least two same-name Skill members",
+        ));
+    }
+    if request.variants.len() != members.len() {
+        return Err(AppError::invalid_input(
+            "Platform resolution must cover every same-name Skill member exactly once",
+        ));
+    }
+    let member_ids: BTreeSet<_> = members.iter().map(|skill| skill.id.clone()).collect();
+    let known_agents: BTreeSet<_> = tool_adapters::all_tool_adapters(store)
+        .into_iter()
+        .map(|adapter| adapter.key)
+        .collect();
+    let mut supplied_ids = BTreeSet::new();
+    let mut routed_agents = BTreeSet::new();
+    let mut variants = Vec::with_capacity(request.variants.len());
+    for input in request.variants {
+        if !supplied_ids.insert(input.skill_id.clone()) {
+            return Err(AppError::invalid_input(
+                "A platform resolution cannot repeat a Skill member",
+            ));
+        }
+        if input.agent_keys.is_empty() {
+            return Err(AppError::invalid_input(
+                "Every platform Skill member needs at least one Agent key",
+            ));
+        }
+        let mut agent_keys = Vec::with_capacity(input.agent_keys.len());
+        for raw_key in input.agent_keys {
+            let key = raw_key.trim();
+            if key.is_empty() || !known_agents.contains(key) {
+                return Err(AppError::invalid_input(format!(
+                    "Unknown Agent key in platform resolution: {key}"
+                )));
+            }
+            if !routed_agents.insert(key.to_string()) {
+                return Err(AppError::invalid_input(format!(
+                    "Agent key is routed to more than one Skill member: {key}"
+                )));
+            }
+            agent_keys.push(key.to_string());
+        }
+        let skill = members
+            .iter()
+            .find(|member| member.id == input.skill_id)
+            .ok_or_else(|| AppError::invalid_input("Platform resolution contains a foreign Skill"))?;
+        variants.push(ResolvedPlatformVariant {
+            skill_id: input.skill_id,
+            agent_keys,
+            digest: content_hash::hash_directory_strict_v2(Path::new(&skill.central_path))
+                .map_err(AppError::io)?,
+        });
+    }
+    if supplied_ids != member_ids {
+        return Err(AppError::invalid_input(
+            "Platform resolution must cover every same-name Skill member exactly once",
+        ));
+    }
+    let resolution = PlatformVariantResolution {
+        normalized_name: name.clone(),
+        variants,
+        reason: reason.into(),
+        resolved_at: now(),
+    };
+    let canonical_setting = canonical_key(&name);
+    let platform_setting = platform_resolution_key(&name);
+    let resolution_json = serde_json::to_string(&resolution).map_err(AppError::db)?;
+    // A platform partition intentionally has no universal winner.
+    store
+        .set_settings_atomic(&[(&platform_setting, &resolution_json), (&canonical_setting, "null")])
+        .map_err(AppError::db)?;
+    Ok(resolution)
 }
 
 pub fn begin_edit(store: &SkillStore, request: BeginEditRequest) -> Result<PublishStage, AppError> {
@@ -949,7 +1242,11 @@ pub fn read_skill_document(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::skill_store::SkillTargetRecord;
+    use crate::core::{
+        skill_store::SkillTargetRecord,
+        tool_adapters::{CustomToolDef, ToolCategory},
+        tool_service,
+    };
     use tempfile::tempdir;
 
     fn write_skill(path: &Path, name: &str, body: &str) {
@@ -1245,6 +1542,263 @@ mod tests {
         let (_, groups) = list_library(&store).unwrap();
         assert_eq!(groups[0].canonical_status, "stale");
         assert!(groups[0].selected_content_changed);
+        central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn platform_variants_confirm_without_universal_canonical_or_deployment_change() {
+        let _serial = central_repo::test_base_dir_lock();
+        let (_temp, store) = setup();
+        let claude = central_repo::skills_dir().join("claude-gsd");
+        let codex = central_repo::skills_dir().join("codex-gsd");
+        write_skill(&claude, "gsd-manager", "claude wrapper");
+        write_skill(&codex, "gsd-manager", "codex adapter");
+        store.insert_skill(&record("claude", "gsd-manager", &claude)).unwrap();
+        store.insert_skill(&record("codex", "gsd-manager-2", &codex)).unwrap();
+        store
+            .insert_target(&SkillTargetRecord {
+                id: "existing-deployment".into(),
+                skill_id: "claude".into(),
+                tool: "claude_code".into(),
+                target_path: central_repo::base_dir().join("unchanged-target").to_string_lossy().into(),
+                mode: "copy".into(),
+                status: "ok".into(),
+                synced_at: Some(now()),
+                last_error: None,
+                source_hash: None,
+            })
+            .unwrap();
+        let resolution = resolve_platform_variants(
+            &store,
+            ResolvePlatformVariantsRequest {
+                group_name: "gsd-manager".into(),
+                variants: vec![
+                    PlatformVariantInput {
+                        skill_id: "claude".into(),
+                        agent_keys: vec!["claude_code".into()],
+                    },
+                    PlatformVariantInput {
+                        skill_id: "codex".into(),
+                        agent_keys: vec!["codex".into()],
+                    },
+                ],
+                reason: "each runtime needs its own adapter".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(resolution.variants.len(), 2);
+        let (library, groups) = list_library(&store).unwrap();
+        assert_eq!(groups[0].canonical_status, "variants_confirmed");
+        assert!(groups[0].selected_skill_id.is_none());
+        assert!(groups[0].unresolved_alternatives.is_empty());
+        assert_eq!(
+            groups[0]
+                .platform_resolution
+                .as_ref()
+                .unwrap()
+                .reason,
+            "each runtime needs its own adapter"
+        );
+        assert_eq!(
+            library
+                .iter()
+                .find(|view| view.skill.id == "claude")
+                .unwrap()
+                .platform_agent_keys,
+            vec!["claude_code"]
+        );
+        assert_eq!(store.get_all_targets().unwrap().len(), 1);
+        assert!(std::fs::read_to_string(claude.join("SKILL.md")).unwrap().contains("claude wrapper"));
+        assert!(std::fs::read_to_string(codex.join("SKILL.md")).unwrap().contains("codex adapter"));
+        central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn platform_variant_resolution_stales_when_custom_agent_is_removed() {
+        let _serial = central_repo::test_base_dir_lock();
+        let (temp, store) = setup();
+        let left = central_repo::skills_dir().join("custom-agent-left");
+        let right = central_repo::skills_dir().join("custom-agent-right");
+        write_skill(&left, "same", "left");
+        write_skill(&right, "same", "right");
+        store.insert_skill(&record("left", "same", &left)).unwrap();
+        store.insert_skill(&record("right", "same-2", &right)).unwrap();
+        tool_service::set_custom_tools(
+            &store,
+            &[CustomToolDef {
+                key: "retired_custom".into(),
+                display_name: "Retired custom agent".into(),
+                skills_dir: temp.path().join("retired-custom-skills").to_string_lossy().into(),
+                project_relative_skills_dir: None,
+                category: ToolCategory::Coding,
+            }],
+        )
+        .unwrap();
+        resolve_platform_variants(
+            &store,
+            ResolvePlatformVariantsRequest {
+                group_name: "same".into(),
+                variants: vec![
+                    PlatformVariantInput { skill_id: "left".into(), agent_keys: vec!["claude_code".into()] },
+                    PlatformVariantInput { skill_id: "right".into(), agent_keys: vec!["retired_custom".into()] },
+                ],
+                reason: "custom runtime needs its adapter".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(list_library(&store).unwrap().1[0].canonical_status, "variants_confirmed");
+        tool_service::set_custom_tools(&store, &[]).unwrap();
+        let (library, groups) = list_library(&store).unwrap();
+        assert_eq!(groups[0].canonical_status, "stale");
+        assert_eq!(groups[0].unresolved_alternatives.len(), 2);
+        assert!(library
+            .iter()
+            .filter(|view| matches!(view.skill.id.as_str(), "left" | "right"))
+            .all(|view| view.platform_agent_keys.is_empty()));
+        central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn platform_variant_resolution_stales_on_member_or_content_change() {
+        let _serial = central_repo::test_base_dir_lock();
+        let (_temp, store) = setup();
+        let left = central_repo::skills_dir().join("left-variant");
+        let right = central_repo::skills_dir().join("right-variant");
+        write_skill(&left, "same", "left");
+        write_skill(&right, "same", "right");
+        store.insert_skill(&record("left", "same", &left)).unwrap();
+        store.insert_skill(&record("right", "same-2", &right)).unwrap();
+        resolve_platform_variants(
+            &store,
+            ResolvePlatformVariantsRequest {
+                group_name: "same".into(),
+                variants: vec![
+                    PlatformVariantInput { skill_id: "left".into(), agent_keys: vec!["claude_code".into()] },
+                    PlatformVariantInput { skill_id: "right".into(), agent_keys: vec!["codex".into()] },
+                ],
+                reason: "runtime split".into(),
+            },
+        )
+        .unwrap();
+        write_skill(&left, "same", "changed externally");
+        let (library, groups) = list_library(&store).unwrap();
+        assert_eq!(groups[0].canonical_status, "stale");
+        assert_eq!(groups[0].unresolved_alternatives.len(), 2);
+        assert!(library
+            .iter()
+            .filter(|view| matches!(view.skill.id.as_str(), "left" | "right"))
+            .all(|view| view.platform_agent_keys.is_empty()));
+
+        // Reconfirm, then add a third same-name member without changing the
+        // stored resolution. The old two-way partition must not look current.
+        resolve_platform_variants(
+            &store,
+            ResolvePlatformVariantsRequest {
+                group_name: "same".into(),
+                variants: vec![
+                    PlatformVariantInput { skill_id: "left".into(), agent_keys: vec!["claude_code".into()] },
+                    PlatformVariantInput { skill_id: "right".into(), agent_keys: vec!["codex".into()] },
+                ],
+                reason: "reconfirmed after edit".into(),
+            },
+        )
+        .unwrap();
+        let third = central_repo::skills_dir().join("third-variant");
+        write_skill(&third, "same", "third");
+        store.insert_skill(&record("third", "same-3", &third)).unwrap();
+        let (_, groups) = list_library(&store).unwrap();
+        assert_eq!(groups[0].canonical_status, "stale");
+        assert_eq!(groups[0].unresolved_alternatives.len(), 3);
+        store.delete_skill("right").unwrap();
+        store.delete_skill("third").unwrap();
+        let (library, groups) = list_library(&store).unwrap();
+        assert_eq!(groups.len(), 1, "stale resolution remains visible with one member");
+        assert_eq!(groups[0].canonical_status, "stale");
+        assert_eq!(groups[0].members.len(), 1);
+        assert!(library
+            .iter()
+            .filter(|view| view.skill.id == "left")
+            .all(|view| view.platform_agent_keys.is_empty()));
+        central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn platform_variant_resolution_rejects_overlap_or_incomplete_members() {
+        let _serial = central_repo::test_base_dir_lock();
+        let (_temp, store) = setup();
+        let left = central_repo::skills_dir().join("reject-left");
+        let right = central_repo::skills_dir().join("reject-right");
+        write_skill(&left, "same", "left");
+        write_skill(&right, "same", "right");
+        store.insert_skill(&record("left", "same", &left)).unwrap();
+        store.insert_skill(&record("right", "same-2", &right)).unwrap();
+        let overlap = resolve_platform_variants(
+            &store,
+            ResolvePlatformVariantsRequest {
+                group_name: "same".into(),
+                variants: vec![
+                    PlatformVariantInput { skill_id: "left".into(), agent_keys: vec!["codex".into()] },
+                    PlatformVariantInput { skill_id: "right".into(), agent_keys: vec!["codex".into()] },
+                ],
+                reason: "bad overlap".into(),
+            },
+        )
+        .unwrap_err();
+        assert!(overlap.message.contains("more than one"));
+        let incomplete = resolve_platform_variants(
+            &store,
+            ResolvePlatformVariantsRequest {
+                group_name: "same".into(),
+                variants: vec![PlatformVariantInput {
+                    skill_id: "left".into(),
+                    agent_keys: vec!["claude_code".into()],
+                }],
+                reason: "bad coverage".into(),
+            },
+        )
+        .unwrap_err();
+        assert!(incomplete.message.contains("cover every"));
+        central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn canonical_and_platform_resolution_clear_each_other() {
+        let _serial = central_repo::test_base_dir_lock();
+        let (_temp, store) = setup();
+        let left = central_repo::skills_dir().join("choice-left");
+        let right = central_repo::skills_dir().join("choice-right");
+        write_skill(&left, "same", "left");
+        write_skill(&right, "same", "right");
+        store.insert_skill(&record("left", "same", &left)).unwrap();
+        store.insert_skill(&record("right", "same-2", &right)).unwrap();
+        select_canonical(
+            &store,
+            CanonicalSelectionRequest { skill_id: "left".into(), reason: "one primary".into() },
+        )
+        .unwrap();
+        resolve_platform_variants(
+            &store,
+            ResolvePlatformVariantsRequest {
+                group_name: "same".into(),
+                variants: vec![
+                    PlatformVariantInput { skill_id: "left".into(), agent_keys: vec!["claude_code".into()] },
+                    PlatformVariantInput { skill_id: "right".into(), agent_keys: vec!["codex".into()] },
+                ],
+                reason: "separate runtimes".into(),
+            },
+        )
+        .unwrap();
+        let (_, groups) = list_library(&store).unwrap();
+        assert_eq!(groups[0].canonical_status, "variants_confirmed");
+        assert!(groups[0].selected_skill_id.is_none());
+        select_canonical(
+            &store,
+            CanonicalSelectionRequest { skill_id: "right".into(), reason: "reviewed universal choice".into() },
+        )
+        .unwrap();
+        let (_, groups) = list_library(&store).unwrap();
+        assert_eq!(groups[0].canonical_status, "confirmed");
+        assert!(groups[0].platform_resolution.is_none());
         central_repo::set_test_base_dir_override(None);
     }
 
