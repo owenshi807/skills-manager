@@ -94,6 +94,10 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
 
   const generate = async () => {
     if (busyRef.current || !agentKey || goal.trim().length < 8) return;
+    if (planRef.current?.sceneImportStatus === "pending" && planRef.current.sceneId) {
+      setError("请先继续保存当前方案，完成后再生成新组合。");
+      return;
+    }
     busyRef.current = true; setBusy("generate"); setError("");
     const submittedGoal = goal.trim();
     const targetScene = scene;
@@ -150,18 +154,18 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
       <div className="border-t border-border-subtle p-4">
         <p className="max-w-2xl text-sm leading-6 text-muted">{scene ? "助手会根据这个场景已有的 Skill，组织各项能力的分工，解释它们怎样配合。先看建议，再保存；没有纳入组合的 Skill 仍保留在此场景。" : "说明你要完成的工作。助手会从技能库中挑选合适的 Skill，解释它们如何配合；先看方案，再保存为使用场景。"}</p>
         <label className="mt-4 block text-sm font-medium text-secondary" htmlFor="scene-goal">这次想完成什么？</label>
-        <textarea id="scene-goal" value={goal} disabled={busy !== null} onChange={(event) => setGoal(event.target.value)} maxLength={2000} placeholder="例如：验证一个新业务机会，把访谈与数据整理成可执行的决策。" className="app-input mt-2 min-h-24 w-full resize-y px-3 py-2 text-sm leading-6" />
+        <textarea id="scene-goal" value={goal} disabled={busy !== null || resumeLocked} onChange={(event) => setGoal(event.target.value)} maxLength={2000} placeholder="例如：验证一个新业务机会，把访谈与数据整理成可执行的决策。" className="app-input mt-2 min-h-24 w-full resize-y px-3 py-2 text-sm leading-6" />
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="sr-only" htmlFor="scene-goal-agent">用于组织场景的助手</label>
-          <select id="scene-goal-agent" className="app-input h-9 text-sm" value={agentKey} onChange={(event) => setAgentKey(event.target.value)} disabled={busy !== null || !agents.length}>
+          <select id="scene-goal-agent" className="app-input h-9 text-sm" value={agentKey} onChange={(event) => setAgentKey(event.target.value)} disabled={busy !== null || resumeLocked || !agents.length}>
             {!agents.length && <option value="">暂无可用助手</option>}
             {agents.map((agent) => <option key={agent.key} value={agent.key}>{agent.display_name}{agent.key === "codex" ? " · GPT-5.6 Luna" : ""}</option>)}
           </select>
-          <button type="button" className="app-button-primary" disabled={busy !== null || !agentKey || goal.trim().length < 8 || (!!scene && !skillIds?.length)} onClick={() => void generate()}>
+          <button type="button" className="app-button-primary" disabled={busy !== null || resumeLocked || !agentKey || goal.trim().length < 8 || (!!scene && !skillIds?.length)} onClick={() => void generate()}>
             {busy === "generate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {busy === "generate" ? "正在组织能力…" : "生成组合建议"}
           </button>
-          <span className="text-xs text-muted">{scene && !skillIds?.length ? "先把 Skill 加入此场景，再组织能力" : "目标至少 8 个字"}</span>
+          <span className="text-xs text-muted">{resumeLocked ? "先继续保存当前方案，完成后再生成新组合" : scene && !skillIds?.length ? "先把 Skill 加入此场景，再组织能力" : "目标至少 8 个字"}</span>
         </div>
         {agentError && <p role="alert" className="mt-3 text-sm text-danger">{agentError}</p>}
         {loadError && <div role="alert" className="mt-3 text-sm text-danger">{loadError}<button type="button" className="ml-2 underline" onClick={() => window.dispatchEvent(new CustomEvent(SCENE_COMBINATIONS_CHANGED_EVENT))}>重新读取</button></div>}

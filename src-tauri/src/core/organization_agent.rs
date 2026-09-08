@@ -752,7 +752,7 @@ pub fn parse_deck_suggestion(
         .map(|card| card.stage.as_str())
         .collect::<std::collections::HashSet<_>>();
     let mut explained_stages = std::collections::HashSet::new();
-    if deck.stages.len() > actual_stages.len()
+    if (!deck.stages.is_empty() && deck.stages.len() != actual_stages.len())
         || deck.stages.iter().any(|stage| {
             !actual_stages.contains(stage.name.as_str())
                 || !explained_stages.insert(stage.name.as_str())
@@ -962,6 +962,29 @@ mod tests {
                 assert!(parse_deck_suggestion(&invalid.to_string(), &allowed).is_err());
             }
         }
+    }
+
+    #[test]
+    fn deck_explanations_cover_every_capability_or_use_the_legacy_empty_form() {
+        let mut envelope = serde_json::json!({
+            "schema_version": 1, "method_version": DECK_METHOD_VERSION,
+            "deck": {
+                "title": "Research", "summary": "Find and verify facts",
+                "cards": [
+                    {"skill_id": "s1", "stage": "Investigate", "role": "Find evidence", "reason": "Matches the goal"},
+                    {"skill_id": "s2", "stage": "Verify", "role": "Check evidence", "reason": "Supports the conclusion"}
+                ],
+                "stages": [{"name": "Investigate", "purpose": "Find facts", "handoff": "Send facts for verification", "done_when": "Sources are identified"}]
+            }
+        });
+        let allowed = std::collections::HashSet::from(["s1".to_string(), "s2".to_string()]);
+        assert!(parse_deck_suggestion(&envelope.to_string(), &allowed).is_err());
+        envelope["deck"]["stages"].as_array_mut().unwrap().push(serde_json::json!({
+            "name": "Verify", "purpose": "Check facts", "handoff": "Return supported conclusions", "done_when": "Claims have sources"
+        }));
+        assert!(parse_deck_suggestion(&envelope.to_string(), &allowed).is_ok());
+        envelope["deck"]["stages"] = serde_json::json!([]);
+        assert!(parse_deck_suggestion(&envelope.to_string(), &allowed).is_ok());
     }
 
     #[test]
