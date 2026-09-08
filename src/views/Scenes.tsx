@@ -70,7 +70,7 @@ export function Scenes() {
   }, []);
   const availableAgents = agents.filter((agent) => agent.available);
   const preferredAgent = availableAgents.find((agent) => agent.key === overview?.preferredAgent)?.key ?? availableAgents[0]?.key ?? "";
-  const classifierModel = preferredAgent === "codex" ? "Codex · gpt-5.4-mini" : preferredAgent === "claude_code" ? "Claude · Haiku" : preferredAgent === "hermes" ? "Hermes" : "选择 Agent";
+  const classifierModel = preferredAgent === "codex" ? "Codex · gpt-5.6-luna" : preferredAgent === "claude_code" ? "Claude · Haiku" : preferredAgent === "hermes" ? "Hermes" : "选择 Agent";
   const sceneById = useMemo(() => new Map((overview?.scenes ?? []).map((scene) => [scene.id, scene])), [overview]);
   const requestedSceneId = searchParams.get("scene");
   const selectedScene = requestedSceneId && sceneById.has(requestedSceneId) ? requestedSceneId : null;

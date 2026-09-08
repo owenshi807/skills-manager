@@ -6,7 +6,7 @@ Status: in progress. Base: `8504432`. Goal: implement all four user requirements
 
 - [x] R1: query all managed Skills with source and actual Agent deployment status; identify divergent duplicates and persist an explicit canonical choice without deleting variants or guessing equivalence.
 - [x] R2: an Agent in another session can create/edit in a Manager-owned workspace and publish back; Manager records and displays the result, refreshes content facts, and updates selected managed deployments. Stale edits cannot overwrite newer work. Direct external edits remain discoverable.
-- [ ] R3: AI discovers named usage scenes from the whole library, persists multi-scene assignments with reasons, allows user correction, and incrementally classifies new/changed Skills. Scene metadata is independent of deployment Presets. Partial/unknown results remain visible.
+- [x] R3: AI discovers named usage scenes from the whole library, persists multi-scene assignments with reasons, allows user correction, and incrementally classifies new/changed Skills. Scene metadata is independent of deployment Presets. Partial/unknown results remain visible.
 - [ ] R4: a real stdio MCP server shares the same library and services; Claude Code/Codex can query, organize, inspect distribution/canonical choices, and publish via conversation. App provides an enable switch and working connection setup.
 - [ ] Verify isolated full lifecycle, stale/concurrent updates, distinct variants, MCP wire protocol, real Agent scene generation, frontend interactions, and packaged local usage. Inspect actual runtime state before completion.
 
@@ -48,7 +48,7 @@ Status: in progress. Base: `8504432`. Goal: implement all four user requirements
 - [x] Confirm the real library has no scene state yet: previous native results were synthetic UAT, not user-library delivery. Corrected that reporting explicitly.
 - [x] Verify Business Coach, Codex Review Loop and related custom review variants are in the authoritative library; list actual coverage gaps.
 - [x] Persist user-selected priority Skills, process them first, expose priority coverage and unresolved IDs. Do not infer authorship from source type.
-- [ ] Run classification against the actual library and verify user-named Skills individually before reporting completion.
+- [x] Run classification against the actual library and verify user-named Skills individually before reporting completion.
 
 ## Actual rollout and remaining approval (2026-09-08)
 
@@ -59,8 +59,30 @@ Status: in progress. Base: `8504432`. Goal: implement all four user requirements
 - Published current Codex Review Loop content back to its existing managed identity using staged preview → publish. History `67f04929-bac2-4bf3-ba7a-6212082179ec` retains rollback; the current content includes `SCOPE_CASCADE`. Canonical selection correctly rejects this singleton active group; its prior archived record is not an active alternative.
 - Priority tests: 9 pass, including priority preservation across the 80-Skill batch boundary. Updated MCP process test passes with 19 real tools, including priority tracking. Frontend TypeScript/build/ESLint and design contract pass.
 - Agent capability errors now show their actual reason and allow retry; a selected default Agent no longer appears as an empty dropdown.
-- Actual scene classification has **not run**: current scene count and classified state count are both zero, priority coverage is 0/40. Automatic approval rejected sending actual Skill evidence to Codex gpt-5.4-mini without a fresh explicit data/destination confirmation. An async confirmation question is pending. Do not route around this through another executor or the app button.
+- Before the latest user authorization, actual scene classification had **not run**: current scene count and classified state count are both zero, priority coverage is 0/40. Automatic approval rejected sending actual Skill evidence to Codex gpt-5.4-mini without a fresh explicit data/destination confirmation. This data-transfer blocker was resolved by the latest explicit user message: “允许发送片段到GPT，建议使用更好一点的模型。5.6Luna”. Classification is now authorized using gpt-5.6-luna; the exact model returned READY in a real Codex CLI probe. Full-library classification and named-priority verification are in progress.
 - Automatic approval also rejected connecting Codex persistently to Manager MCP without action-time confirmation. Codex `config.toml` and Claude `.claude.json` remain byte-identical to their backups. MCP is enabled in Manager, but global assistant registration is pending the user's confirmation.
 - Claude model execution remains unverified (even an independent empty-tools request timed out); isolated native MCP handshake was Connected.
 
-Evidence outside the application repository: `_knowledge_base/reviews/product-selection-audit-20260907/personal-skill-coverage.{json,md}` and `real-library-rollout.json`. Resume real classification from the prepared `/private/tmp/skill-manager-classify-real.py` only after explicit approval of the stated Skill evidence and Codex destination; use normal client connection buttons only after access approval.
+Evidence outside the application repository: `_knowledge_base/reviews/product-selection-audit-20260907/personal-skill-coverage.{json,md}` and `real-library-rollout.json`. Run the authorized real classification with gpt-5.6-luna from `/private/tmp/skill-manager-classify-real.py`; use normal client connection buttons only after access approval.
+
+## Luna authorization and real classification (2026-09-08)
+
+- [x] User explicitly authorized real Skill snippets to GPT and selected `gpt-5.6-luna`; exact Codex CLI model probe passed.
+- [x] Installed the Luna default and direct-stdin classifier update. Native Rust classifier actually classified Business Coach Family and Codex Review Loop: 2 applied, 0 stale, 0 unknown, 0 errors.
+- [x] Fixed family evidence loss: when root SKILL.md is absent, bounded evidence now reads safe root FAMILY.md/README.md with a source label. The family fixture passes.
+- [x] Corrected Unix stdin EOF handling after inspecting the installed Tokio implementation; full model input is delivered through stdin, then its handle is dropped.
+- [x] Invalid real model output was rejected before mutation (duplicate IDs and empty memberships); runtime batches reduced to 20, semantic instructions distinguish new scenes from unknown evidence.
+- [x] Real Luna inference covers all 431 active entries: 430 classified proposals, one unknown aggregate directory (`Proma-Skills`). All 40 priorities have results.
+- [x] Consolidate 233 provisional names into usable work scenarios, replay saved validated proposals, and verify final native Sidebar and persistence.
+- [ ] Persistent assistant connection remains a separate approval item; this model/data authorization does not silently register an MCP server.
+
+## Verified installed result (2026-09-08, Luna)
+
+- 61 named scenes, 430 classified entries, 40/40 priority coverage, 0 pending, 0 errors. One aggregate directory (`Proma-Skills`) remains explicitly unknown because it lacks a root SKILL.md/FAMILY.md/README.md.
+- The first broad pass over-fragmented scenes and hit the 128-scene guard. No rejected batches were applied. Reviewed same-purpose names were consolidated with a backed-up, compare-and-swap update restricted to this run’s AI metadata (no manual assignments/exclusions/descriptions existed), then saved proposals were replayed through normal MCP hash validation. No scene-limit increase, Skill content edit, or deployment change was needed.
+- Semantic audit corrected UI redesign and the business deal control tower; project-code-review, github-code-review and requesting-code-review now appear in the code review scene. Business work is not collapsed into engineering.
+- Native restart retained all 61 Sidebar child nodes. Clicking 商业项目推演 shows Business Coach and its family; clicking 代码审查与修复 shows 13 entries including Codex Review Loop and custom reviews. Native UI reports 430 classified and 40/40 priorities.
+- Incremental classification enabled through native UI, preferred Agent Codex; persisted preference verified. Model label is gpt-5.6-luna.
+- Scene module regression suite: 11 passed. TypeScript/ESLint/build pass; actual native Rust Luna probe: 2 applied, no stale/unknown/errors.
+- Actual deployment target count remains 671. Codex and Claude global configuration bytes still match their backups. Persistent connection remains pending the separate access confirmation.
+- Stable receipts and database/app rollback are under `_local_backups/before-scenes-mcp-20260908-104549/luna-classification`; human-readable evidence JSON is `_knowledge_base/reviews/product-selection-audit-20260907/real-luna-classification.json` outside the app repository.
