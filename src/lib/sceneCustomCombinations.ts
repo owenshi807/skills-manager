@@ -238,7 +238,11 @@ export function saveCombinationAsScene(
     if (!cards.length && !(sceneSaveMode === "existing-scene" && [...excludedSkillIds, ...restoredSkillIds].some((id) => current.has(id)))) {
       throw new Error("方案中的 Skill 已不在当前技能库，请重新生成组合。");
     }
-    let saved: SceneCustomCombination = { ...existing, ...combination, sceneId, sceneSaveMode, excludedSkillIds, restoredSkillIds, sceneImportStatus: "pending" };
+    let saved: SceneCustomCombination = { ...existing, ...combination, cards, sceneId, sceneSaveMode, excludedSkillIds, restoredSkillIds, sceneImportStatus: "pending" };
+    if (saved.stages) {
+      const stageNames = new Set(groupCombinationCards(cards).map((stage) => stage.title));
+      saved = { ...saved, stages: saved.stages.filter((stage) => stageNames.has(stage.name.trim())) };
+    }
     const persist = async () => {
       const records = parseSceneCustomCombinations(await deps.read());
       const index = records.findIndex((row) => row.id === saved.id);

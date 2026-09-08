@@ -77,6 +77,27 @@ test("organizing an existing scene never creates or assigns, even when the previ
   assert.deepEqual(state.assignments, []);
   assert.equal(saved.sceneId, "existing-scene");
   assert.equal(saved.sceneSaveMode, "existing-scene");
+  assert.deepEqual(saved.cards.map((card) => card.skill_id), ["decision"]);
+});
+
+test("re-adding a member omitted at confirmation does not revive its discarded role or explanation", async () => {
+  const sceneId = "scene-1";
+  const state = fixture();
+  const preview = { ...plan, sceneId, sceneSaveMode: "existing-scene" as const, stages: [
+    { name: "验证需求", purpose: "旧访谈分工", handoff: "旧交接说明", done_when: "旧完成标准" },
+    { name: "形成决策", purpose: "形成可执行选择", handoff: "交给执行者", done_when: "有明确的下一步" },
+  ] };
+  await saveCombinationAsScene(preview, ["decision"], () => undefined, state.deps);
+  assert.deepEqual(state.records()[0].cards, [plan.cards[1]]);
+  assert.deepEqual(state.records()[0].stages, [preview.stages[1]]);
+  const members = ["interview", "decision"];
+  const group: SceneCapabilityGroup = { sceneId, skillIds: members, capabilities: [], uncoveredSkillIds: [] };
+  const skills = members.map((id) => ({ id, name: id }) as ManagedSkill);
+  const assignments = Object.fromEntries(members.map((id) => [id, [{ sceneId, source: "user" as const, reason: "重新确认归属", updatedAt: 2 }]]));
+  const applied = applySceneCustomCombination(group, state.records(), skills, assignments);
+  assert.ok(!applied.capabilities.some((capability) => capability.title === "验证需求"));
+  assert.deepEqual(applied.capabilities.find((capability) => capability.title === "补充能力")?.skillIds, ["interview"]);
+  assert.deepEqual(state.assignments, []);
 });
 
 test("an existing-scene save retry preserves manual cancellation and the durable membership-free mode", async () => {
