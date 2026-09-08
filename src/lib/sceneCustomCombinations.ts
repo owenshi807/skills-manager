@@ -5,6 +5,11 @@ import type { SceneMembership, SkillScene } from "./skillScenes.ts";
 export const CUSTOM_DECKS_KEY = "card_master_custom_decks_v1";
 export const SCENE_COMBINATIONS_CHANGED_EVENT = "scene-combinations-changed";
 
+/** Scene names are single-line; normalize previews without changing stored plans. */
+export function sceneCombinationTitle(title: string): string {
+  return [...title.replace(/[\r\n]+/g, " ")].slice(0, 80).join("");
+}
+
 /** Retains the original custom-deck record so older saved plans remain usable. */
 export interface SceneCustomCombination {
   id: string;

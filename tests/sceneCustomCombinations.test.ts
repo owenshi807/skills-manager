@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applySceneCustomCombination, parseSceneCustomCombinations, saveCombinationAsScene,
-  removeSkillFromCombination, restoreSkillToCombination, sceneCombinationExcludedSkillIds,
+  removeSkillFromCombination, restoreSkillToCombination, sceneCombinationExcludedSkillIds, sceneCombinationTitle,
   type SceneCombinationSaveDependencies, type SceneCustomCombination,
 } from "../src/lib/sceneCustomCombinations.ts";
 import type { SceneCapabilityGroup } from "../src/lib/sceneCapabilities.ts";
@@ -50,6 +50,23 @@ test("legacy plans round-trip without dropping fields, and malformed storage can
   for (const raw of ["", "{}", JSON.stringify([{ ...plan, cards: "bad" }]), JSON.stringify([plan, plan]), JSON.stringify([{ ...plan, stages: [{ name: "wrong shape" }] }]), JSON.stringify([{ ...plan, excludedSkillIds: [5] }]), JSON.stringify([{ ...plan, sceneSaveMode: "ambiguous" }])]) {
     assert.throws(() => parseSceneCustomCombinations(raw));
   }
+});
+
+test("legacy multiline titles are previewed as valid scene names and stored only after confirmation", async () => {
+  const legacy = { ...plan, title: "验证业务\r\n机会", unknownLegacyField: { keep: true } };
+  const state = fixture([legacy]);
+  const loaded = state.records()[0];
+  const preview = { ...loaded, title: sceneCombinationTitle(loaded.title) };
+  assert.deepEqual(state.records(), [legacy]);
+  const create = state.deps.createScene;
+  state.deps.createScene = async (name, ...args) => {
+    assert.equal(name, "验证业务 机会");
+    return create(name, ...args);
+  };
+  const saved = await saveCombinationAsScene(preview, ["interview", "decision"], () => undefined, state.deps);
+  assert.equal(saved.sceneImportStatus, "complete");
+  assert.deepEqual((state.records()[0] as typeof legacy).unknownLegacyField, legacy.unknownLegacyField);
+  assert.deepEqual(state.records()[0].cards, legacy.cards);
 });
 
 test("organizing an existing scene never creates or assigns, even when the preview still lists a removed member", async () => {

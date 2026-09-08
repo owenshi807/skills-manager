@@ -7,7 +7,7 @@ import type { OrganizationAgentCapability } from "../lib/tauri";
 import { getErrorMessage } from "../lib/error";
 import type { SkillScene } from "../lib/skillScenes";
 import {
-  groupCombinationCards, loadSceneCustomCombinations, saveCombinationAsScene,
+  groupCombinationCards, loadSceneCustomCombinations, saveCombinationAsScene, sceneCombinationTitle,
   removeSkillFromCombination, restoreSkillToCombination, latestSceneCustomCombination, sceneCombinationExcludedSkillIds,
   SCENE_COMBINATIONS_CHANGED_EVENT, type SceneCustomCombination,
 } from "../lib/sceneCustomCombinations";
@@ -123,7 +123,7 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
         || (targetScene && !scopeRef.current.skillIds?.includes(card.skill_id)))) {
         throw new Error("场景中的 Skill 已变化，请重新生成当前场景的分工。");
       }
-      selectPlan({ ...suggestion, id: `custom-${crypto.randomUUID()}`, title: [...suggestion.title.replace(/[\r\n]+/g, " ")].slice(0, 80).join(""), summary: [...suggestion.summary].slice(0, 400).join(""), goal: submittedGoal, createdAt: Date.now(), excludedSkillIds: exclusions, restoredSkillIds, sceneSaveMode: targetScene ? "existing-scene" : "new-scene-import", ...(targetScene ? { sceneId: targetScene.id } : {}) });
+      selectPlan({ ...suggestion, id: `custom-${crypto.randomUUID()}`, title: sceneCombinationTitle(suggestion.title), summary: [...suggestion.summary].slice(0, 400).join(""), goal: submittedGoal, createdAt: Date.now(), excludedSkillIds: exclusions, restoredSkillIds, sceneSaveMode: targetScene ? "existing-scene" : "new-scene-import", ...(targetScene ? { sceneId: targetScene.id } : {}) });
     } catch (cause) { if (mounted.current) setError(getErrorMessage(cause, "组合建议未生成，请重试。")); }
     finally { busyRef.current = false; if (mounted.current) setBusy(null); }
   };
@@ -183,7 +183,7 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
         </details>}
         {pendingPlans.length > 0 && <details className="mt-4 border-t border-border-subtle pt-3">
           <summary className="cursor-pointer text-sm text-secondary">继续已有方案（{pendingPlans.length}）</summary>
-          <div className="mt-2 flex flex-wrap gap-2">{pendingPlans.map((item) => <button type="button" disabled={busy !== null} key={item.id} className="app-button-secondary" onClick={() => selectPlan(item)}>{item.title}{item.sceneImportStatus === "pending" ? " · 待完成" : ""}</button>)}</div>
+          <div className="mt-2 flex flex-wrap gap-2">{pendingPlans.map((item) => <button type="button" disabled={busy !== null} key={item.id} className="app-button-secondary" onClick={() => selectPlan(item.sceneId ? item : { ...item, title: sceneCombinationTitle(item.title) })}>{item.title}{item.sceneImportStatus === "pending" ? " · 待完成" : ""}</button>)}</div>
         </details>}
         {plan && <section className="mt-5 border-t border-border-subtle pt-4" aria-label="场景组合预览">
           <p className="text-xs font-medium text-accent-light">组合预览</p>
