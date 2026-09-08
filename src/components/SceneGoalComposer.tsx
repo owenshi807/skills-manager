@@ -19,7 +19,8 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
   excludedSkillIds?: string[];
 }) {
   const { managedSkills } = useApp();
-  const [goal, setGoal] = useState(scene ? `围绕「${scene.name}」，组织清楚各项能力如何配合。${scene.description}` : "");
+  const [goalDraft, setGoalDraft] = useState<string>();
+  const goal = goalDraft ?? (scene ? `围绕「${scene.name}」，组织清楚各项能力如何配合。${scene.description}` : "");
   const [agents, setAgents] = useState<OrganizationAgentCapability[]>([]);
   const [agentKey, setAgentKey] = useState("");
   const [plans, setPlans] = useState<SceneCustomCombination[]>([]);
@@ -142,7 +143,7 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
         if (mounted.current) setPlan(progress);
       });
       if (mounted.current) {
-        selectPlan(null); if (!scope.scene) setGoal("");
+        selectPlan(null); if (!scope.scene) setGoalDraft(undefined);
         toast.success(scope.scene ? "已保存此场景的能力分工" : "已保存使用场景和确认的 Skill 组合");
         onCreated(saved.sceneId!);
       }
@@ -159,7 +160,7 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
       <div className="border-t border-border-subtle p-4">
         <p className="max-w-2xl text-sm leading-6 text-muted">{scene ? "助手会根据这个场景已有的 Skill，组织各项能力的分工，解释它们怎样配合。先看建议，再保存；没有纳入组合的 Skill 仍保留在此场景。" : "说明你要完成的工作。助手会从技能库中挑选合适的 Skill，解释它们如何配合；先看方案，再保存为使用场景。"}</p>
         <label className="mt-4 block text-sm font-medium text-secondary" htmlFor="scene-goal">这次想完成什么？</label>
-        <textarea id="scene-goal" value={goal} disabled={busy !== null || resumeLocked} onChange={(event) => setGoal(event.target.value)} maxLength={2000} placeholder="例如：验证一个新业务机会，把访谈与数据整理成可执行的决策。" className="app-input mt-2 min-h-24 w-full resize-y px-3 py-2 text-sm leading-6" />
+        <textarea id="scene-goal" value={goal} disabled={busy !== null || resumeLocked} onChange={(event) => setGoalDraft(event.target.value)} maxLength={2000} placeholder="例如：验证一个新业务机会，把访谈与数据整理成可执行的决策。" className="app-input mt-2 min-h-24 w-full resize-y px-3 py-2 text-sm leading-6" />
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="sr-only" htmlFor="scene-goal-agent">用于组织场景的助手</label>
           <select id="scene-goal-agent" className="app-input h-9 text-sm" value={agentKey} onChange={(event) => setAgentKey(event.target.value)} disabled={busy !== null || resumeLocked || !agents.length}>
