@@ -278,7 +278,7 @@ fn save_state(store: &SkillStore, state: &SceneLibraryState) -> Result<(), AppEr
 
 /// Bounded root-level evidence. Never traverses a path supplied by a skill:
 /// only explicitly named direct children are read after a symlink check.
-fn evidence(skill: &SkillRecord) -> String {
+pub(crate) fn evidence(skill: &SkillRecord) -> String {
     let root = Path::new(&skill.central_path);
     let Ok(root_meta) = fs::symlink_metadata(root) else {
         return "[SKILL.md unavailable]".into();
@@ -784,6 +784,20 @@ pub fn set_assignment(
     assigned: bool,
     reason: Option<String>,
 ) -> Result<(), AppError> {
+    set_assignment_with_preservation(store, skill_id, scene_id, assigned, reason, false)
+}
+
+/// Import retries fill only undecided scene memberships. The condition is
+/// checked under the same repository lock as the state update, so a later
+/// user decision cannot be overwritten by a stale client-side snapshot.
+pub fn set_assignment_with_preservation(
+    store: &SkillStore,
+    skill_id: String,
+    scene_id: String,
+    assigned: bool,
+    reason: Option<String>,
+    preserve_existing: bool,
+) -> Result<(), AppError> {
     if !valid_id(&skill_id)
         || !valid_id(&scene_id)
         || assigned
@@ -806,6 +820,12 @@ pub fn set_assignment(
         return Err(AppError::not_found("Scene not found"));
     }
     let entry = state.skills.entry(skill_id).or_default();
+    if preserve_existing
+        && (entry.memberships.iter().any(|membership| membership.scene_id == scene_id)
+            || entry.excluded_scene_ids.contains(&scene_id))
+    {
+        return Ok(());
+    }
     let timestamp = now();
     entry.content_hash = live_revision(&skill)?;
     entry.observed_db_revision = revision(&skill);
@@ -1179,6 +1199,71 @@ mod tests {
         );
         crate::core::central_repo::set_test_base_dir_override(None);
     }
+
+    #[test]
+    fn preserving_assignment_keeps_existing_reason_source_and_timestamps() {
+        let _repo_guard = crate::core::central_repo::test_base_dir_lock();
+        let tmp = tempdir().unwrap();
+        crate::core::central_repo::set_test_base_dir_override(Some(tmp.path().join("repo")));
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store.insert_skill(&skill("a", &tmp.path().join("a"), "one")).unwrap();
+        let snapshot = build_snapshot(&store, None).unwrap();
+        apply_proposal(&store, &snapshot, proposal(&snapshot, "Writing")).unwrap();
+        let scene = get_overview(&store).unwrap().scenes.pop().unwrap();
+        for source in [SceneMembershipSource::Ai, SceneMembershipSource::User] {
+            if source == SceneMembershipSource::User {
+                set_assignment(&store, "a".into(), scene.id.clone(), true, Some("manual reason".into())).unwrap();
+            }
+            let before = store.get_setting(SCENE_STATE_SETTING).unwrap();
+            set_assignment_with_preservation(
+                &store, "a".into(), scene.id.clone(), true, Some("stale import retry".into()), true,
+            ).unwrap();
+            assert_eq!(store.get_setting(SCENE_STATE_SETTING).unwrap(), before);
+            assert_eq!(get_overview(&store).unwrap().assignments["a"][0].source, source);
+        }
+        crate::core::central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn preserving_assignment_does_not_restore_an_excluded_membership() {
+        let _repo_guard = crate::core::central_repo::test_base_dir_lock();
+        let tmp = tempdir().unwrap();
+        crate::core::central_repo::set_test_base_dir_override(Some(tmp.path().join("repo")));
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store.insert_skill(&skill("a", &tmp.path().join("a"), "one")).unwrap();
+        let scene = upsert_scene(&store, None, "Writing".into(), None).unwrap();
+        set_assignment(&store, "a".into(), scene.id.clone(), false, None).unwrap();
+        let before = store.get_setting(SCENE_STATE_SETTING).unwrap();
+        set_assignment_with_preservation(
+            &store, "a".into(), scene.id.clone(), true, Some("stale import retry".into()), true,
+        ).unwrap();
+        assert_eq!(store.get_setting(SCENE_STATE_SETTING).unwrap(), before);
+        let state = state_from_store(&store).unwrap();
+        assert!(state.skills["a"].memberships.is_empty());
+        assert!(state.skills["a"].excluded_scene_ids.contains(&scene.id));
+        // Ordinary manual editing remains able to change that explicit choice.
+        set_assignment(&store, "a".into(), scene.id.clone(), true, Some("new manual choice".into())).unwrap();
+        assert_eq!(get_overview(&store).unwrap().assignments["a"][0].reason, "new manual choice");
+        crate::core::central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn preserving_assignment_adds_an_undecided_membership() {
+        let _repo_guard = crate::core::central_repo::test_base_dir_lock();
+        let tmp = tempdir().unwrap();
+        crate::core::central_repo::set_test_base_dir_override(Some(tmp.path().join("repo")));
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        store.insert_skill(&skill("a", &tmp.path().join("a"), "one")).unwrap();
+        let scene = upsert_scene(&store, None, "Writing".into(), None).unwrap();
+        set_assignment_with_preservation(
+            &store, "a".into(), scene.id, true, Some("imported explanation".into()), true,
+        ).unwrap();
+        let overview = get_overview(&store).unwrap();
+        assert_eq!(overview.assignments["a"][0].reason, "imported explanation");
+        assert_eq!(overview.assignments["a"][0].source, SceneMembershipSource::User);
+        crate::core::central_repo::set_test_base_dir_override(None);
+    }
+
     #[test]
     fn malformed_and_partial_outputs_fail_closed() {
         let _repo_guard = crate::core::central_repo::test_base_dir_lock();

@@ -30,6 +30,7 @@ import { SkillMarkdown } from "./SkillMarkdown";
 import { AgentToggleSection, type AgentToggleItem } from "./AgentToggleSection";
 import { SkillProjectsSection } from "./SkillProjectsSection";
 import { SyncDots } from "./SyncDots";
+import { SkillGovernanceDetails, type LibraryGovernanceSnapshot } from "./SkillLibraryGovernance";
 
 interface Props {
   skill: ManagedSkill | null;
@@ -43,6 +44,9 @@ interface Props {
   onProjectsChanged?: () => void;
   readOnly?: boolean;
   showTags?: boolean;
+  governance?: LibraryGovernanceSnapshot | null;
+  onGovernanceChanged?: () => Promise<void>;
+  onOpenSkill?: (id: string) => void;
 }
 
 export function SkillDetailPanel({
@@ -57,6 +61,9 @@ export function SkillDetailPanel({
   onProjectsChanged,
   readOnly = false,
   showTags = true,
+  governance,
+  onGovernanceChanged,
+  onOpenSkill,
 }: Props) {
   if (!skill) return null;
 
@@ -83,6 +90,9 @@ export function SkillDetailPanel({
       onProjectsChanged={onProjectsChanged}
       readOnly={readOnly}
       showTags={showTags}
+      governance={governance}
+      onGovernanceChanged={onGovernanceChanged}
+      onOpenSkill={onOpenSkill}
     />
   );
 }
@@ -99,6 +109,9 @@ function SkillDetailPanelContent({
   onProjectsChanged,
   readOnly,
   showTags,
+  governance,
+  onGovernanceChanged,
+  onOpenSkill,
 }: {
   skill: ManagedSkill;
   onClose: () => void;
@@ -111,6 +124,9 @@ function SkillDetailPanelContent({
   onProjectsChanged?: () => void;
   readOnly: boolean;
   showTags: boolean;
+  governance?: LibraryGovernanceSnapshot | null;
+  onGovernanceChanged?: () => Promise<void>;
+  onOpenSkill?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const [doc, setDoc] = useState<SkillDocument | null>(null);
@@ -520,6 +536,8 @@ function SkillDetailPanelContent({
           onChanged={onProjectsChanged}
         />
       )}
+
+      <SkillGovernanceDetails skillId={skill.id} snapshot={governance} onOpenSkill={onOpenSkill} onChanged={onGovernanceChanged} />
 
       {supportsSourceDiff ? (
         <section

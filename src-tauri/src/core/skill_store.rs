@@ -783,6 +783,10 @@ impl SkillStore {
 
     pub fn upsert_skill(&self, skill: &SkillRecord) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        Self::upsert_skill_on_connection(&conn, skill)
+    }
+
+    fn upsert_skill_on_connection(conn: &Connection, skill: &SkillRecord) -> Result<()> {
         conn.execute(
             "INSERT INTO skills (
                 id, name, description, source_type, source_ref, source_ref_resolved, source_subpath,
@@ -1062,17 +1066,38 @@ impl SkillStore {
         Ok(())
     }
 
-    /// Park every skill's `central_path` on a unique placeholder before a
-    /// reindex rewrites them. Path reassignments between existing skills
-    /// (renames, collision reshuffles after a merge) would otherwise collide
-    /// with the UNIQUE constraint mid-loop — e.g. skill A moving onto the
-    /// path skill B is about to vacate.
-    pub fn park_central_paths_for_reindex(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        conn.execute(
-            "UPDATE skills SET central_path = 'sm-reindex-parked://' || id",
+    /// Install one prepared active-library snapshot atomically. Temporary paths
+    /// allow genuine path swaps, but stay inside this transaction: GUI/MCP
+    /// readers (including other processes) see either the old or new snapshot.
+    /// Archived rows are not part of this snapshot and must retain their paths.
+    pub(crate) fn replace_skills_from_metadata(
+        &self,
+        records: &[(SkillRecord, Vec<String>)],
+    ) -> Result<()> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        let expected_ids = records.iter().map(|(skill, _)| skill.id.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        let active_ids = {
+            let mut statement = tx.prepare("SELECT id FROM skills WHERE status != 'archived'")?;
+            let ids = statement.query_map([], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            ids
+        };
+        for id in active_ids {
+            if !expected_ids.contains(id.as_str()) {
+                tx.execute("DELETE FROM skills WHERE id = ?1", params![id])?;
+            }
+        }
+        tx.execute(
+            "UPDATE skills SET central_path = 'sm-reindex-parked://' || id WHERE status != 'archived'",
             [],
         )?;
+        for (skill, tags) in records {
+            Self::upsert_skill_on_connection(&tx, skill)?;
+            Self::set_tags_on_connection(&tx, &skill.id, tags)?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -1926,6 +1951,10 @@ impl SkillStore {
 
     pub fn set_tags_for_skill(&self, skill_id: &str, tags: &[String]) -> Result<()> {
         let conn = self.conn.lock().unwrap();
+        Self::set_tags_on_connection(&conn, skill_id, tags)
+    }
+
+    fn set_tags_on_connection(conn: &Connection, skill_id: &str, tags: &[String]) -> Result<()> {
         conn.execute(
             "DELETE FROM skill_tags WHERE skill_id = ?1",
             params![skill_id],
