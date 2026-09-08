@@ -38,3 +38,7 @@ pub mod tool_adapters;
 pub mod tool_service;
 
 pub mod foundation_write;
+pub mod mcp_bridge;
+pub mod mcp_server;
+pub mod skill_publish;
+pub mod skill_scenes;

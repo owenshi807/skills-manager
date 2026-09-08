@@ -89,13 +89,46 @@ fn agent_definition(key: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
+/// Finder-launched applications do not inherit an interactive shell's PATH.
+/// Resolve known user installation directories without running shell startup
+/// scripts or searching the current Skill working directory.
+pub(crate) fn executable_path(binary: &str) -> std::path::PathBuf {
+    let mut directories: Vec<_> = std::env::var_os("PATH")
+        .map(|p| {
+            std::env::split_paths(&p)
+                .filter(|p| p.is_absolute())
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(home) = dirs::home_dir() {
+        directories.extend([
+            home.join(".local/bin"),
+            home.join(".bun/bin"),
+            home.join(".cargo/bin"),
+        ]);
+    }
+    directories.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(std::path::PathBuf::from));
+    for directory in directories {
+        let candidate = directory.join(if cfg!(windows) {
+            format!("{binary}.exe")
+        } else {
+            binary.into()
+        });
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    std::path::PathBuf::from(binary)
+}
+
 pub async fn probe_agents() -> Vec<AgentCapability> {
     let mut capabilities = Vec::new();
     for key in ["codex", "claude_code", "hermes"] {
         let (binary, display_name) = agent_definition(key).expect("known adapter");
+        let executable = executable_path(binary);
         let output = tokio::time::timeout(
             Duration::from_secs(3),
-            tokio::process::Command::new(binary)
+            tokio::process::Command::new(&executable)
                 .arg("--version")
                 .stdin(Stdio::null())
                 .output(),
@@ -112,38 +145,80 @@ pub async fn probe_agents() -> Vec<AgentCapability> {
                     reason: None,
                 }
             }
-            Ok(Ok(output)) => AgentCapability {
-                key: key.to_string(),
-                display_name: display_name.to_string(),
-                available: false,
-                version: None,
-                reason: Some(String::from_utf8_lossy(&output.stderr).trim().to_string()),
-            },
+            Ok(Ok(output)) => {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let detail = if !stderr.is_empty() {
+                    stderr
+                } else if !stdout.is_empty() {
+                    stdout
+                } else {
+                    format!("exited with {}", output.status)
+                };
+                AgentCapability {
+                    key: key.to_string(),
+                    display_name: display_name.to_string(),
+                    available: false,
+                    version: None,
+                    reason: Some(format!(
+                        "{}: {}",
+                        executable.display(),
+                        probe_detail(&detail)
+                    )),
+                }
+            }
             Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => AgentCapability {
                 key: key.to_string(),
                 display_name: display_name.to_string(),
                 available: false,
                 version: None,
-                reason: Some("CLI not found on PATH".to_string()),
+                reason: Some(format!("{}: CLI not found", executable.display())),
             },
             Ok(Err(error)) => AgentCapability {
                 key: key.to_string(),
                 display_name: display_name.to_string(),
                 available: false,
                 version: None,
-                reason: Some(error.to_string()),
+                reason: Some(format!("{}: {}", executable.display(), error)),
             },
             Err(_) => AgentCapability {
                 key: key.to_string(),
                 display_name: display_name.to_string(),
                 available: false,
                 version: None,
-                reason: Some("CLI probe timed out".to_string()),
+                reason: Some(format!(
+                    "{}: CLI probe timed out after 3 seconds",
+                    executable.display()
+                )),
             },
         };
+        if capability.available {
+            log::debug!(
+                "scene agent probe: {key} available via {}",
+                executable.display()
+            );
+        } else {
+            log::warn!(
+                "scene agent probe: {key} unavailable via {}: {}",
+                executable.display(),
+                capability.reason.as_deref().unwrap_or("no reason returned")
+            );
+        }
         capabilities.push(capability);
     }
     capabilities
+}
+
+fn probe_detail(value: &str) -> String {
+    const MAX_CHARS: usize = 500;
+    let trimmed = value.trim();
+    let count = trimmed.chars().count();
+    let detail: String = trimmed.chars().take(MAX_CHARS).collect();
+    if count > MAX_CHARS {
+        format!("{detail}…")
+    } else {
+        detail
+    }
 }
 
 pub async fn execute(agent_key: &str, prompt: &str, cwd: &Path) -> Result<String, AppError> {
@@ -153,7 +228,7 @@ pub async fn execute(agent_key: &str, prompt: &str, cwd: &Path) -> Result<String
 
     let mut command = match agent_key {
         "codex" => {
-            let mut command = tokio::process::Command::new("codex");
+            let mut command = tokio::process::Command::new(executable_path("codex"));
             command.args([
                 "exec",
                 "--sandbox",
@@ -166,7 +241,7 @@ pub async fn execute(agent_key: &str, prompt: &str, cwd: &Path) -> Result<String
             command
         }
         "claude_code" => {
-            let mut command = tokio::process::Command::new("claude");
+            let mut command = tokio::process::Command::new(executable_path("claude"));
             command.args([
                 "--print",
                 "--permission-mode",
@@ -179,7 +254,7 @@ pub async fn execute(agent_key: &str, prompt: &str, cwd: &Path) -> Result<String
             command
         }
         "hermes" => {
-            let mut command = tokio::process::Command::new("hermes");
+            let mut command = tokio::process::Command::new(executable_path("hermes"));
             command.args(["--ignore-rules", "-z", prompt]);
             command
         }
@@ -203,6 +278,102 @@ pub async fn execute(agent_key: &str, prompt: &str, cwd: &Path) -> Result<String
         }));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Scene classification is deliberately isolated from the general organization
+/// adapter. It uses the small verified model/configuration path and never loads
+/// user MCP/plugin configuration that could recursively invoke this app.
+pub async fn execute_scene_classifier(
+    agent_key: &str,
+    prompt: &str,
+    cwd: &Path,
+) -> Result<String, AppError> {
+    let mut command = match agent_key {
+        "codex" => {
+            let mut command = tokio::process::Command::new(executable_path("codex"));
+            command.args([
+                "exec",
+                "--ignore-user-config",
+                "--sandbox",
+                "read-only",
+                "--skip-git-repo-check",
+                "--ephemeral",
+                "-m",
+                "gpt-5.4-mini",
+                "-C",
+            ]);
+            command.arg(cwd).arg(prompt);
+            command
+        }
+        "claude_code" => {
+            let mut command = tokio::process::Command::new(executable_path("claude"));
+            command.args([
+                "--print",
+                "--model",
+                "haiku",
+                "--permission-mode",
+                "plan",
+                "--allowedTools",
+                "Read",
+                "--strict-mcp-config",
+                "--mcp-config",
+                r#"{"mcpServers":{}}"#,
+                "--disable-slash-commands",
+                "--no-session-persistence",
+                "--output-format",
+                "text",
+            ]);
+            command.arg(prompt);
+            command
+        }
+        "hermes" => {
+            let mut command = tokio::process::Command::new(executable_path("hermes"));
+            command.args(["--ignore-rules", "-z", prompt]);
+            command
+        }
+        _ => {
+            return Err(AppError::invalid_input(
+                "Unsupported scene classification agent",
+            ))
+        }
+    };
+    command
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    let output = tokio::time::timeout(Duration::from_secs(600), command.output())
+        .await
+        .map_err(|_| AppError::internal("Scene classifier timed out after 10 minutes"))?
+        .map_err(AppError::io)?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::internal(scene_error_tail(&stderr)));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stdout.is_empty() {
+        return Err(AppError::internal(scene_error_tail(
+            &String::from_utf8_lossy(&output.stderr),
+        )));
+    }
+    Ok(stdout)
+}
+
+fn scene_error_tail(stderr: &str) -> String {
+    let trimmed = stderr.trim();
+    if trimmed.is_empty() {
+        return "Scene classifier exited without a result".to_string();
+    }
+    const MAX_CHARS: usize = 1_200;
+    let count = trimmed.chars().count();
+    let tail: String = trimmed
+        .chars()
+        .skip(count.saturating_sub(MAX_CHARS))
+        .collect();
+    if count > MAX_CHARS {
+        format!("Scene classifier failed (last {MAX_CHARS} chars): {tail}")
+    } else {
+        format!("Scene classifier failed: {tail}")
+    }
 }
 
 /// Run an Agent against a disposable copy of one managed Skill.
@@ -308,9 +479,8 @@ pub fn parse_assessments(
     ];
     let mut seen = std::collections::HashSet::new();
     for assessment in &envelope.assessments {
-        let Some((_, revision, member_ids)) = expected
-            .iter()
-            .find(|(id, _, _)| id == &assessment.case_id)
+        let Some((_, revision, member_ids)) =
+            expected.iter().find(|(id, _, _)| id == &assessment.case_id)
         else {
             return Err(AppError::invalid_input(
                 "Agent returned an unknown organization case",
@@ -360,17 +530,19 @@ pub fn parse_assessments(
                 .any(|question| !bounded_nonempty(question, 400))
             || assessment_text_chars > 12_000
             || match assessment.recommended_action.as_str() {
-                "archive_one" => assessment
-                    .recommended_keep_skill_id
-                    .as_ref()
-                    .is_none_or(|skill_id| !member_ids.contains(skill_id))
-                    || !assessment.suggested_actions.iter().any(|action| {
-                        matches!(
-                            action.as_str(),
-                            "prefer_newer_archive_old"
-                                | "prefer_more_complete_archive_redundant"
-                        )
-                    }),
+                "archive_one" => {
+                    assessment
+                        .recommended_keep_skill_id
+                        .as_ref()
+                        .is_none_or(|skill_id| !member_ids.contains(skill_id))
+                        || !assessment.suggested_actions.iter().any(|action| {
+                            matches!(
+                                action.as_str(),
+                                "prefer_newer_archive_old"
+                                    | "prefer_more_complete_archive_redundant"
+                            )
+                        })
+                }
                 "keep_both" => {
                     assessment.recommended_keep_skill_id.is_some()
                         || !assessment.suggested_actions.iter().any(|action| {

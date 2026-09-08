@@ -17,6 +17,8 @@ import {
   ChevronDown,
   ChevronRight,
   PanelsTopLeft,
+  Tags,
+  Bot,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -31,6 +33,12 @@ import * as api from "../lib/tauri";
 import type { SyncHealth, ToolCategory, ToolInfo } from "../lib/tauri";
 import { getPresetIconOption } from "../lib/presetIcons";
 import { CARD_MASTER_PRODUCT_SURFACE } from "../lib/productSurface";
+import { getSceneOverview, type SceneOverview } from "../lib/skillScenes";
+
+const SCENE_DOT_COLORS = ["bg-blue-400", "bg-emerald-400", "bg-amber-400", "bg-pink-400", "bg-violet-400", "bg-cyan-400"];
+function sceneDotColor(id: string) {
+  return SCENE_DOT_COLORS[Array.from(id).reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 0) % SCENE_DOT_COLORS.length];
+}
 
 function getSyncHealthIndicator(health: SyncHealth, skillCount: number): { color: string; title: string } | null {
   if (skillCount === 0) return null;
@@ -75,6 +83,43 @@ export function Sidebar() {
   const [projectsOpen, setProjectsOpen] = useState(true);
   const [globalWorkspaceOpen, setGlobalWorkspaceOpen] = useState(true);
   const [lobsterWorkspaceOpen, setLobsterWorkspaceOpen] = useState(true);
+  const [scenesOpen, setScenesOpen] = useState(() => localStorage.getItem("skill-manager:scenes-expanded") !== "false");
+  const [sceneOverview, setSceneOverview] = useState<SceneOverview | null>(null);
+  const [sceneLoadError, setSceneLoadError] = useState(false);
+  const selectedSceneId = location.pathname === "/scenes" ? new URLSearchParams(location.search).get("scene") : null;
+  const sceneCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const memberships of Object.values(sceneOverview?.assignments ?? {})) {
+      for (const membership of memberships) counts.set(membership.sceneId, (counts.get(membership.sceneId) ?? 0) + 1);
+    }
+    return counts;
+  }, [sceneOverview]);
+
+  useEffect(() => {
+    localStorage.setItem("skill-manager:scenes-expanded", String(scenesOpen));
+  }, [scenesOpen]);
+  useEffect(() => {
+    if (selectedSceneId) setScenesOpen(true);
+  }, [selectedSceneId]);
+  useEffect(() => {
+    let cancelled = false;
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const overview = await getSceneOverview();
+        if (!cancelled) { setSceneOverview(overview); setSceneLoadError(false); }
+      } catch {
+        if (!cancelled) setSceneLoadError(true);
+      } finally { refreshing = false; }
+    };
+    const onChanged = () => { void refresh(); };
+    void refresh();
+    window.addEventListener("skill-scenes-changed", onChanged);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 15_000);
+    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener("skill-scenes-changed", onChanged); };
+  }, []);
 
   const globalSkillsByAgent = useMemo(() => {
     const map: Record<string, number> = {};
@@ -169,7 +214,9 @@ export function Sidebar() {
   const NAV_ITEMS = [
     { name: t("sidebar.dashboard"), path: "/", icon: LayoutDashboard },
     { name: t("sidebar.mySkills"), path: "/my-skills", icon: Layers },
+    { name: "使用场景", path: "/scenes", icon: Tags },
     { name: t("sidebar.decks"), path: "/decks", icon: PanelsTopLeft },
+    { name: "连接助手", path: "/assistants", icon: Bot },
     { name: t("sidebar.installSkills"), path: "/install", icon: Download },
     { name: t("sidebar.backup"), path: "/backup", icon: CloudUpload },
   ];
@@ -399,6 +446,32 @@ export function Sidebar() {
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
+            if (item.path === "/scenes") {
+              return <div key={item.path}>
+                <div className={cn("flex items-center rounded-md transition-colors", isActive && !selectedSceneId ? "bg-surface-active" : "hover:bg-surface-hover")}>
+                  <Link to="/scenes" aria-current={isActive && !selectedSceneId ? "page" : undefined} className={cn("flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-[7px] text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent", isActive ? "text-primary" : "text-tertiary hover:text-secondary")}>
+                    <Tags className={cn("h-4 w-4 shrink-0", isActive ? "text-accent" : "text-muted")} />
+                    <span className="truncate">使用场景</span>
+                  </Link>
+                  <button type="button" aria-label={scenesOpen ? "收起使用场景" : "展开使用场景"} aria-expanded={scenesOpen} aria-controls="sidebar-skill-scenes" onClick={() => setScenesOpen((open) => !open)} className="mr-1 rounded p-1.5 text-muted hover:text-primary focus-visible:ring-2 focus-visible:ring-accent">
+                    {scenesOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                {scenesOpen && <div id="sidebar-skill-scenes" className="mb-1 ml-[18px] max-h-[32vh] overflow-y-auto border-l border-border-subtle pl-2" aria-label="使用场景子节点">
+                  {sceneLoadError ? <button type="button" onClick={() => window.dispatchEvent(new Event("skill-scenes-changed"))} className="px-2 py-2 text-left text-[11px] text-muted hover:text-primary">场景加载失败，点击重试</button>
+                    : sceneOverview === null ? <p className="px-2 py-2 text-[11px] text-faint">正在加载场景…</p>
+                    : sceneOverview.scenes.length === 0 ? <Link to="/scenes" className="block px-2 py-2 text-[11px] text-muted hover:text-primary">AI 整理后，场景会显示在这里</Link>
+                    : sceneOverview.scenes.map((scene) => {
+                      const active = selectedSceneId === scene.id;
+                      return <Link key={scene.id} to={`/scenes?scene=${encodeURIComponent(scene.id)}`} title={scene.description || scene.name} aria-current={active ? "page" : undefined} className={cn("my-0.5 flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-[12px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", active ? "bg-surface-active font-medium text-primary" : "text-tertiary hover:bg-surface-hover hover:text-secondary")}>
+                        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", sceneDotColor(scene.id))} aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate">{scene.name}</span>
+                        <span className={cn("text-[11px] tabular-nums", active ? "text-accent-light" : "text-faint")}>{sceneCounts.get(scene.id) ?? 0}</span>
+                      </Link>;
+                    })}
+                </div>}
+              </div>;
+            }
             return (
               <Link
                 key={item.path}

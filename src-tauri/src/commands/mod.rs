@@ -10,3 +10,6 @@ pub mod sync;
 pub mod tools;
 
 pub mod agent_control;
+pub mod mcp_control;
+pub mod skill_publish;
+pub mod skill_scenes;

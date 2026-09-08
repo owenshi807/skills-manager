@@ -932,6 +932,9 @@ pub fn run() {
             tauri::async_runtime::spawn_blocking(|| {
                 let step = Instant::now();
                 core::cli_bridge::ensure_bridge(env!("CARGO_PKG_VERSION"));
+                if let Err(error) = core::mcp_bridge::ensure_bridge() {
+                    log::warn!("MCP bridge unavailable: {error}");
+                }
                 log::info!(
                     "startup: cli bridge step done in {} ms",
                     step.elapsed().as_millis()
@@ -1020,6 +1023,26 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::mcp_control::get_mcp_control_status,
+            commands::mcp_control::set_mcp_control_settings,
+            commands::mcp_control::connect_mcp_client,
+            commands::skill_scenes::get_skill_scene_overview,
+            commands::skill_scenes::get_skill_scene_agent_capabilities,
+            commands::skill_scenes::get_skill_scene_snapshot,
+            commands::skill_scenes::apply_skill_scene_proposal,
+            commands::skill_scenes::upsert_skill_scene,
+            commands::skill_scenes::set_skill_scene_assignment,
+            commands::skill_scenes::set_skill_scene_preferences,
+            commands::skill_scenes::set_skill_scene_priorities,
+            commands::skill_scenes::classify_skill_scenes,
+            commands::skill_publish::get_skill_library,
+            commands::skill_publish::begin_skill_edit,
+            commands::skill_publish::preview_skill_publish,
+            commands::skill_publish::write_skill_publish_stage_file,
+            commands::skill_publish::publish_skill_stage,
+            commands::skill_publish::get_skill_publish_history,
+            commands::skill_publish::select_skill_canonical,
+            commands::skill_publish::read_skill_publish_document,
             // Tools
             commands::tools::get_tool_status,
             commands::tools::set_tool_enabled,
