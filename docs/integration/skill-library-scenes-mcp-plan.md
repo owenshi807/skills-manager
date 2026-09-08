@@ -106,3 +106,17 @@ Evidence outside the application repository: `_knowledge_base/reviews/product-se
 - [ ] R4 remains pending persistent Codex/Claude registration; prior automatic approval rejection requires separate action-time confirmation. This is distinct from the authorized model evidence transfer.
 
 Metadata mutation receipts and the immediate pre-mutation DB/app backup are under `_local_backups/before-scenes-mcp-20260908-104549/before-platform-variants-124558`. Durable summary: `_knowledge_base/reviews/product-selection-audit-20260907/real-platform-variants.json`.
+
+## Codex-only access authorization and connection (2026-09-08)
+
+User explicitly confirmed “确认接入codex，claude本级还没有配置”. Codex persistent access is authorized; Claude connection is deferred by the user because this machine is not configured. Earlier pending-registration notes above describe historical state.
+
+- [x] Backed up current Codex and Claude configuration before connecting.
+- [x] Used the installed app’s **连接 Codex** control. Native `codex mcp get skill-manager --json` now verifies the enabled stdio server at `/Users/owen/.skills-manager/bin/skills-manager-mcp`.
+- [x] Verified the only semantic Codex configuration addition is the Manager entry. The Codex CLI also serializes away an unrelated `node_repl args=[]` default; omitted args are equivalent. Claude configuration remains byte-identical.
+- [x] Read the persisted executable and completed a local initialize → tools/list → Manager status handshake: 20 tools, shared real library, query and file publication enabled.
+- [ ] A fresh GPT-5.6-Luna conversation querying real names, IDs, scenes and publish history was rejected **before process launch** by automatic approval. The stated reason requires explicit consent for this specific metadata transfer; no alternative model invocation or indirect workaround was attempted.
+- [ ] After that data-transfer confirmation, finish real connected-conversation acceptance. No second Codex registration is needed.
+- [ ] Claude connection and Claude model acceptance: deferred by explicit user direction, not a current execution blocker.
+
+Current evidence: `_knowledge_base/reviews/product-selection-audit-20260907/codex-mcp-connection.json`. The earlier 19-tool fixture receipt is historical; platform resolution added the 20th tool.
