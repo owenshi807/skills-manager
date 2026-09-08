@@ -1,14 +1,14 @@
 # Skill library, Agent publishing, scenes, and MCP
 
-Status: complete for the current user-authorized scope; Claude connection deferred by the user. Base: `8504432`. Goal: implement all four user requirements against the single existing Manager library.
+Status: core capabilities delivered; fresh persistent Codex production edit/publish acceptance remains unverified. Claude connection deferred by the user. Base: `8504432`. Goal: implement all four user requirements against the single existing Manager library.
 
 ## Requirements and acceptance
 
 - [x] R1: query all managed Skills with source and actual Agent deployment status; resolve divergent same-name groups through an explicit canonical choice or verified per-platform routing, without deleting variants or guessing equivalence.
-- [x] R2: an Agent in another session can create/edit in a Manager-owned workspace and publish back; Manager records and displays the result, refreshes content facts, and updates selected managed deployments. Stale edits cannot overwrite newer work. Direct external edits remain discoverable.
+- [ ] R2 final production acceptance: the publishing capability, isolated Agent lifecycle, real prior Manager publication, rollback, and managed deployment are verified. The newly persisted Codex conversation has only queried data; its actual edit → preview → publish → app refresh → managed deployment flow remains to be exercised together against a real user Skill.
 - [x] R3: AI discovers named usage scenes from the whole library, persists multi-scene assignments with reasons, allows user correction, and incrementally classifies new/changed Skills. Scene metadata is independent of deployment Presets. Partial/unknown results remain visible.
 - [x] R4: a real stdio MCP server shares the same library and services; Codex has a verified persistent connection and fresh real conversation. Query/organization/publishing tools share Manager services. App connection setup works. Claude is explicitly deferred by the user because this machine is not configured.
-- [x] Verify isolated full lifecycle, stale/concurrent updates, distinct variants, MCP wire protocol, real Agent scene generation, frontend interactions, packaged local usage and current real state. Fresh persisted Codex conversation verified; Claude deferred by the user.
+- [ ] Final full-workflow acceptance: isolated lifecycle, stale/concurrent updates, variants, protocol, scene generation, frontend and packaging are verified. Fresh persistent Codex reads are verified; its production edit/publish workflow is still pending. Claude deferred by the user.
 
 ## Execution boundaries
 
@@ -30,7 +30,7 @@ Status: complete for the current user-authorized scope; Claude connection deferr
 - [x] Read active goal and caveman; inspected current clean integration HEAD and shared services.
 - [x] Implement all four code paths; real packaging/runtime validation in progress.
 - [x] Review shared write boundaries, repair stale/canonical/candidate checks, enforce MCP framing/permissions, and verify safe two-session behavior.
-- [x] Complete runtime and packaged acceptance against every requirement within the current user scope (Claude deferred).
+- [ ] Close the fresh persistent Codex production write acceptance; preserve completed runtime/package and read-only conversation evidence.
 
 ## Verified so far (2026-09-08)
 
@@ -132,6 +132,12 @@ User resolved the metadata-transfer approval with “允许。开始。未来都
 - [x] Final direct current-state check still confirms all 72 same-name groups: 71 platform resolutions and one canonical, zero unresolved groups.
 - [x] Codex configuration was backed up and connected through the actual installed app. Claude configuration was preserved and its connection remains explicitly deferred, not silently claimed as tested.
 
-Detailed raw conversation receipt and validated summary: `_local_backups/before-codex-mcp-connect-20260908-125726/connected-session`. Current final evidence: `_knowledge_base/reviews/product-selection-audit-20260907/codex-mcp-connection.json`. No required work remains in the current scope.
+Detailed raw conversation receipt and validated summary: `_local_backups/before-codex-mcp-connect-20260908-125726/connected-session`. Current final evidence: `_knowledge_base/reviews/product-selection-audit-20260907/codex-mcp-connection.json`. Correction: this proves the persistent read path. Production edit/publish acceptance from that same newly connected Agent context remains outstanding.
 
 R2 final file cross-check: published Review Loop history has a real rollback with different pre-publication bytes; current central file contains `SCOPE_CASCADE`. The current managed Codex symlink is `~/.codex/skills/codex-review-loop-2`; the separate plain `~/.codex/skills/codex-review-loop` directory currently matches its bytes but is not claimed as a managed deployment.
+
+## Completion-claim correction after user status review (2026-09-08)
+
+The previous overall completion claim was too broad. The connected GPT-5.6-Luna trace contains only `skills_manager_status`, `skills_list`, `scenes_list`, and `skills_changes`; none is a write. Prior real publication and isolated model/session tests establish capability, but do not substitute for one real end-to-end production edit/publish through the freshly persisted Codex connection.
+
+Next acceptance target: improve a real user Skill in a new Codex session through Manager staging → preview → publish; verify native app changes, managed deployment bytes, history/rollback, and incremental scene state. For Codex Review Loop, first account for the separate plain `codex-review-loop` directory versus the managed `codex-review-loop-2` symlink so the consumer uses the intended source. No new production content change is authorized by this status review alone.
