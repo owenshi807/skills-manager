@@ -103,6 +103,11 @@ export function SceneGoalComposer({ onCreated, scene, skillIds, excludedSkillIds
     const targetScene = scene;
     try {
       const savedPlans = await loadSceneCustomCombinations();
+      const pending = savedPlans.find((row) => row.id === planRef.current?.id);
+      if (pending?.sceneImportStatus === "pending" && pending.sceneId) {
+        selectPlan(pending);
+        throw new Error("请先继续保存当前方案，完成后再生成新组合。");
+      }
       const snapshot = planRef.current ?? latestSceneCustomCombination(targetScene?.id, savedPlans);
       const restoredSkillIds = snapshot?.restoredSkillIds ?? [];
       const exclusions = sceneCombinationExcludedSkillIds(targetScene?.id, savedPlans, scopeRef.current.excludedSkillIds, snapshot);

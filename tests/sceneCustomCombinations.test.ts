@@ -25,7 +25,16 @@ function fixture(initial: SceneCustomCombination[] = []) {
   const deps: SceneCombinationSaveDependencies = {
     read: async () => raw,
     write: async (value) => { raw = value; writes++; },
-    createScene: async (name, description) => { creates++; return { id: "scene-1", name, description, createdAt: 1, updatedAt: 1 }; },
+    createScene: async (name, description, planId) => {
+      const records = parseSceneCustomCombinations(raw);
+      const pending = records.find((row) => row.id === planId)!;
+      assert.equal(pending.sceneImportStatus, "pending");
+      assert.equal(pending.sceneSaveMode, "new-scene-import");
+      pending.sceneId = "scene-1";
+      raw = JSON.stringify(records);
+      creates++;
+      return { id: "scene-1", name, description, createdAt: 1, updatedAt: 1 };
+    },
     assign: async (id) => { assignments.push(id); },
     changed: () => undefined,
   };
@@ -212,7 +221,7 @@ test("a saved restoration can override an old Deck exclusion without AI or membe
   assert.deepEqual(state.assignments, []);
 });
 
-test("failure to persist the returned scene ID retains it in progress for a same-session retry", async () => {
+test("a final settings failure preserves scene identity across reload and retry", async () => {
   const state = fixture();
   const write = state.deps.write;
   let attempted = 0;
@@ -220,8 +229,28 @@ test("failure to persist the returned scene ID retains it in progress for a same
   let progress = plan;
   await assert.rejects(saveCombinationAsScene(plan, ["interview"], (value) => { progress = value; }, state.deps), /disk full/);
   assert.equal(progress.sceneId, "scene-1");
-  await saveCombinationAsScene(progress, ["interview"], () => undefined, state.deps);
+  const reloaded = state.records()[0];
+  assert.equal(reloaded.sceneId, "scene-1");
+  assert.equal(reloaded.sceneImportStatus, "pending");
+  await saveCombinationAsScene(reloaded, ["interview"], () => undefined, state.deps);
   assert.equal(state.creates(), 1);
+});
+
+test("a lost create response recovers the durable scene without relying on component progress", async () => {
+  const state = fixture();
+  const create = state.deps.createScene;
+  state.deps.createScene = async (...args) => {
+    await create(...args);
+    throw new Error("response lost after commit");
+  };
+  await assert.rejects(saveCombinationAsScene(plan, ["interview"], () => undefined, state.deps), /response lost/);
+  assert.deepEqual(state.assignments, []);
+  const reloaded = state.records()[0];
+  assert.equal(reloaded.sceneId, "scene-1");
+  const saved = await saveCombinationAsScene(reloaded, ["interview"], () => undefined, state.deps);
+  assert.equal(saved.sceneImportStatus, "complete");
+  assert.equal(state.creates(), 1);
+  assert.deepEqual(state.assignments, ["interview"]);
 });
 
 test("removed library IDs are never assigned and long reasons respect the backend limit", async () => {

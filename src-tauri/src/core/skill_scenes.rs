@@ -19,6 +19,7 @@ use super::{
 };
 
 pub const SCENE_STATE_SETTING: &str = "card_master_skill_scenes_v1";
+const CUSTOM_COMBINATIONS_SETTING: &str = "card_master_custom_decks_v1";
 pub const SCENE_SCHEMA_VERSION: u32 = 1;
 const MAX_SCENES: usize = 120;
 const MAX_SCENES_PER_SKILL: usize = 12;
@@ -727,6 +728,25 @@ pub fn upsert_scene(
     name: String,
     description: Option<String>,
 ) -> Result<SkillScene, AppError> {
+    upsert_scene_with_combination(store, scene_id, name, description, None)
+}
+
+/// Bind a newly created scene to its already-persisted import plan in the
+/// same settings transaction, so a failed link cannot strand a scene ID.
+pub fn upsert_scene_with_combination(
+    store: &SkillStore,
+    scene_id: Option<String>,
+    name: String,
+    description: Option<String>,
+    pending_combination_id: Option<String>,
+) -> Result<SkillScene, AppError> {
+    if pending_combination_id.as_deref().is_some_and(|id| !valid_id(id))
+        || pending_combination_id.is_some() && scene_id.is_some()
+    {
+        return Err(AppError::invalid_input(
+            "A pending combination can only be linked while creating a new scene",
+        ));
+    }
     if !valid_scene_name(&name)
         || description
             .as_deref()
@@ -773,8 +793,49 @@ pub fn upsert_scene(
         .expect("created scene");
     scene.description = description.unwrap_or_default().trim().to_string();
     let result = scene.clone();
-    save_state(store, &state)?;
+    if let Some(combination_id) = pending_combination_id {
+        let combinations = link_pending_combination(store, &combination_id, &result)?;
+        let scene_state = serde_json::to_string(&state)
+            .map_err(|error| AppError::internal(error.to_string()))?;
+        store.set_settings_atomic(&[
+            (SCENE_STATE_SETTING, &scene_state),
+            (CUSTOM_COMBINATIONS_SETTING, &combinations),
+        ]).map_err(AppError::db)?;
+    } else {
+        save_state(store, &state)?;
+    }
     Ok(result)
+}
+
+fn link_pending_combination(
+    store: &SkillStore,
+    combination_id: &str,
+    scene: &SkillScene,
+) -> Result<String, AppError> {
+    let raw = store.get_setting(CUSTOM_COMBINATIONS_SETTING).map_err(AppError::db)?
+        .ok_or_else(|| AppError::not_found("Pending combination not found"))?;
+    let mut value: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|_| AppError::invalid_input("Stored combinations are malformed"))?;
+    let records = value.as_array_mut()
+        .ok_or_else(|| AppError::invalid_input("Stored combinations are not an array"))?;
+    let matches = records.iter().enumerate()
+        .filter(|(_, record)| record.get("id").and_then(|id| id.as_str()) == Some(combination_id))
+        .map(|(index, _)| index).collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(AppError::invalid_input("Pending combination must exist exactly once"));
+    }
+    let record = records[matches[0]].as_object_mut()
+        .ok_or_else(|| AppError::invalid_input("Pending combination is malformed"))?;
+    if record.get("sceneSaveMode").and_then(|value| value.as_str()) != Some("new-scene-import")
+        || record.get("sceneImportStatus").and_then(|value| value.as_str()) != Some("pending")
+        || record.get("sceneId").is_some_and(|value| !value.is_null())
+        || record.get("title").and_then(|value| value.as_str()).map(str::trim) != Some(scene.name.as_str())
+        || record.get("summary").and_then(|value| value.as_str()).map(str::trim) != Some(scene.description.as_str())
+    {
+        return Err(AppError::invalid_input("Combination is not an unlinked pending scene import"));
+    }
+    record.insert("sceneId".into(), serde_json::Value::String(scene.id.clone()));
+    serde_json::to_string(&value).map_err(|error| AppError::internal(error.to_string()))
 }
 
 pub fn set_assignment(
@@ -1263,6 +1324,110 @@ mod tests {
         assert_eq!(overview.assignments["a"][0].source, SceneMembershipSource::User);
         crate::core::central_repo::set_test_base_dir_override(None);
     }
+
+    fn pending_combination_fixture() -> serde_json::Value {
+        serde_json::json!({
+            "id": "custom-pending", "title": " Writing ", "summary": " A clear writing workflow ",
+            "sceneSaveMode": "new-scene-import", "sceneImportStatus": "pending",
+            "cards": [{"skill_id": "a", "stage": "Draft", "reason": "Produce the first draft"}],
+            "stages": [{"name": "Draft", "purpose": "Get the argument on the page"}],
+            "createdAt": 7, "goal": "Write an article", "excludedSkillIds": ["excluded"],
+            "extra": {"preserve": true},
+        })
+    }
+
+    #[test]
+    fn scene_creation_persists_pending_combination_link_without_changing_plan_fields() {
+        let _repo_guard = crate::core::central_repo::test_base_dir_lock();
+        let tmp = tempdir().unwrap();
+        crate::core::central_repo::set_test_base_dir_override(Some(tmp.path().join("repo")));
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let other = serde_json::json!({"id": "custom-other", "sceneId": "scene-existing", "unknownField": [1, 2]});
+        let mut expected = serde_json::json!([other, pending_combination_fixture()]);
+        store.set_setting(CUSTOM_COMBINATIONS_SETTING, &expected.to_string()).unwrap();
+        let scene = upsert_scene_with_combination(
+            &store, None, "Writing".into(), Some("A clear writing workflow".into()), Some("custom-pending".into()),
+        ).unwrap();
+        expected[1]["sceneId"] = serde_json::Value::String(scene.id.clone());
+        let persisted: serde_json::Value = serde_json::from_str(&store.get_setting(CUSTOM_COMBINATIONS_SETTING).unwrap().unwrap()).unwrap();
+        assert_eq!(persisted, expected);
+        assert_eq!(state_from_store(&store).unwrap().scenes, vec![scene]);
+        crate::core::central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn failed_pending_combination_write_rolls_back_new_scene_and_plan() {
+        let _repo_guard = crate::core::central_repo::test_base_dir_lock();
+        let tmp = tempdir().unwrap();
+        crate::core::central_repo::set_test_base_dir_override(Some(tmp.path().join("repo")));
+        let db_path = tmp.path().join("test.db");
+        let store = SkillStore::new(&db_path).unwrap();
+        upsert_scene(&store, None, "Existing".into(), None).unwrap();
+        let plan = serde_json::json!([pending_combination_fixture()]).to_string();
+        store.set_setting(CUSTOM_COMBINATIONS_SETTING, &plan).unwrap();
+        let before_scene = store.get_setting(SCENE_STATE_SETTING).unwrap();
+        let observer = rusqlite::Connection::open(&db_path).unwrap();
+        observer.execute_batch("CREATE TRIGGER fail_combination_link BEFORE INSERT ON settings
+            WHEN NEW.key = 'card_master_custom_decks_v1'
+            BEGIN SELECT RAISE(ABORT, 'simulated combination link failure'); END;").unwrap();
+        let error = upsert_scene_with_combination(
+            &store, None, "Writing".into(), Some("A clear writing workflow".into()), Some("custom-pending".into()),
+        ).unwrap_err();
+        assert!(error.to_string().contains("simulated combination link failure"));
+        assert_eq!(store.get_setting(SCENE_STATE_SETTING).unwrap(), before_scene);
+        assert_eq!(store.get_setting(CUSTOM_COMBINATIONS_SETTING).unwrap(), Some(plan));
+        crate::core::central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn pending_combination_must_be_unique_unlinked_and_match_the_requested_scene() {
+        let _repo_guard = crate::core::central_repo::test_base_dir_lock();
+        let tmp = tempdir().unwrap();
+        crate::core::central_repo::set_test_base_dir_override(Some(tmp.path().join("repo")));
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let pending = pending_combination_fixture();
+        let mut invalid_records = vec![serde_json::json!([]), serde_json::json!([pending.clone(), pending.clone()])];
+        for (field, value) in [
+            ("sceneId", "scene-already-linked"), ("sceneSaveMode", "existing-scene"),
+            ("sceneImportStatus", "complete"), ("title", "Different title"), ("summary", "Different description"),
+        ] {
+            let mut invalid = pending.clone();
+            invalid[field] = serde_json::json!(value);
+            invalid_records.push(serde_json::json!([invalid]));
+        }
+        for records in invalid_records {
+            let raw = records.to_string();
+            store.set_setting(CUSTOM_COMBINATIONS_SETTING, &raw).unwrap();
+            assert!(upsert_scene_with_combination(
+                &store, None, "Writing".into(), Some("A clear writing workflow".into()), Some("custom-pending".into()),
+            ).is_err());
+            assert!(store.get_setting(SCENE_STATE_SETTING).unwrap().is_none());
+            assert_eq!(store.get_setting(CUSTOM_COMBINATIONS_SETTING).unwrap(), Some(raw));
+        }
+        crate::core::central_repo::set_test_base_dir_override(None);
+    }
+
+    #[test]
+    fn pending_combination_does_not_adopt_an_existing_same_name_scene() {
+        let _repo_guard = crate::core::central_repo::test_base_dir_lock();
+        let tmp = tempdir().unwrap();
+        crate::core::central_repo::set_test_base_dir_override(Some(tmp.path().join("repo")));
+        let store = SkillStore::new(&tmp.path().join("test.db")).unwrap();
+        let existing = upsert_scene(&store, None, "Writing".into(), Some("Existing description".into())).unwrap();
+        let plan = serde_json::json!([pending_combination_fixture()]).to_string();
+        store.set_setting(CUSTOM_COMBINATIONS_SETTING, &plan).unwrap();
+        assert!(upsert_scene(&store, None, " writing ".into(), None).is_err());
+        assert!(upsert_scene_with_combination(
+            &store, None, "Writing".into(), Some("A clear writing workflow".into()), Some("custom-pending".into()),
+        ).is_err());
+        assert!(upsert_scene_with_combination(
+            &store, Some(existing.id.clone()), "Writing".into(), Some("A clear writing workflow".into()), Some("custom-pending".into()),
+        ).is_err());
+        assert_eq!(state_from_store(&store).unwrap().scenes, vec![existing]);
+        assert_eq!(store.get_setting(CUSTOM_COMBINATIONS_SETTING).unwrap(), Some(plan));
+        crate::core::central_repo::set_test_base_dir_override(None);
+    }
+
 
     #[test]
     fn malformed_and_partial_outputs_fail_closed() {

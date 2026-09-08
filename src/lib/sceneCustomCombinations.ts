@@ -175,7 +175,8 @@ export function applySceneCustomCombination(
 export interface SceneCombinationSaveDependencies {
   read: () => Promise<string | null>;
   write: (raw: string) => Promise<void>;
-  createScene: (name: string, description: string) => Promise<SkillScene>;
+  /** Creation atomically binds the scene ID to this persisted pending plan. */
+  createScene: (name: string, description: string, pendingCombinationId: string) => Promise<SkillScene>;
   assign: (skillId: string, sceneId: string, reason: string) => Promise<void>;
   changed: () => void;
 }
@@ -185,7 +186,7 @@ async function defaultSaveDependencies(): Promise<SceneCombinationSaveDependenci
   return {
     read: () => api.getSettings(CUSTOM_DECKS_KEY),
     write: (raw) => api.setSettings(CUSTOM_DECKS_KEY, raw),
-    createScene: (name, description) => scenes.upsertSkillScene(null, name, description),
+    createScene: (name, description, planId) => scenes.upsertSkillScene(null, name, description, planId),
     assign: (skillId, sceneId, reason) => scenes.setSkillSceneAssignment(skillId, sceneId, true, reason, true),
     changed: () => window.dispatchEvent(new CustomEvent(SCENE_COMBINATIONS_CHANGED_EVENT)),
   };
@@ -234,11 +235,11 @@ export function saveCombinationAsScene(
     // Preserve the plan before attempting any scene operation, including retries.
     await persist();
     if (!saved.sceneId) {
-      const scene = await deps.createScene(saved.title.trim(), saved.summary.trim());
+      const scene = await deps.createScene(saved.title.trim(), saved.summary.trim(), saved.id);
       saved = { ...saved, sceneId: scene.id };
-      // Retain the returned ID even if the next setting write fails.
+      // The backend commits this association with scene creation, so reloads
+      // recover it even when the response or a later import operation fails.
       onProgress(saved);
-      await persist();
     }
     if (saved.sceneSaveMode === "new-scene-import") {
       const reasons = new Map<string, string[]>();

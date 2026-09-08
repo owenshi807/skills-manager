@@ -57,11 +57,14 @@ pub async fn upsert_skill_scene(
     scene_id: Option<String>,
     name: String,
     description: Option<String>,
+    pending_combination_id: Option<String>,
     store: State<'_, Arc<SkillStore>>,
 ) -> Result<SkillScene, AppError> {
     let store = store.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        skill_scenes::upsert_scene(&store, scene_id, name, description)
+        skill_scenes::upsert_scene_with_combination(
+            &store, scene_id, name, description, pending_combination_id,
+        )
     })
     .await?
 }
