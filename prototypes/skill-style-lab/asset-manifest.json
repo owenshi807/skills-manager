@@ -1,0 +1,36 @@
+[
+  {
+    "style": "pokemon",
+    "path": "assets/pokemon.png",
+    "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-d35ff745-b5c7-4570-bb25-4b07532812ac.png",
+    "sha256": "1033c86ab9b0ab8b7a103da76e6dcb4a5bcefcf4ee631d7ac67e755305a7c80b",
+    "bytes": 2647185
+  },
+  {
+    "style": "bruno",
+    "path": "assets/bruno.png",
+    "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-3044a786-46d4-4b84-af24-21b19b6c6ee2.png",
+    "sha256": "51146a76840e011cb8aa970dfaf6a63b5a80b1bcbf1382d42907198a40afd077",
+    "bytes": 2150923,
+    "revision_1": {
+      "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-6c75fbce-eb3c-431f-a9be-0b8d5d4f47eb.png",
+      "sha256": "d2f4ce78a6a3eb61ce27ef97a91d1dcc72d5097c0f3bd2833f1d7cca8236b3bd",
+      "note": "未选原稿；项目只保留第二版，生成器原稿暂留。"
+    },
+    "revision": 2
+  },
+  {
+    "style": "hd2d",
+    "path": "assets/hd2d.png",
+    "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-0467daf7-b47e-4a9b-a7c9-2e19b01eac9b.png",
+    "sha256": "82c1e139a8130c98c3cf2da822d45c4fb867b6e4d2ee8ec5caed588623094de9",
+    "bytes": 2968590
+  },
+  {
+    "style": "mythic",
+    "path": "assets/mythic.png",
+    "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-a01641db-deab-4b79-aded-ebde1c4eb0df.png",
+    "sha256": "c5e1b644b231e39cd9a16647a6704274c0e427c24232a0a203443d90469bc315",
+    "bytes": 2732805
+  }
+]

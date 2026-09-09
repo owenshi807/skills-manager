@@ -1,0 +1,26 @@
+{
+  "authorized_processing": "User explicitly approved local technical cutout, alpha and exact line-art extraction on 2026-09-09.",
+  "subject_source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-54059142-d8d7-492a-997e-a5a42480e09a.png",
+  "background_source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-f7f90918-b803-445c-a3cf-a36c10cda492.png",
+  "method": "Largest chromatic connected silhouette; small neutral highlight holes restored; 0.45px edge antialias; registered Canny contours. Source RGB preserved.",
+  "alpha_transparent_fraction": 0.7066847483317057,
+  "alpha_visible_fraction": 0.29038429260253906,
+  "canvas": [
+    1024,
+    1536
+  ],
+  "assets": {
+    "subject": {
+      "sha256": "edf71ddd0c99f1d8aeae766b6dfa7a0ec6437a1c686703aefc653f6e629f7d67"
+    },
+    "background": {
+      "sha256": "c2f3a1ff9f95f4c325b9751a2e304d8659ebde8ea87ba9e7076d6a93b0d58da1"
+    },
+    "lineart": {
+      "sha256": "b5eda43dda240117a899a7cb45facc522f22920be105718dc796691aca2d020a"
+    },
+    "text": {
+      "sha256": "3c19a6a18042edb63daba956f505d0859c16708555da8cfd022f13cbecfe9a83"
+    }
+  }
+}

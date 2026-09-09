@@ -1,0 +1,32 @@
+{
+  "tool": "built-in image_gen",
+  "artwork": [
+    {
+      "name": "archive",
+      "file": "archive.png",
+      "width": 1024,
+      "height": 1536,
+      "sha256": "a2b407705db1f0a1b80db060695dd56f487ab3bd1c0b2c11f8e2e70773429f88",
+      "generatedSource": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-2b8d7c5a-9efd-4aad-9a6f-afa31ad65916.png",
+      "usage": "composite direction-study artwork; not separated production shader layers"
+    },
+    {
+      "name": "prism",
+      "file": "prism.png",
+      "width": 1024,
+      "height": 1536,
+      "sha256": "994bb6baf6e1574beea320a6d0ac3f0b655b2da3a3c7a54aaf6cf46ae780fae7",
+      "generatedSource": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-b994825e-6c6c-4930-b580-b005c32b50e4.png",
+      "usage": "composite direction-study artwork; not separated production shader layers"
+    },
+    {
+      "name": "journal",
+      "file": "journal.png",
+      "width": 1024,
+      "height": 1536,
+      "sha256": "bcad0709cdab66c0058e730bd8bc5161c867af28cb8ca6f65f547117dd901d6c",
+      "generatedSource": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-f49e711c-6112-41dc-a3b4-d7dba4a6135b.png",
+      "usage": "composite direction-study artwork; not separated production shader layers"
+    }
+  ]
+}

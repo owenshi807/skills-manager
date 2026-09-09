@@ -1,0 +1,30 @@
+{
+  "client": "develop-web-game/scripts/web_game_playwright_client.js",
+  "adaptations": [
+    "installed Playwright/Chromium path",
+    "explicit shared Tauri fixture",
+    "wait for Portal lazy game ready before actions"
+  ],
+  "actions": [
+    "Portal click",
+    "Enter to start",
+    "ArrowRight 30 frames",
+    "ArrowUp 20 frames"
+  ],
+  "result": {
+    "ready": true,
+    "mode": "world",
+    "player": {
+      "x": 0.711,
+      "z": 7.149
+    },
+    "viewport": {
+      "left": 0,
+      "top": 82,
+      "width": 1280,
+      "height": 638
+    },
+    "errors": 0
+  },
+  "screenshotInspected": true
+}

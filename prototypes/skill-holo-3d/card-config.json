@@ -1,0 +1,29 @@
+{
+  "title": "依赖镜头",
+  "subtitle": "精灵冒险图鉴 · 方法装备",
+  "technique": "识别同源 · 保留反证",
+  "tagline": "让证据在需要时说话",
+  "edition": "SCM / 014 · EQUIPMENT EVOLUTION",
+  "collection": "SKILL CARD MASTER",
+  "description": "同一依赖镜头 Skill，从基础器具进化为精密机构、解析仪与重构镜。",
+  "parameters": {
+    "subjectScale": 1.05,
+    "subjectDepth": 0.4,
+    "backgroundDepth": -0.25,
+    "foil": 0.75
+  },
+  "safeArea": {
+    "scale": 1.12,
+    "offset": [
+      -0.06,
+      -0.085
+    ]
+  },
+  "assets": {
+    "model": "./assets/card.glb",
+    "subject": "./assets/subject.png",
+    "background": "./assets/background.png",
+    "text": "./assets/text.png",
+    "lineart": "./assets/lineart.png"
+  }
+}

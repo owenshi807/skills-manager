@@ -1,0 +1,14 @@
+{
+  "magic": "0x46546c67",
+  "version": 2,
+  "bytes": 23668,
+  "meshes": 3,
+  "materials": [
+    "web_front",
+    "web_edge",
+    "web_back",
+    "web_gold"
+  ],
+  "vertices": 520,
+  "primitives": 5
+}

@@ -1,0 +1,103 @@
+{
+  "capturedAt": "2026-09-09T13:49:17.326Z",
+  "authority": "Public identity-only projection of the official MCP snapshot; not source-method evidence.",
+  "originalPrivateSnapshotSha256": "a36676fe6d5ced74634c60cfc299afe264b5c72c81d005027d917ec2797852ed",
+  "scenes": [
+    {
+      "id": "scene-36c2451fa91aad0e",
+      "name": "商业项目推演",
+      "description": "",
+      "createdAt": 1788839934065,
+      "updatedAt": 1788841173441,
+      "members": [
+        {
+          "id": "3dd686bd-b3b3-4830-9613-9d28e009b241"
+        },
+        {
+          "id": "3ee50be1-c6ff-4b3c-831b-b3db21070bd9"
+        },
+        {
+          "id": "da2a78c0-ad2f-4d03-a25e-1e318cb14cb3"
+        },
+        {
+          "id": "ed2efaec-f1c1-4549-a047-a764736dd4e1"
+        }
+      ]
+    },
+    {
+      "id": "scene-5dceda2d4cfc9a10",
+      "name": "知识库与笔记治理",
+      "description": "",
+      "createdAt": 1788840386275,
+      "updatedAt": 1788841173441,
+      "members": [
+        {
+          "id": "07e1973e-eea3-4682-b696-75b0928be2db"
+        },
+        {
+          "id": "280c9e1e-c15d-48ca-b90b-6283be3749b7"
+        },
+        {
+          "id": "2c1c1cca-f07b-49e4-8332-407e46e1a00b"
+        },
+        {
+          "id": "3170f092-6ad3-4565-82f1-d1c6a47629ef"
+        },
+        {
+          "id": "49822923-e519-4e70-8262-bf9dbcd196b6"
+        },
+        {
+          "id": "4e8fe63b-52cc-4978-ae23-7e1580c9a01c"
+        },
+        {
+          "id": "4fa54d97-11e5-4d15-a778-0a1e5bb42513"
+        },
+        {
+          "id": "6a916c61-fa1e-4f77-81bf-31e3c6c702f8"
+        },
+        {
+          "id": "6aec1885-4491-4148-9927-e0813927a61d"
+        },
+        {
+          "id": "6d03abb5-c7cc-4d20-b503-87c3c048002e"
+        },
+        {
+          "id": "6fc55a5f-11e5-4d06-b0c9-5851cc082070"
+        },
+        {
+          "id": "7973c503-2dc7-4301-bd0d-aa2381aacd90"
+        },
+        {
+          "id": "8e331dc7-3066-4aa8-a8ba-411f1aa951ea"
+        },
+        {
+          "id": "9912eea2-b43b-45f5-b256-dbebbbd81f6c"
+        },
+        {
+          "id": "adcd6795-6446-467d-9853-a5eef4757a64"
+        },
+        {
+          "id": "c4e979f9-17f3-4df8-950d-0603104524a4"
+        },
+        {
+          "id": "d45653c3-61b4-47e3-b252-31dcf17fc1d5"
+        },
+        {
+          "id": "d6987a29-69ff-4e40-aecd-e326fb7e9a7f"
+        },
+        {
+          "id": "d8b2607e-f04f-4eaf-9a0e-3ebd4f3735f3"
+        },
+        {
+          "id": "e1b11df0-7b25-4a4a-93ba-b891090daee3"
+        },
+        {
+          "id": "e85bae36-6130-481f-aa15-2584a70a6e64"
+        },
+        {
+          "id": "f9ec4591-efae-4ae0-8636-52558cd3c2f4"
+        }
+      ]
+    }
+  ]
+}

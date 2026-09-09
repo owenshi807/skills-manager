@@ -1,0 +1,28 @@
+{
+  "background": "image_gen original copied intact",
+  "alpha": "Sibling texture, one-pixel fringe trim; source RGB and preceding artwork preserved.",
+  "mask": "Hand-registered core polygon intersected with cyan glass and subject alpha; 1.2px feather. Shader uses the SAME signed subject parallax UV.",
+  "core_image_center": [
+    533,
+    622
+  ],
+  "core_image_radius": [
+    175,
+    165
+  ],
+  "canvas": [
+    1024,
+    1536
+  ],
+  "mask_bbox": [
+    376,
+    469,
+    681,
+    770
+  ],
+  "assets": {
+    "background": "6c527f40a69fe17f36ef4d7ed165eaf8de09f400916c646a1c806435d7b81bdb",
+    "subject-divine": "5a98d2103bed2ecd96656e0ed758a20e806482eaa527236c1b2adc3836acf209",
+    "crystal-mask": "22bcf048f32449e1057dbeebd8f4f78b664b27ba1f7bb7fab667e02bed28f672"
+  }
+}

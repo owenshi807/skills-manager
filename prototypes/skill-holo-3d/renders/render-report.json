@@ -1,0 +1,23 @@
+[
+  {
+    "file": "hero.png",
+    "frame": 25,
+    "engine": "CYCLES",
+    "device": "GPU",
+    "samples": 20
+  },
+  {
+    "file": "tilt-left.png",
+    "frame": 1,
+    "engine": "CYCLES",
+    "device": "GPU",
+    "samples": 20
+  },
+  {
+    "file": "tilt-right.png",
+    "frame": 49,
+    "engine": "CYCLES",
+    "device": "GPU",
+    "samples": 20
+  }
+]

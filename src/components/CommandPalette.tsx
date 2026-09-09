@@ -27,7 +27,10 @@ interface PaletteItem {
   run: () => void;
 }
 
+import { usePortal } from "../features/portal/PortalContext";
+
 export function CommandPalette() {
+  const { active: portalActive } = usePortal();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const {
@@ -53,6 +56,7 @@ export function CommandPalette() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (portalActive) return;
       const target = e.target as HTMLElement | null;
       const typing =
         target &&
@@ -71,7 +75,7 @@ export function CommandPalette() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
+  }, [open, close, portalActive]);
 
   useEffect(() => {
     if (open) {

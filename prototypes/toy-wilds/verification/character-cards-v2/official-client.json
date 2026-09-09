@@ -1,0 +1,12 @@
+{
+  "source": "/Users/owen/.codex/skills/develop-web-game/scripts/web_game_playwright_client.js",
+  "adaptations": [
+    "Existing Playwright import and cached Chromium path",
+    "Isolated portalFixtureInit for browser-only Tauri reads",
+    "Wait for lazy game ready, then Enter and arrow actions"
+  ],
+  "fixtureOnly": true,
+  "nativeValidated": false,
+  "steps": "Enter starts world, right/up movement across two iterations",
+  "errorFiles": 0
+}

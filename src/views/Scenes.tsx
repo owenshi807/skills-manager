@@ -12,6 +12,8 @@ import { SceneGoalComposer } from "../components/SceneGoalComposer";
 import { useSceneCapabilityGroups } from "../hooks/useSceneCapabilityGroups";
 import { cn } from "../utils";
 
+import { ScenePortal } from "../features/portal/ScenePortal";
+
 function StatusPill({ label, tone }: { label: string; tone: "amber" | "red" | "slate" }) {
   return <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", tone === "red" ? "bg-red-500/10 text-red-500" : tone === "amber" ? "bg-amber-500/10 text-amber-500" : "bg-surface-active text-muted")}>{label}</span>;
 }
@@ -174,6 +176,7 @@ export function Scenes() {
       <div><h1 className="app-page-title">{activeScene?.name ?? "使用场景"}</h1>{!activeScene && <p className="mt-2 max-w-[680px] text-[13px] leading-6 text-muted">从你要完成的工作出发，找到能配合使用的能力。选择场景，了解怎样做、用哪些 Skill，以及何时完成。</p>}</div>
       <div className="flex gap-2">{activeScene && <button type="button" className="app-button-secondary h-8" onClick={() => { setEditingScene(activeScene.id); setSceneName(activeScene.name); setSceneDescription(activeScene.description); setSceneFormOpen(true); }}><Pencil className="h-3.5 w-3.5" />编辑场景</button>}<button type="button" className="app-button-secondary h-8" onClick={() => { setEditingScene(null); setSceneName(""); setSceneDescription(""); setSceneFormOpen(true); }}><Plus className="h-3.5 w-3.5" />新建场景</button></div>
     </header>
+    <ScenePortal sceneId={activeScene?.id ?? null} sceneName={activeScene?.name ?? "使用场景"} />
     {sceneFormOpen && <form onSubmit={(event) => { event.preventDefault(); void saveScene(); }} className="app-panel mb-5 grid gap-3 p-4"><label className="text-[12px] text-muted">场景名称<input required className="app-input mt-1.5 w-full" value={sceneName} onChange={(event) => setSceneName(event.target.value)} placeholder="例如：商业项目推演" /></label><label className="text-[12px] text-muted">要完成什么<textarea className="app-input mt-1.5 w-full" value={sceneDescription} onChange={(event) => setSceneDescription(event.target.value)} placeholder="描述这个场景的目标与期望结果" /></label><div className="flex gap-2"><button type="submit" className="app-button-primary h-8" disabled={saving || !sceneName.trim()}>{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}保存</button><button type="button" className="app-button-secondary h-8" onClick={() => setSceneFormOpen(false)}>取消</button></div></form>}
     {missingScene && <section className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4"><h2 className="text-[13px] font-semibold text-primary">这个使用场景已不存在</h2><p className="mt-1 text-[12px] text-muted">当前库中找不到这个场景。返回全库可以继续浏览已有场景。</p><button type="button" className="app-button-secondary mt-3 h-8" onClick={() => selectScene(null)}>返回全部场景</button></section>}
 

@@ -1,0 +1,49 @@
+
+<canvas id="game" tabindex="0" aria-label="玩具旷野，点击小径移动，WASD 或方向键行走，接近镜体按 E 拾取"></canvas>
+<header class="mast"><div class="brand"><span class="crest">◈</span><div><strong>玩具旷野</strong><small>THE TOY WILDS</small></div></div><nav><button id="bag" aria-label="打开角色档案">◈ <span id="bag-label">角色</span></button><button id="armory" aria-label="打开场景卡库">▱ <span>场景卡库</span></button><button id="pause" aria-label="暂停与操作说明">Ⅱ</button></nav></header>
+<div id="region" class="region"><span>第一站 · 秋日水域</span><h1>镜之圣所</h1><p id="quest">沿着暖色小径，找到池畔的镜。</p></div>
+<button id="marker" class="marker" hidden><span class="diamond">◇</span><span id="marker-label">万象重构镜</span><small id="distance"></small></button>
+<div id="travel" class="travel" hidden>正在前往 · 镜之圣所</div>
+<section id="welcome" class="veil"><div class="panel"><span class="eyebrow">一次小小的探索</span><h2>装备，生长在<br>自己的世界里。</h2><p>穿过小径，走近池塘。<br>一件镜体，连着一片小小的水域。</p><div class="controls"><span><kbd>W A S D</kbd> / 方向键行走</span><span>点击地面前往 · <kbd>E</kbd> 拾取</span></div><button class="primary" id="start">进入旷野 <span>↗</span></button><small class="preview-note">本地体验样卡 · 不写入 Skill 库或 Profile</small></div></section>
+<section id="pause-panel" class="veil" hidden><div class="panel"><span class="eyebrow">停一会儿</span><h2>旷野在等你。</h2><p>WASD / 方向键行走，点击地面前往。<br>E 拾取，装备袋查看。卡片点击翻面。<br>Esc 返回或暂停。</p><button class="primary" id="resume">继续探索 ↗</button><button class="quiet" id="restart">重新体验这段旅程</button></div></section>
+<div id="card-ui" hidden><div class="card-heading"><span class="eyebrow">装备袋 · 圣品样卡</span><h2>万象重构镜</h2><p>镜环重连，水路成域。</p></div><button id="return" class="return">← 返回旷野</button><p class="card-help" id="card-help">移入卡片轻转 · 点击卡片翻面 · Esc 返回</p></div>
+<footer id="map-footer"><span class="tiny-compass">N ↗</span><span id="hint">点击地面前往 / WASD 行走</span><span class="preview">旷野预览 · 01</span></footer>
+<div id="message" role="status" aria-live="polite"></div><div id="fatal" role="alert" hidden></div>
+
+<section id="inventory-panel" role="dialog" aria-modal="true" aria-labelledby="inventory-title" hidden>
+  <header class="inventory-heading">
+    <div><span class="inventory-kicker">THE TOY WILDS / YOUR COMPANY</span><h1 id="inventory-title">旅人 · 与他的本领</h1></div>
+    <div class="profile-tabs" role="tablist" aria-label="角色与卡库">
+      <button id="profile-tab" type="button" role="tab" aria-controls="profile-view" aria-selected="true">◈ 角色档案</button>
+      <button id="armory-tab" type="button" role="tab" aria-controls="armory-view" aria-selected="false">▱ 场景卡库 <span id="inventory-library-count">—</span></button>
+    </div>
+    <button id="inventory-close" type="button" aria-label="关闭角色界面，返回旷野"><span>×</span><small>返回旷野</small></button>
+  </header>
+  <div class="inventory-status-line"><p id="profile-status">本机角色 · 本机配装 · 待同步</p><button id="inventory-refresh" type="button">↻ 读取卡库</button></div>
+  <p id="inventory-error" role="alert" hidden></p><p id="inventory-loading" role="status" hidden>正在打开你的卡库…</p>
+  <div id="profile-view" class="profile-view" role="tabpanel" tabindex="0" aria-labelledby="profile-tab">
+    <aside class="company-rail"><span class="inventory-kicker">选择旅伴</span><div id="agent-portraits" class="agent-portraits" aria-label="本机角色"></div>
+      <details class="agent-create"><summary>＋ 创建角色</summary>
+        <form id="agent-create-form">
+          <label for="agent-name">角色名字</label><input id="agent-name" name="name" maxlength="40" required placeholder="给新旅伴起个名字" autocomplete="off">
+          <label for="agent-lineage">角色族系</label><select id="agent-lineage" name="lineage"><option value="explorer">旷野族 · 探险者</option><option value="maker">铸造族 · 工匠</option><option value="sage">星语族 · 贤者</option><option value="ranger">林风族 · 游侠</option></select>
+          <p>族系决定初始形象与角色设定，场景卡由你另行分配。</p>
+          <p id="agent-create-error" role="alert" hidden></p><button id="agent-create-submit" type="submit" class="game-action">创建旅伴 ↗</button>
+        </form>
+      </details>
+    </aside>
+    <section class="character-profile" aria-labelledby="inventory-role-title">
+      <div class="character-title"><span id="profile-lineage" class="inventory-kicker">旷野族 · 探险者</span><h2 id="inventory-role-title">旷野探险者</h2><p id="profile-summary"></p></div>
+      <div id="inventory-character" class="character-stage" role="img" aria-label="当前角色的三维形象"><span class="character-coordinate" aria-hidden="true">N<br>◇</span><span class="character-caption">A WORLD OF YOUR OWN.</span></div>
+      <div class="character-lore"><span>角色设定</span><p id="profile-traits">轻装探索 · 好奇心 · 发现小径</p></div>
+      <div id="inventory-demo" class="inventory-demo-entry"></div>
+    </section>
+    <section class="equipped-section" aria-labelledby="equipped-title"><div class="equipped-heading"><div><span class="inventory-kicker">EQUIPPED SCENES</span><h2 id="equipped-title">携带场景卡 <span id="inventory-loadout-count">0</span></h2></div><button id="profile-open-armory" type="button" class="game-action">去卡库配装 ↗</button></div><p class="equipment-help">一张卡，一个完整场景。内容留在卡里，旅伴带着场景出发。</p><div id="legacy-loadout" class="legacy-loadout" hidden><p>旧配装已保留，请重新选择场景卡。</p><details><summary>查看旧选择</summary><ul id="legacy-loadout-list"></ul></details></div><div id="equipped-cards" class="equipped-cards"></div></section>
+  </div>
+  <section id="armory-view" class="armory-view" role="tabpanel" tabindex="0" aria-labelledby="armory-tab" hidden>
+    <div class="armory-heading"><div><p>为 <strong id="armory-agent-name">旷野探险者</strong> 挑选整套本领。</p></div><label class="inventory-search-wrap"><span>寻找卡片</span><input id="inventory-search" type="search" aria-label="搜索场景卡" placeholder="场景或其中的技能…"></label></div>
+    <p id="inventory-material-count" class="inventory-material-count"></p><p class="card-interaction-hint">移入轻转 · 点击翻面 · 卡片下方装卸</p>
+    <div id="inventory-grid" class="armory-grid" aria-label="场景卡片仓库"></div><button id="inventory-more" type="button" hidden>继续查看</button>
+  </section>
+  <footer class="inventory-footing"><p id="inventory-source-state">尚未读取 Skill Manager</p><span>本机角色与配装 · 未连接真实 Agent 执行</span></footer>
+</section>

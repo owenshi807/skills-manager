@@ -1,0 +1,82 @@
+{
+  "scenes": {
+    "fixtureOnly": true,
+    "checks": [
+      "Preserves v3 character and original Skill choices without automatic scene equipment",
+      "81 materials become 24 scene cards; unclassified material and members never become cards",
+      "Scene handbook explains composition; member text is lazy, inert and keyboard accessible",
+      "Adding content updates the same equipped scene; grade and number of cards stay unchanged",
+      "Broken scene reads preserve the full card set and equipment; source retries and late responses stay scoped",
+      "Mobile cards and handbook remain readable; long list closes at the same scroll position",
+      "Manage scene exits Portal to the same official scene; no business writes or resource leaks",
+      "Partially damaged v4 storage remains byte-for-byte intact after opening and equipping"
+    ],
+    "errors": [],
+    "passed": true
+  },
+  "portal": {
+    "fixtureOnly": true,
+    "checks": [
+      {
+        "name": "cold Portal URL returns to SaaS without loading game resources",
+        "passed": true,
+        "durationMs": 445
+      },
+      {
+        "name": "scene search, expanded list, page, scroll and focus survive Portal",
+        "passed": true,
+        "durationMs": 1050
+      },
+      {
+        "name": "browser Back exits and Forward cannot re-enter an expired Portal",
+        "passed": true,
+        "durationMs": 324
+      },
+      {
+        "name": "ground interaction, real fixture bag, failed refresh retention and card chain",
+        "passed": true,
+        "durationMs": 1188
+      },
+      {
+        "name": "20 initialized Portal cycles dispose listeners, hooks, frames and GPU resources",
+        "passed": true,
+        "durationMs": 4586
+      },
+      {
+        "name": "text scale 90–120% preserves canvas bounds and physical click mapping",
+        "passed": true,
+        "durationMs": 2110
+      },
+      {
+        "name": "900–1280 widths keep the bag, renderer and exit usable",
+        "passed": true,
+        "durationMs": 3102
+      },
+      {
+        "name": "fresh-context aborted lazy module exposes real failure and return action",
+        "passed": true,
+        "durationMs": 1734
+      },
+      {
+        "name": "Portal emits only inventory reads and no business writes",
+        "passed": true,
+        "durationMs": 0
+      }
+    ],
+    "browserErrors": [
+      {
+        "context": "lazy-failure",
+        "phase": "fresh-context aborted lazy module exposes real failure and return action",
+        "console": true,
+        "message": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "context": "lazy-failure",
+        "phase": "fresh-context aborted lazy module exposes real failure and return action",
+        "console": true,
+        "message": "TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4186/assets/GameShell-CROR5Qaf.js"
+      }
+    ],
+    "passed": true
+  }
+}

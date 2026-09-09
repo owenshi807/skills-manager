@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-09",
+  "appVersion": "1.38.0",
+  "platform": "macOS aarch64 / Tauri WebKit",
+  "method": "CUA interaction with locally built native App; no browser fixture in native verification",
+  "sourceScene": "知识库与笔记治理",
+  "observedLibrarySkills": 434,
+  "observedTargetsFromNativeLog": 53,
+  "codexDeployment": {
+    "current": 170,
+    "needsCheck": 1
+  },
+  "checks": [
+    "SaaS scene entry visible before Portal",
+    "explicit click reveals full game and removes SaaS from visible/accessibility surface",
+    "3D world renders inside native WebKit",
+    "equipment bag reads actual library and deployment state",
+    "marker path reaches relic and pickup displays held relic on character",
+    "sample card click flips front/back",
+    "Escape returns card to equipment bag",
+    "return restores exact scene URL and entry-button focus"
+  ],
+  "limitations": [
+    "local explorer and loadout draft only; no Multica identity/equipment/task write",
+    "sample card is visual preview; actual library Skills remain ungraded"
+  ],
+  "fixes": [
+    "keyboard welcome/pause focus ownership",
+    "Safari marker route returns focus to canvas for E pickup"
+  ],
+  "finalInstalledApp": "/Applications/Skill Card Manager.app",
+  "sha256": "cd55cecca5228fb277a06b9db9b495e9fe4548fae6c15990a9252e16603f80c0",
+  "finalInstalledCheck": [
+    "exact binary matches final release build",
+    "default SaaS cold startup",
+    "explicit scene Portal entry",
+    "welcome start has focus",
+    "Enter starts rendered world"
+  ]
+}

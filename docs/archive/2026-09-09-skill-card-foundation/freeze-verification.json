@@ -1,0 +1,35 @@
+{
+  "phase": "portal-scene-cards-v1",
+  "productCommit": "f099596",
+  "reviewBase": "72ab671",
+  "productCodeUnchanged": true,
+  "publicFixtureContainsSkillBodies": false,
+  "nodeTests": {
+    "passed": 35,
+    "failed": 0
+  },
+  "build": "passed",
+  "targetedEslint": "passed",
+  "diffCheck": "passed",
+  "pilotBrowser": {
+    "fixtureOnly": true,
+    "nativeValidated": false,
+    "passed": true,
+    "checks": [
+      "two reviewed pilots and one ordinary unreviewed fixture render by stable scene identity",
+      "both pilot images are complete 1024px assets and cards do not auto-flip",
+      "SSR holo appears only while the knowledge art is pointed at, never on R art",
+      "equip stores the scene identity only and detail exposes the SSR four-cell record",
+      "hash refresh keeps the historical image and changes only the review freshness label",
+      "knowledge card remains readable on mobile"
+    ],
+    "errors": []
+  },
+  "nativeEvidence": "../../reviews/scene-card-pilot-2026-09-09/verification/native.json",
+  "notes": [
+    "Native product evidence is inherited from the unchanged f099596 product; no native rebuild at freeze.",
+    "Private knowledge-method evaluations are historical, not rerun."
+  ],
+  "pullRequest": "https://github.com/owenshi807/skills-manager/pull/7",
+  "cleanupBytes": 1411045
+}

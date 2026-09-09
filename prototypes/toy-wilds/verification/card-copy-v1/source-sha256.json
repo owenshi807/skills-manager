@@ -1,0 +1,19 @@
+{
+  "src/features/toy-wilds/world.js": "320b1e2653e774ec5928b147205e45ff4f652e7438125653c2f21b8069848972",
+  "src/features/toy-wilds/inventory-types.ts": "69c4cf23fbd865bdcc5edb975f52578c825e60052e0384274f35142db313a2b2",
+  "src/features/toy-wilds/engine.d.ts": "6f6f41030cd0a50e008d3e486bb527589f19748c87b46260f717ce39b2c43562",
+  "src/features/toy-wilds/GameShell.tsx": "de98fb69b954870fda5004c9e0f6010088b9d648c76fa6be24790270ef253f5a",
+  "src/features/toy-wilds/scene.html": "420a51ef4ffc701e3b5058bd61c26458b12a7585341b00b7b089831c25a74e47",
+  "src/features/toy-wilds/actors.js": "ae3e5e0a529ea1dc16901b77d46c5b610a583ccb366ce6f202560e6680184fc3",
+  "src/features/toy-wilds/navigation.js": "84a0af00c3c68ab1372161a96a636eafb914baf8dabac1a129de55e6d3d5eee2",
+  "src/features/toy-wilds/inventory.js": "cfc9595157c97425948e0488ddfa40ae45c6d1ece32845bc14fe2c8d4ad756fd",
+  "src/features/toy-wilds/card-copy.js": "09db9f2a26a9c3d064addbf13c4764f9a2096f37bf059199d66113094c2b144c",
+  "src/features/toy-wilds/engine.js": "f47f3e90a7d6061e9cc1cb2aba59017812b4c75b00a36374427b2537c6b9f38a",
+  "src/features/toy-wilds/card-copy.d.ts": "9d10a38aa5e4559d8390b02e2c5c53e25a6bc53b195e62fc4d737a3dbf90c434",
+  "src/features/toy-wilds/card.js": "a5d1e3695f25e608ff9080c383ff0d4502d1076a7ea078c881463c1fadf4e5c3",
+  "src/features/toy-wilds/inventory-port.ts": "0884349f6fa86d7364b0f90b3cd91cd8ca62e25e2b3104efad8586aabec9f9d7",
+  "src/features/toy-wilds/GameShell.css": "61a68b5ff132bda30d666d1318dd3094e30e3e0a9618fd890529398ba451e1a6",
+  "src/lib/skillPublishing.ts": "de7f0cd8b0581f9852ee9d9a87490a7b2e26f8d96935fa12d6dc96527cc345ef",
+  "skills/skill-card-forge/SKILL.md": "58b122b979fcc8b3575f2db550956ccb023a7dc113a7e286290b8481594cbf6a",
+  "skills/skill-card-forge/references/card-copy.md": "a96e6056b0e700178cbef14952bc5d29f27a6d2956e3fe0de00842a26b02e678"
+}

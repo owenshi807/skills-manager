@@ -1,0 +1,282 @@
+{
+  "startedAt": "2026-09-09T10:40:02.960Z",
+  "baseURL": "http://127.0.0.1:4186",
+  "fixtureOnly": true,
+  "nativeValidated": false,
+  "checks": [
+    {
+      "name": "cold Portal URL returns to SaaS without loading game resources",
+      "passed": true,
+      "durationMs": 306
+    },
+    {
+      "name": "scene search, expanded list, page, scroll and focus survive Portal",
+      "passed": true,
+      "durationMs": 873
+    },
+    {
+      "name": "browser Back exits and Forward cannot re-enter an expired Portal",
+      "passed": true,
+      "durationMs": 221
+    },
+    {
+      "name": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "passed": true,
+      "durationMs": 907
+    },
+    {
+      "name": "20 initialized Portal cycles dispose listeners, hooks, frames and GPU resources",
+      "passed": true,
+      "durationMs": 3306
+    },
+    {
+      "name": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "passed": true,
+      "durationMs": 1323
+    },
+    {
+      "name": "900–1280 widths keep the bag, renderer and exit usable",
+      "passed": true,
+      "durationMs": 2029
+    },
+    {
+      "name": "fresh-context aborted lazy module exposes real failure and return action",
+      "passed": true,
+      "durationMs": 1302
+    },
+    {
+      "name": "Portal emits only inventory reads and no business writes",
+      "passed": true,
+      "durationMs": 1
+    }
+  ],
+  "browserErrors": [
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "console": true,
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "console": true,
+      "message": "TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4186/assets/GameShell-CQ7_PAF4.js"
+    }
+  ],
+  "blockedRequests": [],
+  "diagnostics": {
+    "initial": {
+      "mounts": 3,
+      "disposals": 3,
+      "activeEngines": 0,
+      "activeAnimationFrames": 0,
+      "activeListeners": 0,
+      "activeObservers": 0,
+      "liveGeometries": 0,
+      "liveMaterials": 0,
+      "liveTextures": 0
+    },
+    "final": {
+      "mounts": 23,
+      "disposals": 23,
+      "activeEngines": 0,
+      "activeAnimationFrames": 0,
+      "activeListeners": 0,
+      "activeObservers": 0,
+      "liveGeometries": 0,
+      "liveMaterials": 0,
+      "liveTextures": 0
+    },
+    "initializedCycles": 20
+  },
+  "zoom": [
+    {
+      "scale": 0.9,
+      "rect": {
+        "x": 0,
+        "y": 73.796875,
+        "width": 1100,
+        "height": 566.203125
+      },
+      "renderer": {
+        "left": 0,
+        "top": 73.796875,
+        "width": 1100,
+        "height": 566.203125
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    },
+    {
+      "scale": 1,
+      "rect": {
+        "x": 0,
+        "y": 82,
+        "width": 1100,
+        "height": 558
+      },
+      "renderer": {
+        "left": 0,
+        "top": 82,
+        "width": 1100,
+        "height": 558
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    },
+    {
+      "scale": 1.1,
+      "rect": {
+        "x": 0,
+        "y": 90.1875,
+        "width": 1100,
+        "height": 549.8125
+      },
+      "renderer": {
+        "left": 0,
+        "top": 90.1875,
+        "width": 1100,
+        "height": 549.8125
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    },
+    {
+      "scale": 1.2,
+      "rect": {
+        "x": 0,
+        "y": 98.390625,
+        "width": 1100,
+        "height": 541.609375
+      },
+      "renderer": {
+        "left": 0,
+        "top": 98.390625,
+        "width": 1100,
+        "height": 541.609375
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    }
+  ],
+  "coldResources": {
+    "contexts": 0,
+    "canvases": 0,
+    "resources": []
+  },
+  "restoredScroll": {
+    "before": 100,
+    "after": 100
+  },
+  "firstLibraryStringError": {
+    "visible": true,
+    "readyAfterFailure": false,
+    "recoveredTotal": 80
+  },
+  "bagScroll": [
+    {
+      "width": 900,
+      "parents": [
+        {
+          "id": "inventory-panel",
+          "className": "",
+          "top": 6623,
+          "height": 558,
+          "scrollHeight": 7181
+        }
+      ],
+      "lastCard": {
+        "x": 676,
+        "y": 227.953125,
+        "width": 199,
+        "height": 314,
+        "top": 227.953125,
+        "right": 875,
+        "bottom": 541.953125,
+        "left": 676
+      },
+      "demo": {
+        "x": 158,
+        "y": 488.375,
+        "width": 316.796875,
+        "height": 48
+      },
+      "demoClick": "passed"
+    },
+    {
+      "width": 1100,
+      "parents": [
+        {
+          "id": "inventory-panel",
+          "className": "",
+          "top": 5169,
+          "height": 558,
+          "scrollHeight": 5825
+        }
+      ],
+      "lastCard": {
+        "x": 879.390625,
+        "y": 325.953125,
+        "width": 195.609375,
+        "height": 314,
+        "top": 325.953125,
+        "right": 1075,
+        "bottom": 639.953125,
+        "left": 879.390625
+      },
+      "demo": {
+        "x": 158,
+        "y": 488.375,
+        "width": 406.796875,
+        "height": 48
+      },
+      "demoClick": "passed"
+    },
+    {
+      "width": 1280,
+      "parents": [
+        {
+          "id": "inventory-panel",
+          "className": "",
+          "top": 4952,
+          "height": 558,
+          "scrollHeight": 5510
+        }
+      ],
+      "lastCard": {
+        "x": 243.328125,
+        "y": 207.5625,
+        "width": 180.328125,
+        "height": 334,
+        "top": 207.5625,
+        "right": 423.65625,
+        "bottom": 541.5625,
+        "left": 243.328125
+      },
+      "demo": {
+        "x": 222,
+        "y": 488.984375,
+        "width": 425,
+        "height": 48
+      },
+      "demoClick": "passed"
+    }
+  ],
+  "lazyModuleAborts": 1,
+  "ipcSummary": {
+    "read": 56,
+    "telemetry": 12,
+    "lifecycle": 8,
+    "unexpected": 0
+  },
+  "businessWrites": 0,
+  "passed": true,
+  "finishedAt": "2026-09-09T10:40:13.830Z",
+  "retainedScreenshots": [
+    "portal-03-equipment-bag.png",
+    "portal-05-card-front.png",
+    "portal-07-scale-120.png"
+  ],
+  "originalScreenshotCount": 18
+}

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>精灵冒险图鉴 · 第一套视觉概念</title>
+  <style>
+    :root{font-family:ui-sans-serif,system-ui,"PingFang SC",sans-serif;color:#193740;background:#f4f0e5;line-height:1.65}
+    *{box-sizing:border-box}body{margin:0}main{max-width:1500px;margin:auto;padding:38px clamp(16px,4vw,64px) 64px}header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}p,h1,h2{margin:0}h1{font-size:clamp(26px,3vw,42px);letter-spacing:-.035em;line-height:1.25;margin:6px 0 12px}.eyebrow{font-size:11px;letter-spacing:.16em;font-weight:750;color:#4b7169}.intro{max-width:780px;color:#426066;font-size:15px}.stamp{font-size:12px;white-space:nowrap;padding:6px 12px;border:1px solid #aec2b4;border-radius:4px;color:#365e50}nav{display:flex;gap:10px;flex-wrap:wrap;margin:30px 0 18px}button,a{font:inherit}button{cursor:pointer;border:1px solid #b6c4ba;color:#315348;background:transparent;border-radius:6px;padding:9px 17px;font-size:14px;font-weight:650}button[aria-pressed=true]{background:#174f48;border-color:#174f48;color:#fff}button:hover{border-color:#174f48}button:focus-visible,a:focus-visible{outline:3px solid #da713f;outline-offset:4px}figure{margin:0;border:1px solid #b8c7b8;border-radius:10px;background:#dce7da;overflow:hidden}.art{display:flex;justify-content:center;background:#e1eadf;min-height:180px}.art img{display:block;width:100%;height:auto;max-height:850px;object-fit:contain}figcaption{background:#fbf9f1;padding:16px 20px;display:flex;justify-content:space-between;gap:24px;align-items:flex-start}#caption-title{font-size:16px;font-weight:750}#caption-copy{font-size:14px;color:#506466;max-width:940px;margin-top:4px}a{color:#17584f;text-underline-offset:4px}#original{white-space:nowrap;font-size:13px}footer{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:30px;padding-top:24px;border-top:1px solid #c6cec1}h2{font-size:15px;margin-bottom:8px}footer p{font-size:14px;color:#506466}.links{margin-top:12px;font-size:13px}small{display:block;font-size:12px;color:#6a766d;margin-top:26px}@media(max-width:680px){header{display:block}.stamp{display:inline-block;margin-top:16px}nav{gap:7px;margin-top:22px}button{flex:1;padding:10px 6px;font-size:13px}figcaption{display:block;padding:14px}#original{display:inline-block;margin-top:12px}footer{grid-template-columns:1fr;gap:20px}main{padding-top:24px}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><p class="eyebrow">SKILL CARD MASTER · ART DIRECTION 01</p><h1>精灵冒险图鉴</h1><p class="intro">Skill 是可升级的装备，Agent 是使用装备的角色。先用同一件「依赖镜头」把等级、人物装备页与突破仪式做成一套。</p></div>
+    <span class="stamp">概念原画 · 尚未接入产品</span>
+  </header>
+  <nav aria-label="选择概念图">
+    <button type="button" data-frame="tiers" aria-pressed="true">01 等级卡面</button>
+    <button type="button" data-frame="agent" aria-pressed="false">02 Agent 装备页</button>
+    <button type="button" data-frame="ssr" aria-pressed="false">03 SSR 突破分镜</button>
+  </nav>
+  <figure>
+    <div class="art"><img id="concept-image" src="./assets/adventure-tiers.png" width="1774" height="887" alt="同一件依赖镜头装备的 C 素面、R 局部镭射、SR 金光镭射、SSR 永久突破纹章对照"></div>
+    <figcaption><div aria-live="polite"><p id="caption-title">一件装备，四层视觉表达</p><p id="caption-copy">C 素面 → R 局部镭射 → SR 金光镭射 → SSR 结构重组与专属纹章。这里展示 SSR 用于设计对照；产品中未解锁前保持隐藏。</p></div><a id="original" href="./assets/adventure-tiers.png" target="_blank" rel="noopener">查看原尺寸 ↗</a></figcaption>
+  </figure>
+  <footer>
+    <section><h2>保持身份，让突破改变结构</h2><p>象牙圆环、青色镜片、深蓝握柄与珊瑚校准片贯穿各等级。SSR 打开并重连旧环，纪念方法的变化；奖章归属 Skill，角色装备它不等于人已掌握同等能力。</p></section>
+    <section><h2>先固定制作规则，再换世界</h2><p>复用卡片比例、图层接口、等级特效与事件节奏。主题替换插画、字体、纹理和纹章；线描与镭射遮罩必须随原画重新对齐。</p><p class="links"><a href="http://localhost:4183/">把玩真实 3D 镭射样卡 →</a> · <a href="./">先期材质样机</a> · <a href="./README.md">制作与验证说明</a></p></section>
+  </footer>
+  <small>这三张是合成概念原画。精灵主题的实时 3D 样卡已在独立页面实现；角色装备页与分镜仍为构想，Agent 装备与模型训练尚未接入。</small>
+</main>
+<script>
+  const frames = {
+    tiers: {file:'adventure-tiers.png',width:1774,height:887,title:'一件装备，四层视觉表达',copy:'C 素面 → R 局部镭射 → SR 金光镭射 → SSR 结构重组与专属纹章。这里展示 SSR 用于设计对照；产品中未解锁前保持隐藏。',alt:'同一件依赖镜头装备的 C 素面、R 局部镭射、SR 金光镭射、SSR 永久突破纹章对照'},
+    agent: {file:'adventure-agent-room.png',width:1536,height:1024,title:'Agent · 档案员的装备空间',copy:'角色拿起当前装备的 SR 依赖镜头。底部是等级材质对照，用于评审；不是把同一 Skill 的三个等级当作三件装备重复叠加。',alt:'精灵冒险研究室里的猫头鹰档案员 Agent，持有依赖镜头，右侧显示 SR 装备卡，底部为等级材质对照'},
+    ssr: {file:'adventure-ssr-storyboard.png',width:1774,height:887,title:'突破揭晓：旧结构打开 → 新关系成形 → 突破留存',copy:'用打开并重连的环表达「共同信念进 Prompt，高代价不变量进机械门禁」。先记录永久成就，再播放庆祝；跳过、关闭与重放均不改变授奖事实。',alt:'SSR 突破的三格静态分镜：旧结构打开、新关系成形、突破留存，最后形成永久金色纹章'}
+  };
+  document.querySelectorAll('[data-frame]').forEach(button => button.addEventListener('click', () => {
+    const frame = frames[button.dataset.frame], image = document.querySelector('#concept-image');
+    image.src = './assets/' + frame.file; image.alt = frame.alt; image.width = frame.width; image.height = frame.height;
+    document.querySelector('#caption-title').textContent = frame.title;
+    document.querySelector('#caption-copy').textContent = frame.copy;
+    document.querySelector('#original').href = image.getAttribute('src');
+    document.querySelectorAll('[data-frame]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  }));
+</script>
+</body>
+</html>

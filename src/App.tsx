@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AppProvider } from "./context/AppContext";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
@@ -18,6 +18,8 @@ import { CARD_MASTER_PRODUCT_SURFACE } from "./lib/productSurface";
 import { Scenes } from "./views/Scenes";
 import { SceneAutoClassifier } from "./components/SceneAutoClassifier";
 import { AssistantConnections } from "./views/AssistantConnections";
+import { PortalProvider, PORTAL_PATH, usePortal } from "./features/portal/PortalContext";
+import { PortalSurface } from "./features/portal/PortalSurface";
 
 function ThemedToaster() {
   const { resolvedTheme } = useThemeContext();
@@ -36,13 +38,14 @@ function ThemedToaster() {
   );
 }
 
-function App() {
-  return (
-    <ThemeProvider>
-      <AppProvider>
-        <SceneAutoClassifier />
-        <BrowserRouter>
-          <Routes>
+function AppSurfaces() {
+  const location = useLocation();
+  const { active, entry } = usePortal();
+  const coldPortal = location.pathname === PORTAL_PATH && !active;
+  const background = active && entry ? entry.backgroundLocation : coldPortal ? { ...location, pathname: "/scenes", search: "", hash: "" } : location;
+  return <>
+    <div id="saas-surface" hidden={active} inert={active} aria-hidden={active || undefined} className="h-full w-full">
+      <Routes location={background}>
             <Route element={<Layout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/my-skills" element={<MySkills />} />
@@ -61,10 +64,26 @@ function App() {
               />
               <Route path="/settings" element={<Settings />} />
             </Route>
-          </Routes>
-          <HelpDialog />
-          <CloseActionGuard />
-          <FirstRunRestoreDialog />
+
+      </Routes>
+      <HelpDialog />
+      <FirstRunRestoreDialog />
+    </div>
+    <PortalSurface />
+    {coldPortal && <Navigate replace to="/scenes" />}
+    <CloseActionGuard />
+  </>;
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppProvider>
+        <SceneAutoClassifier />
+        <BrowserRouter>
+          <PortalProvider>
+            <AppSurfaces />
+          </PortalProvider>
         </BrowserRouter>
         <ThemedToaster />
       </AppProvider>

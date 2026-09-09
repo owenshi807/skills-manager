@@ -7,7 +7,10 @@ import { useApp } from "../context/AppContext";
 import { useTranslation } from "react-i18next";
 import { useDragWindow } from "../hooks/useDragWindow";
 
+import { usePortal } from "../features/portal/PortalContext";
+
 export function Layout() {
+  const { active: portalActive } = usePortal();
   const { t } = useTranslation();
   const { appError, refreshAppData } = useApp();
   const onDrag = useDragWindow();
@@ -16,6 +19,7 @@ export function Layout() {
   // Cmd+, to open Settings
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (portalActive) return;
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         const target = e.target as HTMLElement;
         if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
@@ -31,7 +35,7 @@ export function Layout() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate, refreshAppData]);
+  }, [navigate, refreshAppData, portalActive]);
 
   return (
     <div className="relative flex h-full w-full overflow-hidden bg-background text-primary">
@@ -42,7 +46,7 @@ export function Layout() {
       />
       <Sidebar />
       <div className="relative flex min-w-[600px] flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-5 pb-5 pt-[calc(28px+20px)] scrollbar-hide">
+        <div data-portal-scroll data-testid="saas-scroll" className="flex-1 overflow-y-auto px-5 pb-5 pt-[calc(28px+20px)] scrollbar-hide">
           <div className="mx-auto flex min-h-full max-w-[1200px] flex-col gap-4">
             {appError ? (
               <StatusBanner

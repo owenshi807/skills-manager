@@ -1,0 +1,28 @@
+{
+  "artwork": [
+    {
+      "file": "adventure-tiers.png",
+      "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-972e9f8e-8eda-4446-88ae-791ec1cfc0e2.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "b95b508bb2a25f743814482a39cdebea24c4c0a34d73a035261bcadb19d2dcae",
+      "usage": "concept artwork only; not runtime effect or production UI"
+    },
+    {
+      "file": "adventure-agent-room.png",
+      "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-ffc2e057-1219-4709-83f8-8785108533f1.png",
+      "width": 1536,
+      "height": 1024,
+      "sha256": "f7c2e554d91c43e4d3ddeb9bd59bfe958fcf5cfcfe48c428bb32aee37b23379b",
+      "usage": "concept artwork only; not runtime effect or production UI"
+    },
+    {
+      "file": "adventure-ssr-storyboard.png",
+      "source": "/Users/owen/.codex/generated_images/01a083ae-b02c-7610-bf91-c66b3ac517b4/exec-04fac8ba-dca1-49c4-b63d-3dde038b28b6.png",
+      "width": 1774,
+      "height": 887,
+      "sha256": "0934f306523c50140ba6d552761c71bf34a48a224a9e3c60d38eaec3bd826dd7",
+      "usage": "concept artwork only; not runtime effect or production UI"
+    }
+  ]
+}

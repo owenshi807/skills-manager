@@ -1,0 +1,24 @@
+{
+  "testedAt": "2026-09-09T13:27:47.711601+00:00",
+  "app": "/Applications/Skill Card Manager.app",
+  "sha256": "c923e33679333512c2830f2732de71f9d868f4682b17391a8af67a7c2b1af0b3",
+  "fixtureOnly": false,
+  "realSkillCount": 434,
+  "sceneCardCount": 61,
+  "unassignedSkillCount": 1,
+  "checks": [
+    "Default launch remains SaaS; Portal enters game.",
+    "Both existing local characters preserved; 观星者 selected, old knowledge-audit choice retained in collapsed history; no automatic scene equipment.",
+    "First switch to scene card library exposes search and card controls to native AX.",
+    "Searching knowledge-audit yields 知识库与笔记治理, one scene card with 22 members.",
+    "Native equip adds one scene card to 观星者; Profile shows 1 card, then unequip restores original 0 scene choices.",
+    "Scene handbook title, 22 member summaries and return control are available in native AX.",
+    "Actual business-coach original text opened inside 商业项目推演 on preceding build; final change only refreshes outer accessibility container on tab switch."
+  ],
+  "remoteWrites": false,
+  "finalView": "知识库与笔记治理 / 场景手册",
+  "limitations": [
+    "Scene grades remain unreviewed. Shared visual motifs are placeholders, not individually commissioned scene art.",
+    "No new automatic classification, arbitrary content store, scene evaluation engine or Multica execution."
+  ]
+}

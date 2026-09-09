@@ -1,0 +1,20 @@
+[
+  {
+    "scene": "knowledge",
+    "path": "public/scene-card-pilots/knowledge-sacred.png",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2249834,
+    "sha256": "faa82cea2d77f201ae57707eb3a1b58036ea25374d59a29b880cd334665e2ac7",
+    "tool": "built-in image_gen"
+  },
+  {
+    "scene": "business",
+    "path": "public/scene-card-pilots/business-spirit.png",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2326009,
+    "sha256": "101bcbcacc4db466f554d2fb616993baf8961c25e3e0632eebd3a137823ef0cc",
+    "tool": "built-in image_gen"
+  }
+]

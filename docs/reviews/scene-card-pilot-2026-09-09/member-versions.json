@@ -1,0 +1,214 @@
+{
+  "authority": "Public version-identity fixture; local central paths omitted.",
+  "originalPrivateSnapshotSha256": "3ed368354436a9fe5d086e01334afc61b22fc6c5b9bf2ab30d2ae5944e4f8dbe",
+  "members": [
+    {
+      "id": "07e1973e-eea3-4682-b696-75b0928be2db",
+      "name": "self-improvement",
+      "sourceRevision": null,
+      "recordedContentHash": "eadb91a00200c6e4d3382d51da00ed3b8806909edace527e9b01771e40f5e75b",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "280c9e1e-c15d-48ca-b90b-6283be3749b7",
+      "name": "relationship-feature-graph",
+      "sourceRevision": null,
+      "recordedContentHash": "f265afed82f61ce5ebbb2072b1eab0a3b0ad9c971418b301f2424afe95e34f4c",
+      "sourceType": "local",
+      "status": "ok"
+    },
+    {
+      "id": "2c1c1cca-f07b-49e4-8332-407e46e1a00b",
+      "name": "query",
+      "sourceRevision": null,
+      "recordedContentHash": "5903d846c10f941804c9103552d7d137f067df4a8714d63b36236374fb018dc3",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "3170f092-6ad3-4565-82f1-d1c6a47629ef",
+      "name": "multifile-ingest",
+      "sourceRevision": null,
+      "recordedContentHash": "832bb4ffdf15af9585d7977550db5b4077e7a7930311ba6c6dd353faaefc2811",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "3dd686bd-b3b3-4830-9613-9d28e009b241",
+      "name": "office-hours",
+      "sourceRevision": null,
+      "recordedContentHash": "5c3c14e749c5e2c20f95d9a7a5e87a9363e5de4ef1ba733988879d437394768f",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "3ee50be1-c6ff-4b3c-831b-b3db21070bd9",
+      "name": "opportunity-forecasting",
+      "sourceRevision": null,
+      "recordedContentHash": "2393efae02af5f7f82d837f75f76560d0f759f28586fc6226d498c04f162fd35",
+      "sourceType": "local",
+      "status": "ok"
+    },
+    {
+      "id": "49822923-e519-4e70-8262-bf9dbcd196b6",
+      "name": "knowledge-audit",
+      "sourceRevision": null,
+      "recordedContentHash": "167403c8d0339ffdb53235ebf46bc8bbe6990a6c4fa37dd0b10230389b8ecaa4",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "4e8fe63b-52cc-4978-ae23-7e1580c9a01c",
+      "name": "obsidian",
+      "sourceRevision": null,
+      "recordedContentHash": "3a76d8d205b8ea14831b42263a160d34661cefd58eb013c7412bb38a857f824f",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "4fa54d97-11e5-4d15-a778-0a1e5bb42513",
+      "name": "apple-notes",
+      "sourceRevision": null,
+      "recordedContentHash": "83421dd8e20a4a5052146b341add99a96ba6697b8b7ac15353a357902d988c5a",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "6a916c61-fa1e-4f77-81bf-31e3c6c702f8",
+      "name": "llm-wiki",
+      "sourceRevision": null,
+      "recordedContentHash": "0b05e4ef42a7342979b6f60207240fcb99787f67e1780a72554170d913f6b9d2",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "6aec1885-4491-4148-9927-e0813927a61d",
+      "name": "knowledge-panorama",
+      "sourceRevision": null,
+      "recordedContentHash": "5174a18462e0b77698a0b37e3e2e940af3179c1b4f85fb1584f75f198a608af5",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "6d03abb5-c7cc-4d20-b503-87c3c048002e",
+      "name": "jiangou-course-ingest",
+      "sourceRevision": null,
+      "recordedContentHash": "680553a2116265aaea05149824b392e955c9f7083e79e593d98ec0770acd4ab6",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "6fc55a5f-11e5-4d06-b0c9-5851cc082070",
+      "name": "notion",
+      "sourceRevision": null,
+      "recordedContentHash": "981567a09da87337d65bf89bce5a0423bedc9d3a6c333c015db365e1c6987214",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "7973c503-2dc7-4301-bd0d-aa2381aacd90",
+      "name": "ingest",
+      "sourceRevision": null,
+      "recordedContentHash": "9a34c1da3a85cc66819ccb77f1fc2b52d430de49a7221bcf3aa2a72f4e10958e",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "8e331dc7-3066-4aa8-a8ba-411f1aa951ea",
+      "name": "lint",
+      "sourceRevision": null,
+      "recordedContentHash": "49704e5ce3c28880cb863f05c76a19da85ea3d3e7302c05a8c6f08ac059456bd",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "9912eea2-b43b-45f5-b256-dbebbbd81f6c",
+      "name": "list-note",
+      "sourceRevision": null,
+      "recordedContentHash": "1fedb215e11d2c012059183c1c0768dba1383b5ad4bb4d6ea92e4a597da80c20",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "adcd6795-6446-467d-9853-a5eef4757a64",
+      "name": "distill",
+      "sourceRevision": null,
+      "recordedContentHash": "1467d0e09fb7ff21cef8573140e2393adf80415f99f55c0a69b4ea0711880bf1",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "c4e979f9-17f3-4df8-950d-0603104524a4",
+      "name": "graph-lint",
+      "sourceRevision": null,
+      "recordedContentHash": "c9469e49def3c2490e98214a05394fcc60d5dc92bf5c3b7a8ba93088ce83161e",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "d45653c3-61b4-47e3-b252-31dcf17fc1d5",
+      "name": "yitang-course-cleanup",
+      "sourceRevision": null,
+      "recordedContentHash": "4c5d603590d9cae23351ddfdc371329f855487409cc586edf0397988589f7dca",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "d6987a29-69ff-4e40-aecd-e326fb7e9a7f",
+      "name": "obsidian-vault",
+      "sourceRevision": null,
+      "recordedContentHash": "3aaf571312899f2bf2e6ea1c2332f771c34df8ac2941740710f13d9179ac8ffd",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "d8b2607e-f04f-4eaf-9a0e-3ebd4f3735f3",
+      "name": "wiki",
+      "sourceRevision": null,
+      "recordedContentHash": "2e83b291746abc4c1a53a1d43efc9c813908cf76c5debb40b33b55aae69a7596",
+      "sourceType": "local",
+      "status": "ok"
+    },
+    {
+      "id": "da2a78c0-ad2f-4d03-a25e-1e318cb14cb3",
+      "name": "business-coach-family",
+      "sourceRevision": null,
+      "recordedContentHash": "db2d8c4283dd383c9851c5399b52b05a0777218f31923fc2f7e1fe318af8cb6f",
+      "sourceType": "local",
+      "status": "ok"
+    },
+    {
+      "id": "e1b11df0-7b25-4a4a-93ba-b891090daee3",
+      "name": "ubiquitous-language",
+      "sourceRevision": null,
+      "recordedContentHash": "a3bbbda467ebf6596fed9481ccf527093bfe196f9a98fc2cae9d5dfabc01a362",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "e85bae36-6130-481f-aa15-2584a70a6e64",
+      "name": "gsd-graphify",
+      "sourceRevision": null,
+      "recordedContentHash": "b97b86c53d6758e4d91d9309996b3abf1d94b0b0ee7b735174f8652a51053185",
+      "sourceType": "import",
+      "status": "ok"
+    },
+    {
+      "id": "ed2efaec-f1c1-4549-a047-a764736dd4e1",
+      "name": "business-coach",
+      "sourceRevision": null,
+      "recordedContentHash": "d4b0ad0e125eaee10bd0412f5c36fb7b17a283b5bf7f39c22d8c4afcc75747b2",
+      "sourceType": "local",
+      "status": "ok"
+    },
+    {
+      "id": "f9ec4591-efae-4ae0-8636-52558cd3c2f4",
+      "name": "gsd-graphify",
+      "sourceRevision": null,
+      "recordedContentHash": "8f7ef26eae6ce30b6e67509f259868d0af45a5752345461e073dcbb0f470f452",
+      "sourceType": "import",
+      "status": "ok"
+    }
+  ]
+}

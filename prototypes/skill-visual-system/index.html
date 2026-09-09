@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Skill Card Master · 视觉方向原型</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body data-theme="archive" data-motion="on">
+    <header class="prototype-bar" aria-label="原型控制台">
+      <div class="proto-label"><span class="eyebrow">VISUAL DIRECTION PROTOTYPE</span><strong>演示等级</strong></div>
+      <div class="theme-switch" aria-label="切换视觉方向">
+        <button type="button" class="theme-choice is-selected" data-theme-choice="archive" aria-pressed="true">秘藏馆</button>
+        <button type="button" class="theme-choice" data-theme-choice="prism" aria-pressed="false">光谱实验室</button>
+        <button type="button" class="theme-choice" data-theme-choice="journal" aria-pressed="false">探索手册</button>
+      </div>
+      <div class="proto-actions">
+        <button type="button" class="text-button" id="motion-toggle" aria-pressed="true">动效：开</button>
+        <button type="button" class="text-button" id="narrow-toggle" aria-pressed="false">390 窄屏预览</button>
+      </div>
+    </header>
+
+    <div class="prototype-shell">
+      <aside class="rail" aria-label="场景导航">
+        <a class="wordmark" href="#top" aria-label="Skill Card Master 首页"><span>SKILL</span><b>CARD</b><i>MASTER</i></a>
+        <p class="rail-kicker">Skill方法图鉴</p>
+        <nav class="scene-nav" aria-label="知识场景">
+          <button type="button" class="scene-choice is-selected" data-scene="knowledge" aria-pressed="true"><span>01</span> 知识炼成</button>
+          <button type="button" class="scene-choice" data-scene="business" aria-pressed="false"><span>02</span> 商业研判</button>
+        </nav>
+        <div class="rail-foot"><span class="dot"></span><span id="version-state">本场景待验证</span></div>
+      </aside>
+
+      <main class="stage" id="top">
+        <section class="stage-head" aria-labelledby="scene-title">
+          <div>
+            <p class="eyebrow" id="scene-index">SCENE 01 · KNOWLEDGE VAULT</p>
+            <h1 id="scene-title">知识炼成</h1>
+            <p class="objective" id="scene-objective">让资料沉淀为可追溯、可判断、可复用的方法。</p>
+          </div>
+          <div class="head-status"><span>当前材质</span><strong id="active-tier-label">C / 纸面</strong></div>
+        </section>
+
+        <section class="path-panel" aria-label="能力路径">
+          <div class="path-line" aria-hidden="true"></div>
+          <button type="button" class="path-node is-active" data-path="intake" aria-pressed="true"><b>摄取</b><span>标记来源</span></button>
+          <button type="button" class="path-node" data-path="distill" aria-pressed="false"><b>蒸馏</b><span>写出判断</span></button>
+          <button type="button" class="path-node" data-path="collide" aria-pressed="false"><b>碰撞</b><span>找反例</span></button>
+          <p class="path-copy" id="path-copy">按任务选用，不是强制三步：先保住可追溯的原始线索。</p>
+        </section>
+
+        <section class="workbench" aria-label="方法工作台">
+          <div class="card-column">
+            <div class="spotlight" aria-hidden="true"></div>
+            <article class="hero-card tier-c" id="hero-card" tabindex="0" role="button" aria-label="翻转依赖镜头方法卡，查看证据摘要" aria-pressed="false">
+              <div class="card-inner">
+                <div class="card-face card-front" id="card-front" aria-hidden="false">
+                  <div class="card-topline"><span id="card-tier">C</span><span>METHOD / 014</span></div>
+                  <div class="art-window"><img id="card-art" src="./assets/archive.png" alt="依赖镜头器物画" /></div>
+                  <div class="card-caption"><span id="card-edition">ARCHIVE EDITION</span><span class="card-mark">SCM</span></div>
+                  <h2 id="card-name">依赖镜头</h2>
+                  <p id="card-subtitle">让资料显露：它依赖了什么，又能支撑什么。</p>
+                  <div class="card-bottomline"><span>方法卡</span><span id="card-material">普通纸面</span></div>
+                </div>
+                <div class="card-face card-back" id="card-back" aria-hidden="true">
+                  <div class="card-topline"><span>证据摘要</span><span>014 / BACK</span></div>
+                  <h2>旧方法 → 新原则</h2>
+                  <ol class="evidence-list">
+                    <li><b>旧方法</b><span>把所有原则强制字段化</span></li>
+                    <li><b>新原则</b><span>共同信念进 Prompt，高代价不变量机械保障</span></li>
+                    <li><b>示例证据</b><span>四篇同源报道计为一组，并保留独立反证</span></li>
+                  </ol>
+                  <p class="back-note">点击卡面回到器物视图</p>
+                </div>
+              </div>
+            </article>
+            <p class="card-hint">移动指针观察视角 · 点击翻面</p>
+          </div>
+
+          <section class="method-detail" aria-labelledby="method-heading">
+            <p class="eyebrow">CURRENT METHOD</p>
+            <h2 id="method-heading">让证据在需要时说话</h2>
+            <p id="method-description">依赖会改变结论时，重开来源、区分独立证据；无关时保持安静。</p>
+            <ul class="method-actions" id="method-actions">
+              <li>识别共享上游，避免重复计数</li>
+              <li>保留独立反证与适用条件</li>
+              <li>把高代价边界交给机械保障</li>
+            </ul>
+            <div class="method-cta">
+              <button type="button" class="primary-button" id="deck-toggle">加入演示卡组</button>
+              <button type="button" class="quiet-button" id="new-card-button">演示新卡入库</button>
+            </div>
+            <p class="deck-feedback" id="deck-feedback" role="status">尚未加入本次卡组。</p>
+          </section>
+
+          <aside class="ritual-panel" aria-label="演示仪式">
+            <p class="eyebrow">DEMONSTRATION</p>
+            <h2>材质演示</h2>
+            <p>这是原型内的预览与演示，不代表真实授奖或评级。</p>
+            <button type="button" class="ritual-button" id="rank-button">演示晋级 <span>C → R → SR</span></button>
+            <button type="button" class="ritual-button breakthrough-button" id="breakthrough-button">演示隐藏突破 <span>SSR</span></button>
+            <p class="ritual-status" id="ritual-status" role="status">可从纸面开始观察材质层级。</p>
+          </aside>
+        </section>
+
+        <section class="tiers-section" aria-labelledby="tiers-heading">
+          <div class="section-label"><div><p class="eyebrow">MATERIAL COMPARISON</p><h2 id="tiers-heading">同一张卡，三种材质</h2></div><span id="collection-count">演示卡 0 张</span></div>
+          <div class="tier-row" role="group" aria-label="选择材质预览">
+            <button type="button" class="tier-card active" data-tier="c" aria-pressed="true"><span class="tier-chip">C</span><span class="mini-art"><img src="./assets/archive.png" alt="" /></span><b>纸面</b><small>来源与结论可读</small></button>
+            <button type="button" class="tier-card" data-tier="r" aria-pressed="false"><span class="tier-chip">R</span><span class="mini-art"><img src="./assets/archive.png" alt="" /></span><b>局部镭射</b><small>只让关键关系折光</small></button>
+            <button type="button" class="tier-card" data-tier="sr" aria-pressed="false"><span class="tier-chip">SR</span><span class="mini-art"><img src="./assets/archive.png" alt="" /></span><b>压边与景深</b><small>方法结构更加完整</small></button>
+            <button type="button" class="tier-card ssr-card" id="ssr-card" data-tier="ssr" aria-pressed="false" hidden><span class="tier-chip">SSR</span><span class="mini-art"><img src="./assets/archive.png" alt="" /></span><b>永久突破</b><small>原则完成结构重组</small></button>
+          </div>
+          <div class="tier-note" id="tier-note">C：普通纸面。它只证明这张方法卡被记录下来。</div>
+        </section>
+
+        <section class="deck-panel" aria-labelledby="deck-title">
+          <div><p class="eyebrow">THIS SESSION</p><h2 id="deck-title">本次卡组</h2></div>
+          <div class="deck-items" id="deck-items"><span class="empty-deck">选择方法后加入；组合会在这里判断是否可用。</span></div>
+          <p id="deck-judgement">当前还没有可执行的方法组合。</p>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="breakthrough-dialog" id="breakthrough-dialog" aria-labelledby="breakthrough-title">
+      <div class="dialog-stage" id="dialog-stage">
+        <button class="dialog-close" id="dialog-close" type="button" aria-label="关闭突破演示">×</button>
+        <p class="eyebrow">PERMANENT BREAKTHROUGH</p>
+        <div class="fracture-ring" aria-hidden="true"><i></i><i></i><i></i><b>✧</b></div>
+        <div class="dialog-method-card" aria-hidden="true"><span>METHOD / 014</span><b>共同信念 · 机械门禁</b><i>✧</i></div>
+        <p class="ritual-step" id="breakthrough-step">旧刻线正在断开</p>
+        <h2 id="breakthrough-title">依赖镜头 · SSR</h2>
+        <p class="breakthrough-copy" id="breakthrough-copy">共同信念进 Prompt，高代价不变量进机械门禁。</p>
+        <div class="dialog-actions"><button type="button" class="primary-button" id="skip-breakthrough">跳过动效</button><button type="button" class="quiet-button" id="close-breakthrough">完成并关闭</button></div>
+      </div>
+    </dialog>
+    <script src="./app.js"></script>
+  </body>
+</html>

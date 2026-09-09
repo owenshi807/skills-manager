@@ -1,0 +1,22 @@
+{
+  "fixtureOnly": true,
+  "nativeValidated": false,
+  "baseURL": "http://127.0.0.1:4186",
+  "checks": [
+    "two reviewed pilots and one ordinary unreviewed fixture render by stable scene identity",
+    "both pilot images are complete 1024px assets and cards do not auto-flip",
+    "SSR holo appears only while the knowledge art is pointed at, never on R art",
+    "equip stores the scene identity only and detail exposes the SSR four-cell record",
+    "hash refresh keeps the historical image and changes only the review freshness label",
+    "knowledge card remains readable on mobile"
+  ],
+  "screenshots": [
+    "01-business-front.png",
+    "02-knowledge-front.png",
+    "03-knowledge-handbook-ssr.png",
+    "04-knowledge-back.png",
+    "05-mobile-knowledge.png"
+  ],
+  "errors": [],
+  "passed": true
+}

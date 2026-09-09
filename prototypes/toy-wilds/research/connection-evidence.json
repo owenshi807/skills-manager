@@ -1,0 +1,62 @@
+{
+  "observedAt": "2026-09-09T09:11:03.223Z",
+  "businessReadOnly": true,
+  "profile": "desktop-api.multica.ai",
+  "cliVersion": "v0.4.39",
+  "checks": {
+    "daemon": {
+      "ok": true,
+      "status": "stopped"
+    },
+    "auth": {
+      "ok": true
+    },
+    "workspaces": {
+      "ok": true,
+      "count": 1
+    },
+    "agents": {
+      "ok": true,
+      "count": 10,
+      "statuses": {
+        "idle": 10
+      },
+      "runtimeBound": 10
+    },
+    "runtimes": {
+      "ok": true,
+      "count": 24,
+      "statuses": {
+        "online": 18,
+        "offline": 6
+      }
+    },
+    "skills": {
+      "ok": true,
+      "count": 16
+    },
+    "bindings": {
+      "ok": true,
+      "count": 7,
+      "enabled": 7,
+      "disabled": 0,
+      "enabledUnknown": 0
+    },
+    "runs": {
+      "ok": true,
+      "count": 85,
+      "statuses": {
+        "completed": 73,
+        "cancelled": 5,
+        "failed": 7
+      }
+    }
+  },
+  "scope": {
+    "workspaceSelected": true,
+    "agentSelected": true
+  },
+  "executionVerified": false,
+  "writePermissionVerified": false,
+  "result": "read_verified"
+}

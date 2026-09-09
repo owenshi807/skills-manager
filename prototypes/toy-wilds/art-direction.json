@@ -1,0 +1,62 @@
+{
+  "version": "0.3.0",
+  "decision": "User approved continuing with the Bruno-inspired toy low-poly direction",
+  "style_recipe": "toy_low_poly",
+  "approved_reference": "../skill-style-lab/assets/bruno.png",
+  "domain": "warm autumn paths and a teal pond sanctuary",
+  "equipment": "wanxiang-mirror",
+  "design_grade": "SSR / 圣",
+  "award_mode": "preview_only",
+  "identity_anchors": [
+    "faceted cyan crystal",
+    "three incomplete ivory rings",
+    "coral reconnection",
+    "navy split grip"
+  ],
+  "representations": {
+    "world": "volumetric pickup mesh",
+    "card": "same volumetric mesh on a physical card body, deterministic typography, view-driven foil",
+    "inventory": "same explorer mesh, real managed Skill metadata and runtime deployment status, local role loadout draft"
+  },
+  "interaction": {
+    "world": [
+      "camera-relative walking",
+      "ground-click pathfinding",
+      "nearby pickup",
+      "local inventory"
+    ],
+    "card": [
+      "subtle pointer tilt",
+      "pointer-leave settle",
+      "click/Enter/Space flip",
+      "return to equipment bag"
+    ],
+    "automatic_card_rotation": false,
+    "time_driven_foil": false,
+    "profile_writes": false,
+    "skill_library_writes": false
+  },
+  "scope": "one bounded explorable scene; no claim of a streamed open world or a fully integrated product",
+  "data_integration": {
+    "skill_library": "installed Manager MCP, business read-only, complete revision-consistent snapshot",
+    "role_identity": "local:explorer, not yet a Multica Agent",
+    "loadout": "local browser draft per runtime target",
+    "multica": "installed; workspace identity not connected; dispatch disabled",
+    "unreviewed_skills": "no inferred rarity or artwork"
+  },
+  "portal_contract": {
+    "default_surface": "existing SaaS UI",
+    "entry": "explicit scene Portal click only",
+    "active_surface": "game fills app content; SaaS chrome hidden and inert",
+    "return": "restore originating route, filters, scroll and focus",
+    "shared_library": true,
+    "status": "implemented and verified in main app as Portal v1"
+  },
+  "production_portal": {
+    "entry": "/scenes -> explicit Portal button -> /play/toy-wilds",
+    "data_source": "existing Tauri get_skill_library + get_tool_status",
+    "module": "src/features/toy-wilds/GameShell.tsx",
+    "delivery": "PORTAL-V1.md",
+    "scope": "one shared toy scene; local preview role; real read-only library; Multica binding not implemented"
+  }
+}

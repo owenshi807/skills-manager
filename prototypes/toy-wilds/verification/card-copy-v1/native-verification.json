@@ -1,0 +1,24 @@
+{
+  "testedAt": "2026-09-09T11:45:15.384464+00:00",
+  "app": "/Applications/Skill Card Manager.app",
+  "sha256": "d90bbec76775a1fe0ae472f28b7b1cd3ac25c584ae499e08d159c8e1a9745925",
+  "fixtureOnly": false,
+  "realInventoryCount": 434,
+  "checks": [
+    "Default launch remains SaaS; explicit Portal starts game.",
+    "Existing 观星者 and one knowledge-audit card preserved.",
+    "Exact-source Chinese capability copy visible on native knowledge-audit card.",
+    "Knowledge handbook title, body, close and source summaries appear in native AX tree.",
+    "Expand real source; native full router text visible and scrollable.",
+    "Escape returns to original card control with focus.",
+    "Chinese display-name search 方案追问 finds real grill-me.",
+    "Grill-me handbook retains one-question-at-a-time and participation conditions.",
+    "Escape handbook -> Armory -> Profile verified; reopening knowledge handbook retains AX content.",
+    "Final CSS-only build reinstalled: default SaaS -> Portal -> preserved role -> source-matched handbook; complete rounded frame clears Portal bar, title/close/summaries remain accessible in native AX."
+  ],
+  "roleChangesThisTurn": false,
+  "remoteAgentWrites": false,
+  "finalView": "观星者 / 资料入库把关 / 本领手册",
+  "limitation": "Only three pilot Skill types have human-edited copy. Cross-vault adapter execution has not been verified. Native UI observations use CUA screenshots and AX, separate from browser fixtures.",
+  "priorFullInteractionBuildSha256": "a611ddaca3623825062aca9ec3d1033ee1636665d04e5de9623c1b09acba42cb"
+}

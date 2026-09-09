@@ -1,0 +1,531 @@
+{
+  "schema_version": "1.1.0",
+  "id": "skill-equipment-cultivation",
+  "status": "design_contract_not_runtime",
+  "date": "2026-09-09",
+  "authority": "Product-original visual semantics, informed by genre research; not a universal fictional canon.",
+  "definition_document": "../skill-cultivation-visual-foundation-v1.md",
+  "rating_authority": "../skill-rating-foundation-v1.md",
+  "prompt_pack": "prompt-pack.md",
+  "purpose": "Skill-review AI judges methods and evidence; the user's drawing Agent creates and evolves art within that conclusion. This is a reference prompt contract, not a runtime rating or award system.",
+  "rating_compatibility": {
+    "current_grades": [
+      "C",
+      "R",
+      "SR"
+    ],
+    "achievement": "SSR",
+    "achievement_permanent": true,
+    "achievement_prerequisite_grade": null,
+    "minimum_substantive_breakthroughs": 1,
+    "visual_semantics_are_award_requirements": false,
+    "unfinished_art_delays_or_revokes_achievement": false,
+    "current_evidence_is_separate": true,
+    "unverified_means_low_ability": false,
+    "stale_current_evidence_revokes_achievement": false,
+    "award_personal_profile": false,
+    "award_entire_library": false,
+    "combination_members_auto_inherit": false,
+    "hide_unearned_achievement": true,
+    "future_grade_slots": [],
+    "examples_are_awards": false,
+    "same_grade_visual_evolution": true,
+    "visual_redraw_requires_new_breakthrough": false,
+    "visual_redraw_repeats_award": false,
+    "visual_revision_changes_current_grade": false,
+    "content_revision_may_need_current_assessment": true,
+    "visual_personalization_implies_personal_mastery": false
+  },
+  "independent_axes": [
+    "visual_grade",
+    "equipment_family",
+    "element_motif",
+    "art_style",
+    "artifact_spirit_mode",
+    "domain_inhabitants",
+    "domain_links"
+  ],
+  "element_motifs": [
+    "earth",
+    "water",
+    "wood",
+    "fire",
+    "light",
+    "cosmos",
+    "life"
+  ],
+  "art_styles": [
+    "adventure_field_guide",
+    "eastern_mythic_nature",
+    "mechanical_expedition",
+    "mineral_print"
+  ],
+  "default_art_style": "adventure_field_guide",
+  "global_rules": {
+    "separate_artwork_per_grade": true,
+    "preserve_family_identity": true,
+    "silhouette_distinct_without_effects": true,
+    "low_grade_is_complete_not_damaged": true,
+    "text_baked_into_generated_art": false,
+    "text_foil_allowed": false,
+    "ip_specific_characters_logos_or_signature_weapons": false,
+    "foil_is_added_by_renderer_not_painted_as_overlay": true,
+    "all_grades_support_card_thickness": true,
+    "layered_illustration_is_volumetric_equipment": false,
+    "static_simplified_asset_allowed": true,
+    "all_four_grades_required_before_drawing": false,
+    "same_grade_art_can_simplify": true,
+    "preserve_achievement_origin": true,
+    "per_grade_structure_is_guidance_not_award_gate": true
+  },
+  "interaction": {
+    "hover": "small_pointer_position_tilt",
+    "pointer_leave": "settle_to_neutral",
+    "click": "flip_front_back",
+    "keyboard": [
+      "Enter_flip",
+      "Space_flip"
+    ],
+    "separate_back_action_button": false,
+    "automatic_card_rotation": false,
+    "automatic_whole_card_flash": false,
+    "automatic_foil_sweep": false,
+    "max_active_inspection_cards": 1,
+    "pause_local_motion_when": [
+      "user_paused",
+      "prefers_reduced_motion",
+      "back_visible",
+      "offscreen",
+      "document_hidden"
+    ],
+    "static_grade_identity_required": true
+  },
+  "grades": [
+    {
+      "id": "fan",
+      "display_name": "凡",
+      "legacy_visual_key": "C",
+      "record_kind": "current_assessment",
+      "motto": "凭器",
+      "meaning": "用途由材料和工艺直接表现；基础或待验证，不推断低能力。",
+      "world_relation": "object_in_environment",
+      "background": "local_surface_or_place_supporting_the_object",
+      "effects": {
+        "foil_scope": "none",
+        "rainbow_edge": false,
+        "gold_card_trim": false,
+        "emissive_channels": false,
+        "ordinary_material_reflection": true,
+        "parallax": "shallow",
+        "idle_motion": "none"
+      },
+      "reject": [
+        "holographic_material",
+        "prestige_aura",
+        "worn_out_to_look_low_grade",
+        "same_art_recolor_upgrade"
+      ],
+      "structural_guidance": [
+        "one_readable_primary_function",
+        "physical_support_and_connections",
+        "complete_crafted_object"
+      ],
+      "reference_elements": [
+        "earth",
+        "water",
+        "wood",
+        "fire",
+        "light",
+        "cosmos",
+        "life"
+      ],
+      "custom_elements_allowed": true,
+      "artifact_spirit_modes": [
+        "none"
+      ],
+      "domain_inhabitants": "optional_static_scenery"
+    },
+    {
+      "id": "ling",
+      "display_name": "灵",
+      "legacy_visual_key": "R",
+      "record_kind": "current_assessment",
+      "motto": "载法",
+      "meaning": "器内装载可复用的方法；灵不自动表示独立意识。",
+      "world_relation": "method_within_object",
+      "background": "contained_workspace_echoing_internal_mechanism",
+      "effects": {
+        "foil_scope": "none",
+        "rainbow_edge": false,
+        "gold_card_trim": false,
+        "emissive_channels": false,
+        "ordinary_material_reflection": true,
+        "parallax": "layered_object",
+        "idle_motion": "none"
+      },
+      "reject": [
+        "holographic_material",
+        "soul_swimming",
+        "gemstones_without_functional_change",
+        "same_art_recolor_upgrade"
+      ],
+      "structural_guidance": [
+        "added_functional_mechanism",
+        "traceable_internal_input_output_path",
+        "distinct_from_fan_silhouette"
+      ],
+      "reference_elements": [
+        "earth",
+        "water",
+        "wood",
+        "fire",
+        "light",
+        "cosmos",
+        "life"
+      ],
+      "custom_elements_allowed": true,
+      "artifact_spirit_modes": [
+        "none"
+      ],
+      "domain_inhabitants": "optional_static_scenery"
+    },
+    {
+      "id": "tian",
+      "display_name": "天",
+      "legacy_visual_key": "SR",
+      "record_kind": "current_assessment",
+      "motto": "应势",
+      "meaning": "按外部条件组织方法；天指环境关系，不要求天空或宇宙。",
+      "world_relation": "object_responds_to_existing_environment",
+      "background": "environmental_flow_or_structure_connected_to_conditional_paths",
+      "effects": {
+        "foil_scope": "equipment_mask_only",
+        "rainbow_edge": false,
+        "gold_card_trim": "thin",
+        "emissive_channels": "local_static_or_pointer_driven",
+        "ordinary_material_reflection": true,
+        "parallax": "object_environment_layers",
+        "idle_motion": "none"
+      },
+      "reject": [
+        "full_card_foil",
+        "soul_swimming",
+        "random_external_rays_without_relationship",
+        "more_parts_without_conditional_role"
+      ],
+      "structural_guidance": [
+        "multiple_distinct_functional_parts",
+        "conditional_paths_or_stop_boundary",
+        "visible_object_environment_relationship",
+        "distinct_from_ling_silhouette"
+      ],
+      "reference_elements": [
+        "earth",
+        "water",
+        "wood",
+        "fire",
+        "light",
+        "cosmos",
+        "life"
+      ],
+      "custom_elements_allowed": true,
+      "artifact_spirit_modes": [
+        "none"
+      ],
+      "domain_inhabitants": "optional_static_scenery"
+    },
+    {
+      "id": "sheng",
+      "display_name": "圣",
+      "legacy_visual_key": "SSR",
+      "record_kind": "permanent_breakthrough_achievement",
+      "motto": "成域",
+      "meaning": "一次已成立的 Skill 方法突破化为独有领域；取得圣品后继续个性化演变，不要求再突破或升级品阶。",
+      "world_relation": "artifact_and_domain_share_a_personalized_relationship",
+      "background": "simple_or_expansive_domain_with_optional_habitat_and_inhabitants",
+      "effects": {
+        "foil_scope": "full_card_excluding_text",
+        "rainbow_edge": true,
+        "gold_card_trim": "engraved",
+        "emissive_channels": "core_masked",
+        "ordinary_material_reflection": true,
+        "parallax": "core_object_domain_layers",
+        "idle_motion": "optional_slow_local_motion_or_occasional_inhabitant_appearance",
+        "core_cycle_seconds_reference": [
+          8,
+          14
+        ],
+        "domain_cycle_seconds_reference": [
+          20,
+          35
+        ],
+        "foil_time_driven": false,
+        "whole_card_luminance_pulse": false,
+        "artifact_spirit_motion_boundaries": {
+          "abstract_core_soul": "core_mask",
+          "attached_companion": "declared_attachment_region"
+        },
+        "external_inhabitant_motion": "independent_layer_path_and_occlusion_not_core_mask",
+        "static_reduced_motion_pose": "readable_natural_pose_showing_domain_relationship"
+      },
+      "reject": [
+        "mandatory_cosmos_or_soul",
+        "brightness_as_only_upgrade",
+        "visual_domain_as_new_award_gate",
+        "visual_redraw_resets_achievement"
+      ],
+      "structural_guidance": [
+        "recognizable_equipment_identity",
+        "one_expressive_domain_relation_as_start",
+        "achievement_marker_preserved",
+        "optional_richer_structure_or_ecosystem"
+      ],
+      "reference_elements": [
+        "earth",
+        "water",
+        "wood",
+        "fire",
+        "light",
+        "cosmos",
+        "life"
+      ],
+      "custom_elements_allowed": true,
+      "artifact_spirit_modes": [
+        "none",
+        "abstract_core_soul",
+        "attached_companion"
+      ],
+      "domain_inhabitants": "optional_static_or_locally_animated_domain_beings"
+    }
+  ],
+  "layer_contract": {
+    "subject": "independent_equipment_RGBA_true_alpha",
+    "background": "separate_environment_without_duplicate_equipment_may_include_selected_static_inhabitants",
+    "lineart": "pixel_registered_to_subject",
+    "foil_mask": "empty_for_C_R_equipment_only_for_SR_text_excluded_for_all",
+    "text": "deterministic_typesetting_separate_from_art",
+    "optional_layers": {
+      "core_mask": "required_when_core_motion_is_used",
+      "domain_depth_layers": "required_when_domain_parallax_is_used",
+      "breakthrough_emblem": "separate_typeset_or_graphic_achievement_marker_can_be_added_after_art",
+      "artifact_spirit_layer": "when_artifact_spirit_motion_is_requested_use_core_mask_or_attachment_region",
+      "external_inhabitant_layer": "when_being_motion_is_requested_use_own_habitat_path_depth_and_occlusion"
+    },
+    "alpha_fallback": "uniform_white_for_explicit_technical_cutout_never_painted_checkerboard",
+    "applies_when": "layered_or_animated_export_requested_static_concept_does_not_require_all_layers"
+  },
+  "generation_sequence": [
+    "skill_review_conclusion",
+    "user_idea_and_optional_previous_art",
+    "equipment_identity",
+    "grade_semantics",
+    "one_domain_idea",
+    "complete_static_art",
+    "optional_layers_and_motion",
+    "same_grade_visual_evolution"
+  ],
+  "example_recipes": [
+    {
+      "id": "lens-fan",
+      "grade": "fan",
+      "equipment_family": "dependency_lens",
+      "name": "素木放大镜",
+      "element_motif": "light",
+      "art_style": "adventure_field_guide",
+      "status": "design_preview",
+      "artifact_spirit_mode": "none",
+      "domain_inhabitants": [],
+      "domain_links": [],
+      "motion": "none"
+    },
+    {
+      "id": "lens-ling",
+      "grade": "ling",
+      "equipment_family": "dependency_lens",
+      "name": "双轴勘察镜",
+      "element_motif": "light",
+      "art_style": "adventure_field_guide",
+      "status": "design_preview",
+      "artifact_spirit_mode": "none",
+      "domain_inhabitants": [],
+      "domain_links": [],
+      "motion": "none"
+    },
+    {
+      "id": "lens-tian",
+      "grade": "tian",
+      "equipment_family": "dependency_lens",
+      "name": "三相解析镜",
+      "element_motif": "light",
+      "art_style": "adventure_field_guide",
+      "status": "design_preview",
+      "artifact_spirit_mode": "none",
+      "domain_inhabitants": [],
+      "domain_links": [],
+      "motion": "none"
+    },
+    {
+      "id": "lens-sheng",
+      "grade": "sheng",
+      "equipment_family": "dependency_lens",
+      "name": "万象重构镜",
+      "element_motif": "cosmos",
+      "art_style": "adventure_field_guide",
+      "status": "design_preview",
+      "artifact_spirit_mode": "abstract_core_soul",
+      "domain_inhabitants": [],
+      "domain_links": [],
+      "motion": "none"
+    },
+    {
+      "id": "balance-sheng-earth",
+      "grade": "sheng",
+      "equipment_family": "decision_balance",
+      "name": "山河衡",
+      "element_motif": "earth",
+      "art_style": "adventure_field_guide",
+      "status": "hypothetical_design_preview_not_awarded",
+      "artifact_spirit_mode": "none",
+      "domain_inhabitants": [],
+      "domain_links": [],
+      "motion": "none"
+    },
+    {
+      "id": "lens-sheng-dragon",
+      "grade": "sheng",
+      "equipment_family": "dependency_lens",
+      "name": "水镜栖龙",
+      "element_motif": "water",
+      "art_style": "adventure_field_guide",
+      "artifact_spirit_mode": "none",
+      "domain_inhabitants": [
+        "dragon"
+      ],
+      "domain_links": [
+        "habitat_guardianship",
+        "passage"
+      ],
+      "motion": "optional_pointer_response",
+      "status": "design_preview"
+    },
+    {
+      "id": "balance-sheng-guardian",
+      "grade": "sheng",
+      "equipment_family": "decision_balance",
+      "name": "山河衡·守山",
+      "element_motif": "earth",
+      "art_style": "adventure_field_guide",
+      "artifact_spirit_mode": "none",
+      "domain_inhabitants": [
+        "mountain_ape_guardian"
+      ],
+      "domain_links": [
+        "habitat_guardianship"
+      ],
+      "motion": "optional_occasional_appearance",
+      "status": "design_preview"
+    },
+    {
+      "id": "lens-sheng-simple",
+      "grade": "sheng",
+      "equipment_family": "dependency_lens",
+      "name": "镜畔一池",
+      "element_motif": "water",
+      "art_style": "adventure_field_guide",
+      "artifact_spirit_mode": "none",
+      "domain_inhabitants": [],
+      "domain_links": [
+        "passage"
+      ],
+      "motion": "none",
+      "status": "design_preview"
+    }
+  ],
+  "agent_prompts": "agent-prompts.md",
+  "confirmed_direction": {
+    "saint_core": "evolving_personalized_domain",
+    "artifact_spirit_optional": true,
+    "cosmos_optional": true,
+    "external_inhabitants_optional": true,
+    "encouragement_first": true,
+    "user_confirmed": true
+  },
+  "catalogs_are_examples_not_allowlists": true,
+  "review_posture": {
+    "primary_role": "support_skill_improvement",
+    "start_with_evidenced_value": true,
+    "maximum_next_step_suggestions": 1,
+    "enough_evidence_needs_no_extra_assignment": true,
+    "fabricate_evidence_to_encourage": false,
+    "visual_complexity_affects_grade": false,
+    "review_statuses": [
+      "not_established",
+      "supported",
+      "recorded"
+    ],
+    "supported_means_award_persisted": false
+  },
+  "drawing_workflow": {
+    "minimum_user_input": [
+      "review_result",
+      "one_sentence_idea"
+    ],
+    "optional_input": [
+      "previous_art",
+      "preferred_elements",
+      "preferred_inhabitants",
+      "style",
+      "change_request"
+    ],
+    "missing_review": "clearly_labeled_concept_preview_only",
+    "default_output": "complete_static_art_or_copyable_prompt_if_no_tool",
+    "optional_enhancements": [
+      "layers",
+      "local_animation",
+      "interactive_3d"
+    ],
+    "automatically_calls_paid_tools": false,
+    "scope": "reference_prompts_no_runtime_implementation"
+  },
+  "living_domain": {
+    "links_optional": true,
+    "explicit_link_count_required": 0,
+    "recommended_start": "one_readable_relationship_or_simple_domain",
+    "links_may_be": [
+      "narrative",
+      "shape",
+      "color",
+      "space",
+      "functional_metaphor"
+    ],
+    "every_detail_requires_method_proof": false,
+    "physical_simulation_required": false,
+    "relation_examples": [
+      "habitat_guardianship",
+      "nourishment_symbiosis",
+      "resonance_response",
+      "passage",
+      "shared_growth"
+    ],
+    "inhabitant_examples": [
+      "animal",
+      "dragon",
+      "mountain_ape_guardian",
+      "custom_being"
+    ],
+    "inhabitants_are_art_not_agents_or_profiles": true,
+    "inhabitants_create_grade_entitlement": false,
+    "static_inhabitants_allowed_at_every_grade": true,
+    "dynamic_linked_inhabitants_visual_key": "SSR",
+    "recommended_initial_active_links": 1,
+    "initial_active_link_count_is_hard_limit": false,
+    "same_grade_growth_examples": [
+      "pond",
+      "dragon_habitat",
+      "mountain_and_river_domain"
+    ],
+    "growth_requires_new_grade": false,
+    "growth_must_increase_complexity": false,
+    "automatic_mutation_over_wall_clock_time": false
+  }
+}
