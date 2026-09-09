@@ -2243,6 +2243,8 @@ Edit only this managed Skill directory. Do not modify its external source, other
             <List className="h-4 w-4" />
           </button>
           <button
+            type="button"
+            aria-pressed={isMultiSelect}
             onClick={() => isMultiSelect ? exitMultiSelect() : setIsMultiSelect(true)}
             className={cn(
               "rounded-md p-2 transition-colors outline-none",
