@@ -29,5 +29,7 @@
   "notes": [
     "Native product evidence is inherited from the unchanged f099596 product; no native rebuild at freeze.",
     "Private knowledge-method evaluations are historical, not rerun."
-  ]
+  ],
+  "pullRequest": "https://github.com/owenshi807/skills-manager/pull/7",
+  "cleanupBytes": 1411045
 }
