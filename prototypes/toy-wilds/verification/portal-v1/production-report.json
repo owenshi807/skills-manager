@@ -1,0 +1,909 @@
+{
+  "startedAt": "2026-09-09T09:48:41.546Z",
+  "baseURL": "http://127.0.0.1:4186",
+  "fixtureOnly": true,
+  "nativeValidated": false,
+  "checks": [
+    {
+      "name": "cold Portal URL returns to SaaS without loading game resources",
+      "passed": true,
+      "durationMs": 366
+    },
+    {
+      "name": "scene search, expanded list, page, scroll and focus survive Portal",
+      "passed": true,
+      "durationMs": 896
+    },
+    {
+      "name": "browser Back exits and Forward cannot re-enter an expired Portal",
+      "passed": true,
+      "durationMs": 246
+    },
+    {
+      "name": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "passed": true,
+      "durationMs": 858
+    },
+    {
+      "name": "20 initialized Portal cycles dispose listeners, hooks, frames and GPU resources",
+      "passed": true,
+      "durationMs": 3579
+    },
+    {
+      "name": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "passed": true,
+      "durationMs": 1541
+    },
+    {
+      "name": "900–1280 widths keep the bag, renderer and exit usable",
+      "passed": true,
+      "durationMs": 1331
+    },
+    {
+      "name": "fresh-context aborted lazy module exposes real failure and return action",
+      "passed": true,
+      "durationMs": 1295
+    },
+    {
+      "name": "Portal emits only inventory reads and no business writes",
+      "passed": true,
+      "durationMs": 0
+    }
+  ],
+  "screenshots": [
+    "01-saas-cold.png",
+    "02-game-welcome.png",
+    "03-equipment-bag.png",
+    "03-first-library-string-error.png",
+    "05-card-front.png",
+    "06-world.png",
+    "07-scale-120.png",
+    "08-bag-bottom-1100.png",
+    "09-real-load-error.png"
+  ],
+  "ipc": [
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "language"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_deck_overrides_v1"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_skill_scene_overview",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_deck_overrides_v1"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_skill_scene_overview",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_skill_scene_agent_capabilities",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_managed_skills",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "theme"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_custom_decks_v1"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_custom_decks_v1"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "scan_local_skills",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "text_size"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_organization_agent_capabilities",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_custom_decks_v1"
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "main",
+      "phase": "cold Portal URL returns to SaaS without loading game resources",
+      "command": "get_skill_scene_overview",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "ground interaction, real fixture bag, failed refresh retention and card chain",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "text scale 90–120% preserves canvas bounds and physical click mapping",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "900–1280 widths keep the bag, renderer and exit usable",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "900–1280 widths keep the bag, renderer and exit usable",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "900–1280 widths keep the bag, renderer and exit usable",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "900–1280 widths keep the bag, renderer and exit usable",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "900–1280 widths keep the bag, renderer and exit usable",
+      "command": "get_skill_library",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "main",
+      "phase": "900–1280 widths keep the bag, renderer and exit usable",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "language"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_deck_overrides_v1"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_skill_scene_overview",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_deck_overrides_v1"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_skill_scene_overview",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_skill_scene_agent_capabilities",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_tool_status",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_managed_skills",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "plugin:event|listen",
+      "kind": "lifecycle",
+      "argumentKeys": [
+        "event",
+        "target",
+        "handler"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "theme"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_custom_decks_v1"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_custom_decks_v1"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "scan_local_skills",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "text_size"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_organization_agent_capabilities",
+      "kind": "read",
+      "argumentKeys": []
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_settings",
+      "kind": "read",
+      "argumentKeys": [
+        "key"
+      ],
+      "settingKey": "card_master_custom_decks_v1"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "log_startup_event",
+      "kind": "telemetry",
+      "argumentKeys": [
+        "label",
+        "elapsedMs"
+      ]
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "command": "get_skill_scene_overview",
+      "kind": "read",
+      "argumentKeys": []
+    }
+  ],
+  "browserErrors": [
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "console": true,
+      "message": "Failed to load resource: net::ERR_FAILED"
+    },
+    {
+      "context": "lazy-failure",
+      "phase": "fresh-context aborted lazy module exposes real failure and return action",
+      "console": true,
+      "message": "TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4186/assets/GameShell-G_6AhQLR.js"
+    }
+  ],
+  "blockedRequests": [],
+  "diagnostics": {
+    "initial": {
+      "mounts": 3,
+      "disposals": 3,
+      "activeEngines": 0,
+      "activeAnimationFrames": 0,
+      "activeListeners": 0,
+      "activeObservers": 0,
+      "liveGeometries": 0,
+      "liveMaterials": 0,
+      "liveTextures": 0
+    },
+    "final": {
+      "mounts": 23,
+      "disposals": 23,
+      "activeEngines": 0,
+      "activeAnimationFrames": 0,
+      "activeListeners": 0,
+      "activeObservers": 0,
+      "liveGeometries": 0,
+      "liveMaterials": 0,
+      "liveTextures": 0
+    },
+    "initializedCycles": 20
+  },
+  "zoom": [
+    {
+      "scale": 0.9,
+      "rect": {
+        "x": 0,
+        "y": 73.796875,
+        "width": 1100,
+        "height": 566.203125
+      },
+      "renderer": {
+        "left": 0,
+        "top": 73.796875,
+        "width": 1100,
+        "height": 566.203125
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    },
+    {
+      "scale": 1,
+      "rect": {
+        "x": 0,
+        "y": 82,
+        "width": 1100,
+        "height": 558
+      },
+      "renderer": {
+        "left": 0,
+        "top": 82,
+        "width": 1100,
+        "height": 558
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    },
+    {
+      "scale": 1.1,
+      "rect": {
+        "x": 0,
+        "y": 90.1875,
+        "width": 1100,
+        "height": 549.8125
+      },
+      "renderer": {
+        "left": 0,
+        "top": 90.1875,
+        "width": 1100,
+        "height": 549.8125
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    },
+    {
+      "scale": 1.2,
+      "rect": {
+        "x": 0,
+        "y": 98.390625,
+        "width": 1100,
+        "height": 541.609375
+      },
+      "renderer": {
+        "left": 0,
+        "top": 98.390625,
+        "width": 1100,
+        "height": 541.609375
+      },
+      "groundClick": "passed",
+      "cardClick": "passed"
+    }
+  ],
+  "coldResources": {
+    "contexts": 0,
+    "canvases": 0,
+    "resources": []
+  },
+  "restoredScroll": {
+    "before": 100,
+    "after": 100
+  },
+  "firstLibraryStringError": {
+    "visible": true,
+    "readyAfterFailure": false,
+    "recoveredTotal": 80
+  },
+  "bagScroll": [
+    {
+      "width": 900,
+      "top": 4726,
+      "height": 558,
+      "scrollHeight": 5284,
+      "overflowY": "auto",
+      "footerTop": 495.8125,
+      "footerBottom": 627.40625,
+      "demo": {
+        "x": 32,
+        "y": 340.546875,
+        "width": 836,
+        "height": 40
+      },
+      "demoClick": "passed"
+    },
+    {
+      "width": 1100,
+      "top": 195,
+      "height": 558,
+      "scrollHeight": 753,
+      "overflowY": "auto",
+      "footerTop": 544.78125,
+      "footerBottom": 620.78125,
+      "demo": {
+        "x": 42,
+        "y": 569.78125,
+        "width": 272,
+        "height": 40
+      },
+      "demoClick": "passed"
+    },
+    {
+      "width": 1280,
+      "top": 189,
+      "height": 558,
+      "scrollHeight": 747,
+      "overflowY": "auto",
+      "footerTop": 547.78125,
+      "footerBottom": 623.78125,
+      "demo": {
+        "x": 54,
+        "y": 572.78125,
+        "width": 272,
+        "height": 40
+      },
+      "demoClick": "passed"
+    }
+  ],
+  "lazyModuleAborts": 1,
+  "ipcSummary": {
+    "read": 56,
+    "telemetry": 12,
+    "lifecycle": 8,
+    "unexpected": 0
+  },
+  "businessWrites": 0,
+  "passed": true,
+  "finishedAt": "2026-09-09T09:48:52.677Z",
+  "visualReview": {
+    "method": "agent image inspection of final production screenshots",
+    "images": [
+      "08-bag-bottom-1100.png",
+      "08-bag-demo-1280.png",
+      "03-first-library-string-error.png"
+    ],
+    "result": "passed",
+    "notes": "Short desktop satchel scroll exposes footer and demo entry within viewport; demo is actually clicked by the test. First string rejection displays explicit error and unknown total, then a successful retry restores the fixture library. Product source was unchanged during this run."
+  },
+  "omittedScreenshots": "Repeated scales/sizes omitted after inspection; source script reproduces all captures."
+}

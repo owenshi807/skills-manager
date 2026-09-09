@@ -1,0 +1,21 @@
+{
+  "app": "/Applications/Skill Card Manager.app",
+  "binarySha256": "8fe3c7b57f84b059927331f0cc5de8891bbe40b5f4b9949ed2435bf63226b6c7",
+  "nativeValidated": true,
+  "libraryObservation": {
+    "skills": 435,
+    "scenes": 61,
+    "note": "Live native observation after installation; 434 at the original evidence capture. Scene pilot membership and registered versions remained matched."
+  },
+  "checks": [
+    "App cold launch remains SaaS; explicit Portal and Enter enter world.",
+    "Real native card library shows business R and knowledge SSR supported artwork.",
+    "Knowledge click toggles front/back and keyboard Tab/Enter opens its handbook.",
+    "SSR four evidence panels expand in the native accessibility tree.",
+    "Business handbook exposes R basis, missing family entry and lack of full scene execution evidence.",
+    "Escape restores card library; both pilot cards returned to front.",
+    "Both pilot equip toggles remain off; no native loadout mutation was used during verification."
+  ],
+  "remoteMutationToolsCalled": [],
+  "permanentAwardRecorded": false
+}

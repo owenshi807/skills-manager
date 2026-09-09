@@ -1,0 +1,903 @@
+{
+  "startedAt": "2026-09-09T10:36:44.888Z",
+  "baseURL": "http://127.0.0.1:4186",
+  "fixtureOnly": true,
+  "nativeValidated": false,
+  "checks": [
+    {
+      "name": "local role A carries only explicitly equipped cards",
+      "passed": true,
+      "durationMs": 988
+    },
+    {
+      "name": "every library card supports independent flip and equip controls",
+      "passed": true,
+      "durationMs": 19307
+    },
+    {
+      "name": "new local role B has an isolated saved loadout and lineage",
+      "passed": true,
+      "durationMs": 703
+    },
+    {
+      "name": "reload restores both local identities, selection and independent loadouts",
+      "passed": true,
+      "durationMs": 1051
+    },
+    {
+      "name": "failed and duplicate inventory reads preserve complete snapshot and per-role choices",
+      "passed": true,
+      "durationMs": 515
+    },
+    {
+      "name": "phone and short window scroll to role creation and library bottom with contained keyboard focus",
+      "passed": true,
+      "durationMs": 1375
+    },
+    {
+      "name": "dynamic world screenshots cover two complete water ripple cycles and selected character appearance",
+      "passed": true,
+      "durationMs": 762
+    },
+    {
+      "name": "no native business writes, external calls, duplicate IDs or browser errors",
+      "passed": true,
+      "durationMs": 73
+    }
+  ],
+  "browserErrors": [],
+  "blockedRequests": [],
+  "dynamicFrames": [
+    {
+      "simulatedMs": 0,
+      "worldTime": 2.033,
+      "hash": "6f0a90cb9974716cc1b6041c7fe8170e213715f31fe112119aac44ea5265d030"
+    },
+    {
+      "simulatedMs": 1042,
+      "worldTime": 3.075,
+      "hash": "922bdc8fbc1255169248613bb64fe0dde6a20846f531a2081cf442de266f8e04"
+    },
+    {
+      "simulatedMs": 2083,
+      "worldTime": 4.117,
+      "hash": "4094778070bf2b7dd0f7131718653d8b441f425e0a8686113cb54a0d88fa6661"
+    },
+    {
+      "simulatedMs": 3125,
+      "worldTime": 5.159,
+      "hash": "9b8cb1dd0b02b8a6789589eb86f5652a5242a037062b3e1877957616b8c03867"
+    },
+    {
+      "simulatedMs": 4167,
+      "worldTime": 6.2,
+      "hash": "501527c3c3feead24d15b7a7d95c2e809c7bc77bed77ed94093af50d7a3cf801"
+    },
+    {
+      "simulatedMs": 5208,
+      "worldTime": 7.242,
+      "hash": "5987480f8436feb88da32b90413fcd3d93d62f4f90ff5017dfb665cbc41f4dd3"
+    },
+    {
+      "simulatedMs": 6250,
+      "worldTime": 8.284,
+      "hash": "61b9f66832eb59a224f1776cc8fbbaee8e6ee2b4db02f74226f7c937a5ad052b"
+    },
+    {
+      "simulatedMs": 7292,
+      "worldTime": 9.325,
+      "hash": "82823106c8f2d8435ba89b29668d3bfb6d5f8ae7f7e7fb6112621ebeb310ef60"
+    },
+    {
+      "simulatedMs": 8333,
+      "worldTime": 10.367,
+      "hash": "9ad3056bdba1aedb9b5e33ddb605715fb51ac0613ad048899310744b7822c062"
+    }
+  ],
+  "responsive": [
+    {
+      "width": 390,
+      "height": 740,
+      "creationButton": {
+        "x": 16,
+        "y": 651.53125,
+        "width": 358,
+        "height": 39
+      },
+      "beforeEquip": {
+        "x": 202,
+        "y": 336.34375,
+        "width": 171,
+        "height": 318
+      },
+      "afterEquip": {
+        "x": 202,
+        "y": 336.34375,
+        "width": 171,
+        "height": 318
+      },
+      "bottomCardInteractable": true,
+      "containedFocus": true,
+      "focusTrail": [
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        }
+      ]
+    },
+    {
+      "width": 900,
+      "height": 640,
+      "creationButton": {
+        "x": 20,
+        "y": 517.890625,
+        "width": 107,
+        "height": 39
+      },
+      "beforeEquip": {
+        "x": 676,
+        "y": 227.953125,
+        "width": 199,
+        "height": 314
+      },
+      "afterEquip": {
+        "x": 676,
+        "y": 227.953125,
+        "width": 199,
+        "height": 314
+      },
+      "bottomCardInteractable": true,
+      "containedFocus": true,
+      "focusTrail": [
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-tab"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "profile-open-armory"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "agent-create-submit"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SELECT",
+          "id": "agent-lineage"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "INPUT",
+          "id": "agent-name"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "SUMMARY",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": ""
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "DIV",
+          "id": "profile-view"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-refresh"
+        },
+        {
+          "key": "Shift+Tab",
+          "tag": "BUTTON",
+          "id": "inventory-close"
+        }
+      ]
+    }
+  ],
+  "cardControls": {
+    "verifiedFlipCount": 80,
+    "independentEquip": true,
+    "tilt": {
+      "x": "1.50deg",
+      "y": "2.72deg"
+    }
+  },
+  "saved": {
+    "version": 3,
+    "localAgentCount": 2,
+    "isolatedLoadouts": true
+  },
+  "businessWrites": 0,
+  "ipcSummary": {
+    "read": 44,
+    "telemetry": 12,
+    "lifecycle": 8,
+    "unexpected": 0
+  },
+  "passed": true,
+  "finishedAt": "2026-09-09T10:37:10.695Z",
+  "retainedScreenshots": [
+    "characters-01-profile-a-two-carried.png",
+    "characters-03-profile-b-sage.png",
+    "characters-02-armory-cards.png",
+    "characters-06-armory-bottom-390.png",
+    "characters-07-world-dynamic-0.png",
+    "characters-07-world-dynamic-4.png",
+    "characters-07-world-dynamic-8.png"
+  ],
+  "originalScreenshotCount": 19
+}

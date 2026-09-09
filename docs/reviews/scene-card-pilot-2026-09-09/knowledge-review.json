@@ -1,0 +1,116 @@
+{
+  "subject_type": "scene",
+  "scene_ref": {
+    "id": "scene-5dceda2d4cfc9a10",
+    "name": "知识库与笔记治理",
+    "snapshot": {
+      "captured_at": "2026-09-09T13:49:17.326Z",
+      "original_private_sha256": "a36676fe6d5ced74634c60cfc299afe264b5c72c81d005027d917ec2797852ed",
+      "public_projection_path": "docs/reviews/scene-card-pilot-2026-09-09/source-snapshot.json",
+      "original_availability": "local_private_archive"
+    },
+    "member_versions": {
+      "library_revision": "1a81aa7600edf7386e5fbef6d967251285ec30a5f43620bd7a0f37b3ca606089",
+      "original_private_sha256": "3ed368354436a9fe5d086e01334afc61b22fc6c5b9bf2ab30d2ae5944e4f8dbe",
+      "public_projection_path": "docs/reviews/scene-card-pilot-2026-09-09/member-versions.json",
+      "original_availability": "local_private_archive"
+    }
+  },
+  "scope": "知识库与笔记治理场景中由 wiki、knowledge-audit、ingest、distill、query、knowledge-panorama 与 relationship-feature-graph 组成的、以共享 Epistemic Dependence Lens 约束的知识准入、蒸馏、查询与全景治理方法。",
+  "current_grade": "SR",
+  "ssr_status": "supported",
+  "basis": "该核心链路有可检查的条件式选择：无 material delta 时停止并保持沉默，material 依赖时重开证据、限制归属或改正 evidence-family 计数，同时保留 provenance、locator/hash、release gate 等机械边界；四个冻结情境、两次 fresh-context 行为复测和 110/110 历史 runtime 回归支持其价值。",
+  "next_step": null,
+  "visual_seed": "双光源校准灯：内灯照亮带 locator 的可重开来源纸卷，外侧金属卡尺与封蜡门闩守住 hash、版本和写权限；背景四条同源水脉汇成一条，旁边保留一条反向支流。",
+  "evidenceStrength": {
+    "assessment": "strong, bounded",
+    "why": "场景归属由正式 MCP 快照及版本 metadata 锁定；router 明确要求读取当前 canonical adapter/schema；方法有版本化 before/after、四个冻结案例、两次独立 fresh-context 复测和 110/110 runtime 回归。",
+    "current_version_limit": "本次未重跑历史评测。Lens 与 Audit 的当前 SHA-256 与评测 candidate 一致；Ingest/Distill/Query/Panorama 后续已演进，故历史实跑不能表述为对今日全部 bytes 的重新验证。"
+  },
+  "scopeMembers": {
+    "verified_core": [
+      {
+        "id": "d8b2607e-f04f-4eaf-9a0e-3ebd4f3735f3",
+        "name": "wiki",
+        "recorded_tree_hash": "2e83b291746abc4c1a53a1d43efc9c813908cf76c5debb40b33b55aae69a7596",
+        "snapshot_content_digest": "e39833117e2ab13b98e868e19fd8128ce0fa4eac2078ac681b771230a52beb93"
+      },
+      {
+        "id": "49822923-e519-4e70-8262-bf9dbcd196b6",
+        "name": "knowledge-audit",
+        "recorded_tree_hash": "167403c8d0339ffdb53235ebf46bc8bbe6990a6c4fa37dd0b10230389b8ecaa4",
+        "snapshot_content_digest": "bafaccecfee927c5de908048682aab3cb3f77ff9acf74f9a7e2df831162dcbd3"
+      },
+      {
+        "id": "7973c503-2dc7-4301-bd0d-aa2381aacd90",
+        "name": "ingest",
+        "recorded_tree_hash": "9a34c1da3a85cc66819ccb77f1fc2b52d430de49a7221bcf3aa2a72f4e10958e",
+        "snapshot_content_digest": "7489a3dfbc99d859d803bba869b50a07687eb7793d62430f1da88aec122d2fc2"
+      },
+      {
+        "id": "adcd6795-6446-467d-9853-a5eef4757a64",
+        "name": "distill",
+        "recorded_tree_hash": "1467d0e09fb7ff21cef8573140e2393adf80415f99f55c0a69b4ea0711880bf1",
+        "snapshot_content_digest": "1911200fe06fcbaf56eecc5681ad3d5013c4b4c78c66824a5444a517d6598cd0"
+      },
+      {
+        "id": "2c1c1cca-f07b-49e4-8332-407e46e1a00b",
+        "name": "query",
+        "recorded_tree_hash": "5903d846c10f941804c9103552d7d137f067df4a8714d63b36236374fb018dc3",
+        "snapshot_content_digest": "f00ea1ee29003a46ac39a14b194e5fd30c6dd54df0cee53787cea5d1e38a2253"
+      },
+      {
+        "id": "6aec1885-4491-4148-9927-e0813927a61d",
+        "name": "knowledge-panorama",
+        "recorded_tree_hash": "5174a18462e0b77698a0b37e3e2e940af3179c1b4f85fb1584f75f198a608af5",
+        "snapshot_content_digest": "c2cdd2b149658f2256e34b504191f9f1a9c1ae29ca19acc6a8d4637e9a68c5ed"
+      },
+      {
+        "id": "280c9e1e-c15d-48ca-b90b-6283be3749b7",
+        "name": "relationship-feature-graph",
+        "recorded_tree_hash": "f265afed82f61ce5ebbb2072b1eab0a3b0ad9c971418b301f2424afe95e34f4c",
+        "snapshot_content_digest": "5f6eeb19abbb48fc65b14b42731b6b75e54dc0a8f8105b7ca433830fce817d1c"
+      }
+    ],
+    "not_inferred": "场景其余 15 名成员没有因共同场景成员资格继承 SR/SSR 证据。"
+  },
+  "breakthrough": {
+    "old_limitation": "将重要依赖原则一律机械化为必填字段、检测器或常驻流程，令关系判断伪装成固定来源属性，并制造不必要的审查负担。",
+    "new_effective_distinction": "共同认识原则交给任务中的条件判断；可客观核验且失守代价高的 provenance、locator/hash、状态、可逆写入与发布权限由机械门禁承担；局部工具需由真实 material failure 证明必要。",
+    "changed_judgment_or_action": "完整一手研究不生成额外 checklist；共享上游的四篇报道改计为一个 evidence family；中介解释被保留为有边界的归属，而非升级为原典事实；fresh v3 写入被阻断但历史 published v3 可严格 replay。",
+    "applicable_boundary": "只适用于该场景的知识治理链路；不创建信任/人格分、依赖图、新写权限或自动修复。Collision 仍处于 shadow，且没有本产品已记录 SSR 的证据。"
+  },
+  "evidence": [
+    {
+      "sha256": "f0ec1a77e024f70eaa2874eb79cbbbbf01b6a5ac6183370aeeff4fbdbd8455dc",
+      "role": "现行共享条件判断、渐进披露、各 Activity 分工和硬边界",
+      "availability": "local_private_archive",
+      "evidence_ref": "K-source-01"
+    },
+    {
+      "sha256": "0e0922712735773fb1a8e20a8c9f6d7de36659d9d4ef30522c8319d73ab43955",
+      "role": "旧方法、分层新原则和停止条件",
+      "availability": "local_private_archive",
+      "evidence_ref": "K-source-02"
+    },
+    {
+      "sha256": "b76c91a663e302b059af928b13e70b9f6ab99424655b596b839109a6526d90e2",
+      "role": "冻结 before、四个情境、复测、评分与 attribution boundary",
+      "availability": "local_private_archive",
+      "evidence_ref": "K-source-03"
+    },
+    {
+      "sha256": "d3acf032965353f7906d0a0a5b71a22eac801d730402f95876c481409681537a",
+      "role": "版本化 case、runtime replay、kill criteria 与 110/110 历史回归",
+      "availability": "local_private_archive",
+      "evidence_ref": "K-source-04"
+    },
+    {
+      "sha256": "a19dbf0e025bf09ca05ebee556e0e2f6eedf53006f132a003c6021ba1fb08071",
+      "role": "当前 shadow 和非自动接受状态",
+      "availability": "local_private_archive",
+      "evidence_ref": "K-source-05"
+    }
+  ],
+  "publication_note": "Public review summary. Private source locations and method documents remain in the local archive; historical evaluations were not rerun at freeze."
+}

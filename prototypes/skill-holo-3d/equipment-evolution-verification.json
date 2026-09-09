@@ -1,0 +1,276 @@
+{
+  "blender": "4.5.13 LTS",
+  "source": "card.blend",
+  "source_sha256": "25b174b893bff8c3e04d35b01d1ed640fbe3ce5087389937148cabadc83f7347",
+  "output": "equipment-evolution.blend",
+  "geometry": "Copied editable thick-card mesh, separate text plane and physical trim; equipment artwork is layered RGBA rather than volumetric equipment geometry.",
+  "shader_limit": "Blender material is an editable offline equivalent, not pixel-identical to the custom Three.js shader.",
+  "ssr_divinity": {
+    "static_divine_background": true,
+    "trimmed_subject_source": "assets/tiers/SSR/subject-divine.png",
+    "crystal_mask_packed": true,
+    "crystal_soul_animation_in_blender": false,
+    "web_animation_source": "ssr-divinity.js"
+  },
+  "images": {
+    "C": {
+      "subject": {
+        "name": "C · 素木放大镜 · subject",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/C/subject.png",
+        "sha256": "d999be3ff2ef58ca9d4d78bfb5ecc467174f25dea6fc02d8c6c693d354e7669b"
+      },
+      "lineart": {
+        "name": "C · 素木放大镜 · lineart",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/C/lineart.png",
+        "sha256": "e882b26c97ec2c6f01363aca7914b97eb70a16364e00def639df87a493874bf7"
+      },
+      "text": {
+        "name": "C · 素木放大镜 · text",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/C/text.png",
+        "sha256": "6e5ef455cbfab490941df81416502a04b0f905da05cfe27f621e5eee51c4d81b"
+      }
+    },
+    "R": {
+      "subject": {
+        "name": "R · 双轴勘察镜 · subject",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/R/subject.png",
+        "sha256": "9129b429bbb6af59b67feb14d18d7900f83f69cb5793319f6f4b737f55bed4e8"
+      },
+      "lineart": {
+        "name": "R · 双轴勘察镜 · lineart",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/R/lineart.png",
+        "sha256": "4d9627ff5d85cfefb49dd506115520083bbc577404f5efa7058a5e3eb214824a"
+      },
+      "text": {
+        "name": "R · 双轴勘察镜 · text",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/R/text.png",
+        "sha256": "d09f6483a7b66def16dad599f03d15e55b1247b4c0abaab8377485bb9563b794"
+      }
+    },
+    "SR": {
+      "subject": {
+        "name": "SR · 三相解析镜 · subject",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SR/subject.png",
+        "sha256": "ca15274857371a3cae1cb9493e01022e8c8cfc9424024060bcfc8dc38f56a166"
+      },
+      "lineart": {
+        "name": "SR · 三相解析镜 · lineart",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SR/lineart.png",
+        "sha256": "bc2004734f9930a576b6a5668258408fc9cb01c972dfcef75badbf357c30c779"
+      },
+      "text": {
+        "name": "SR · 三相解析镜 · text",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SR/text.png",
+        "sha256": "c1ee0dd0749f1ca30d7c4f6545508f44d91d0b3533bc9a755f2081149da5b26e"
+      }
+    },
+    "SSR": {
+      "subject": {
+        "name": "SSR · 万象重构镜 · subject",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SSR/subject-divine.png",
+        "sha256": "5a98d2103bed2ecd96656e0ed758a20e806482eaa527236c1b2adc3836acf209"
+      },
+      "lineart": {
+        "name": "SSR · 万象重构镜 · lineart",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SSR/lineart.png",
+        "sha256": "43ac2001b9a0a9eb6440c8aa929f9829e33fe4343af4105b3cd32daca9d2bcec"
+      },
+      "text": {
+        "name": "SSR · 万象重构镜 · text",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SSR/text.png",
+        "sha256": "16f7ab41158cd77fd8111c2d208bf0d437dd8db1a92e50788f9e5142fb05bf00"
+      },
+      "background": {
+        "name": "SSR · 万象重构镜 · background",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SSR/background.png",
+        "sha256": "6c527f40a69fe17f36ef4d7ed165eaf8de09f400916c646a1c806435d7b81bdb"
+      },
+      "crystal_mask": {
+        "name": "SSR · 万象重构镜 · crystal_mask",
+        "size": [
+          1024,
+          1536
+        ],
+        "channels": 4,
+        "packed": true,
+        "source_path": "assets/tiers/SSR/crystal-mask.png",
+        "sha256": "22bcf048f32449e1057dbeebd8f4f78b664b27ba1f7bb7fab667e02bed28f672"
+      }
+    }
+  },
+  "scenes": [
+    {
+      "name": "C · 素木放大镜",
+      "tier": "C",
+      "foil_scope": "none",
+      "mesh_objects": 5,
+      "thick_card_meshes": [
+        "C · 主体平面 · 完整视差合成"
+      ],
+      "automatic_object_animation": false,
+      "camera": "C · 成品相机"
+    },
+    {
+      "name": "R · 双轴勘察镜",
+      "tier": "R",
+      "foil_scope": "none",
+      "mesh_objects": 5,
+      "thick_card_meshes": [
+        "R · 主体平面 · 完整视差合成"
+      ],
+      "automatic_object_animation": false,
+      "camera": "R · 成品相机"
+    },
+    {
+      "name": "SR · 三相解析镜",
+      "tier": "SR",
+      "foil_scope": "subject",
+      "mesh_objects": 5,
+      "thick_card_meshes": [
+        "SR · 主体平面 · 完整视差合成"
+      ],
+      "automatic_object_animation": false,
+      "camera": "SR · 成品相机"
+    },
+    {
+      "name": "SSR · 万象重构镜",
+      "tier": "SSR",
+      "foil_scope": "full",
+      "mesh_objects": 5,
+      "thick_card_meshes": [
+        "SSR · 主体平面 · 完整视差合成"
+      ],
+      "automatic_object_animation": false,
+      "camera": "SSR · 成品相机"
+    }
+  ],
+  "source_unchanged": true,
+  "all_file_images_packed": true,
+  "output_sha256": "b60a9a4dc4642101eba363415f9d8e320573735eda81911b476b9dded6b16fea",
+  "reopen_verified": true,
+  "saved_scene_audit": [
+    {
+      "scene": "C · 素木放大镜",
+      "input_paths": [
+        "assets/background.png",
+        "assets/tiers/C/lineart.png",
+        "assets/tiers/C/subject.png",
+        "assets/tiers/C/text.png"
+      ],
+      "subject_foil": 0.0,
+      "background_foil": 0.0
+    },
+    {
+      "scene": "R · 双轴勘察镜",
+      "input_paths": [
+        "assets/background.png",
+        "assets/tiers/R/lineart.png",
+        "assets/tiers/R/subject.png",
+        "assets/tiers/R/text.png"
+      ],
+      "subject_foil": 0.0,
+      "background_foil": 0.0
+    },
+    {
+      "scene": "SR · 三相解析镜",
+      "input_paths": [
+        "assets/background.png",
+        "assets/tiers/SR/lineart.png",
+        "assets/tiers/SR/subject.png",
+        "assets/tiers/SR/text.png"
+      ],
+      "subject_foil": 0.18000000715255737,
+      "background_foil": 0.0
+    },
+    {
+      "scene": "SSR · 万象重构镜",
+      "input_paths": [
+        "assets/tiers/SSR/background.png",
+        "assets/tiers/SSR/crystal-mask.png",
+        "assets/tiers/SSR/lineart.png",
+        "assets/tiers/SSR/subject-divine.png",
+        "assets/tiers/SSR/text.png"
+      ],
+      "subject_foil": 0.30000001192092896,
+      "background_foil": 0.18000000715255737
+    }
+  ]
+}

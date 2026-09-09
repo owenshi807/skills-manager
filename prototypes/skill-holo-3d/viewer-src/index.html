@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#071116"><title>依赖镜头 · 装备进化</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="http://localhost:4177/concepts.html" aria-label="返回概念集"><span class="seal">技</span><span>技能藏品<small>SKILL CARD COLLECTION</small></span></a>
+    <span class="edition">EQUIPMENT EVOLUTION <i></i> 依赖镜头</span>
+    <a class="top-note" href="http://localhost:4177/concepts.html">← 返回概念集</a>
+  </header>
+  <main>
+    <section class="story">
+      <p class="eyebrow"><span></span><span id="collection">技能样卡</span></p>
+      <p id="subtitle" class="subheading">C · 依赖镜头</p>
+      <h1 id="card-title">素木放大镜</h1>
+      <p id="description" class="description">先把一条线索看清楚。一片玻璃、一圈铜箍，是这件装备最初的形态。</p>
+      <div class="evolution-summary"><p><span>结构</span><strong id="structure">单片玻璃 · 素木握柄</strong></p><p><span>能力</span><strong id="capability">看清线索</strong></p></div>
+      <div class="rule"></div>
+      <p id="tagline" class="technique-label">EQUIPMENT EVOLUTION</p>
+      <h2 id="technique">看清线索</h2>
+      <p class="craft">同一 Skill 的装备形态；演示等级，不代表授奖。<br>装备先发生进化，稀有材质从 SR 开始出现。</p>
+      <div class="collectible"><span>✧</span><div>依赖镜头 · 装备图鉴<small id="edition">FORM STUDY / 01</small></div></div>
+      <div class="realm-notes"><span>SSR / DIVINE REALM</span><p>晶核有灵，星海有应。</p><small>元素潮汐 · 神魂游动 · 星轨相连</small><button id="realm-motion" type="button" aria-pressed="true" hidden>暂停神域流动</button></div>
+    </section>
+    <section class="display" aria-label="交互式全息技能卡牌">
+      <span class="display-label">3D 样卡 · 装备进化</span>
+      <div id="stage" tabindex="0" role="button" aria-pressed="false" aria-label="可交互三维卡牌。鼠标移入卡面轻微倾斜，点击翻面；按 Enter 或空格翻面。"><div id="loading" role="status">正在载入装备图鉴…</div></div>
+      <div class="stage-hint"><span>↔</span> 移动鼠标把玩 <b>·</b> 点击翻面</div>
+      <p id="view-label" class="view-label">FRONT · 正面</p>
+    </section>
+  </main>
+  <section class="evolution" aria-label="装备形态对照">
+    <div class="evolution-heading"><h2>从器具，到重构世界的镜。</h2><p>同一 Skill 的装备形态；演示等级，不代表授奖。</p></div>
+    <div class="evolution-grid" role="group" aria-label="选择装备形态">
+      <button class="evolution-card active" data-tier="C" type="button" aria-pressed="true" aria-label="C 素木放大镜，看清线索"><span class="evolution-art"><img src="./assets/tiers/C/subject.png" alt="素木放大镜，单片玻璃与木柄"></span><span class="evolution-copy"><span class="rank">C <small>基础器具</small></span><strong>素木放大镜</strong><span>看清线索</span><small>单片玻璃 · 素木握柄</small></span></button>
+      <button class="evolution-card" data-tier="R" type="button" aria-pressed="false" aria-label="R 双轴勘察镜，建立校准"><span class="evolution-art"><img src="./assets/tiers/R/subject.png" alt="双轴勘察镜，双镜组与精密校准机构"></span><span class="evolution-copy"><span class="rank">R <small>精密器具</small></span><strong>双轴勘察镜</strong><span>建立校准</span><small>双轴镜组 · 机械校准</small></span></button>
+      <button class="evolution-card" data-tier="SR" type="button" aria-pressed="false" aria-label="SR 三相解析镜，看见关系"><span class="evolution-art"><img src="./assets/tiers/SR/subject.png" alt="三相解析镜，三组棱镜与金色解析框架"></span><span class="evolution-copy"><span class="rank">SR <small>解析器具</small></span><strong>三相解析镜</strong><span>看见关系</span><small>三相棱镜 · 局部折光</small></span></button>
+      <button id="ssr-evolution" class="evolution-card ssr" data-tier="SSR" type="button" aria-pressed="false" aria-label="SSR 万象重构镜，重连框架" hidden><span class="evolution-art"><img src="./assets/tiers/SSR/subject.png" alt="万象重构镜，开放轨道与悬浮晶体"></span><span class="evolution-copy"><span class="rank">SSR <small>隐藏形态</small></span><strong>万象重构镜</strong><span>重连框架</span><small>开放轨道 · 全幅镭射</small></span></button>
+    </div>
+  </section>
+  <section class="controls" aria-label="装备等级与卡牌效果控制">
+    <div class="control-heading"><span>装备预览</span><small>EQUIPMENT FORMS</small></div>
+    <div class="tiers" role="group" aria-label="选择装备等级">
+      <button class="tier active" data-tier="C" type="button" aria-pressed="true">C<small>基础</small></button>
+      <button class="tier" data-tier="R" type="button" aria-pressed="false">R<small>精密</small></button>
+      <button class="tier" data-tier="SR" type="button" aria-pressed="false">SR<small>解析</small></button>
+      <button id="ssr-preview" class="tier ssr" data-tier="SSR" type="button" aria-pressed="false" hidden>SSR<small>重构</small></button>
+    </div>
+    <button id="breakthrough" class="breakthrough" type="button">演示突破：解锁 SSR</button>
+    <label id="foil-control" class="locked">镭射强度 <output id="foil-value">未解锁</output><input id="foil" type="range" min="0" max="1.2" step="0.01" value="0.65" aria-label="镭射强度" aria-describedby="foil-hint" disabled><small id="foil-hint" class="control-hint">SR 起解锁</small></label>
+    <label>主体缩放 <output id="scale-value">1.25</output><input id="scale" type="range" min="1" max="1.7" step="0.01" value="1.25" aria-label="主体缩放"></label>
+    <label>主体深度 <output id="depth-value">0.40</output><input id="depth" type="range" min="0" max="0.8" step="0.01" value="0.4" aria-label="主体深度"></label>
+    <label>背景深度 <output id="bg-depth-value">−0.25</output><input id="bg-depth" type="range" min="-0.65" max="0" step="0.01" value="-0.25" aria-label="背景深度"></label>
+  </section>
+  <p id="tier-note" class="tier-note" aria-live="polite">C · 基础器具。朴素材质与单一镜片，不含镭射、闪点或金边。</p>
+  <footer><span>先见其形，再见其光。</span><span>EACH BREAKTHROUGH TAKES SHAPE</span><button id="details" type="button">查看交互说明 ＋</button></footer>
+  <dialog id="about"><button class="close" type="button" aria-label="关闭">×</button><p class="eyebrow">EQUIPMENT NOTES</p><h2>同一装备，逐级进化。</h2><p>C 是单片玻璃与木柄；R 增加双轴镜组和校准机构。SR 形成三相解析结构，并解锁装备局部折光。SSR 的晶核内有元素潮汐与神魂，开放星轨连接宇宙神域。</p><p>同一 Skill 的装备形态；演示等级，不代表授奖。SSR 的演示解锁独立保存，每次打开仍从 C 开始查看。</p><p>鼠标在卡面上移动可轻微倾斜；点击卡面，或按 Enter / 空格可翻面。神域流动可暂停，并遵循系统减少动态效果设置。翻到背面、页面不可见或卡片离开视野时，流动暂停；卡体不会自动旋转或闪烁。</p><p class="fine">网页在 Blender 导出的 GLB 上合成各级独立装备原画，保留分层视差。若看到加载错误，请确认素材与静态服务完整。</p></dialog>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

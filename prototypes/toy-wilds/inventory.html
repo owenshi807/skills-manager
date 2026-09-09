@@ -1,0 +1,76 @@
+<section id="inventory-panel" role="dialog" aria-modal="true" aria-labelledby="inventory-title" hidden>
+  <header class="inventory-heading">
+    <div class="inventory-heading-copy">
+      <span class="inventory-kicker">THE TOY WILDS · FIELD KIT</span>
+      <h1 id="inventory-title">我的装备袋<span>把本领，带进旷野。</span></h1>
+    </div>
+    <button id="inventory-close" type="button" aria-label="关闭装备袋，返回旷野"><span aria-hidden="true">×</span><span>返回旷野</span><kbd>Esc</kbd></button>
+  </header>
+
+  <div class="inventory-layout">
+    <aside class="inventory-traveler" aria-labelledby="inventory-role-title">
+      <div class="inventory-role-heading inventory-paper">
+        <span class="inventory-kicker">你的本地角色</span>
+        <h2 id="inventory-role-title">旷野探险者</h2>
+        <p>一顶帽子，一个背包。<br>下一段旅程，由你带上的本领开始。</p>
+      </div>
+
+      <div id="inventory-character" role="img" aria-label="旷野探险者的三维角色预览">
+        <span class="inventory-character-mark" aria-hidden="true">N<br>◇</span>
+        <span class="inventory-character-caption">TRAVEL LIGHT, GO FAR.</span>
+      </div>
+
+      <div class="inventory-traveler-notes inventory-paper">
+        <div class="inventory-target-row">
+          <label for="inventory-target">运行环境</label>
+          <span class="inventory-small-mark" aria-hidden="true">↗</span>
+        </div>
+        <select id="inventory-target" aria-describedby="inventory-target-help" disabled>
+          <option value="">读取实际运行环境…</option>
+        </select>
+        <p id="inventory-target-help">来自 Skill Manager 的部署目标。</p>
+        <div id="inventory-demo" class="inventory-demo-entry" hidden>
+          <span class="inventory-demo-symbol" aria-hidden="true">◈</span>
+          <span><strong>万象重构镜</strong><small>旅途中拾取的体验样卡</small></span>
+          <span aria-hidden="true">↗</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="inventory-workspace inventory-paper">
+      <section class="inventory-installed-section" aria-labelledby="inventory-installed-title">
+        <div class="inventory-section-line">
+          <h2 id="inventory-installed-title"><span class="inventory-status-dot" aria-hidden="true"></span>已部署至运行环境 <span id="inventory-installed-count" class="inventory-count">0</span></h2>
+          <button id="inventory-refresh" type="button" aria-label="刷新技能库与真实部署状态"><span aria-hidden="true">↻</span> 核验状态</button>
+        </div>
+        <div id="inventory-installed" aria-live="polite"></div>
+        <p id="inventory-source-state" class="inventory-source-state">正在连接 Skill Manager…</p>
+      </section>
+
+      <div class="inventory-library-toolbar">
+        <div class="inventory-tabs" role="tablist" aria-label="装备袋内容">
+          <button id="inventory-tab-library" type="button" role="tab" aria-selected="true" aria-controls="inventory-grid">仓库 <span id="inventory-library-count">0</span></button>
+          <button id="inventory-tab-loadout" type="button" role="tab" aria-selected="false" aria-controls="inventory-grid" tabindex="-1">角色携带清单 <span id="inventory-loadout-count">0</span></button>
+        </div>
+        <label class="inventory-search-wrap" for="inventory-search">
+          <svg aria-hidden="true" viewBox="0 0 20 20" width="17" height="17"><circle cx="8.5" cy="8.5" r="5.5"></circle><path d="m13 13 4 4"></path></svg>
+          <input id="inventory-search" type="search" placeholder="寻找一项本领…" aria-label="搜索真实技能仓库" autocomplete="off" spellcheck="false">
+          <span aria-hidden="true">⌕</span>
+        </label>
+      </div>
+
+      <p class="inventory-draft-note"><span aria-hidden="true">◇</span> 携带清单是本地准备；真实部署状态另行核验</p>
+      <div id="inventory-error" role="alert" hidden></div>
+      <div id="inventory-loading" role="status"><span class="inventory-loading-seed" aria-hidden="true">✦</span><span>正在整理你的本领…</span></div>
+      <div class="inventory-grid-scroll">
+        <div id="inventory-grid" role="tabpanel" aria-labelledby="inventory-tab-library" tabindex="0"></div>
+        <button id="inventory-more" type="button" hidden>再翻一页 <span aria-hidden="true">↓</span></button>
+      </div>
+
+      <footer class="inventory-footing">
+        <div><span class="inventory-kicker">下一段旅程</span><p id="inventory-runtime-state">Multica 尚未连接，先准备你的携带清单。</p></div>
+        <button id="inventory-dispatch" type="button" disabled>Multica 尚未连接 <span aria-hidden="true">↗</span></button>
+      </footer>
+    </div>
+  </div>
+</section>

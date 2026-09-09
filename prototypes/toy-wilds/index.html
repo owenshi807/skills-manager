@@ -1,0 +1,13 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>玩具旷野 · 镜之圣所</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="inventory.css"><script type="importmap">{"imports":{"three":"/vendor/three.module.js"}}</script></head>
+<body>
+<canvas id="game" tabindex="0" aria-label="玩具旷野，点击小径移动，WASD 或方向键行走，接近镜体按 E 拾取"></canvas>
+<header class="mast"><div class="brand"><span class="crest">◈</span><div><strong>玩具旷野</strong><small>THE TOY WILDS</small></div></div><nav><button id="bag" aria-label="打开角色与装备袋">◈ <span id="bag-label">角色与装备</span></button><button id="pause" aria-label="暂停与操作说明">Ⅱ</button></nav></header>
+<div id="region" class="region"><span>第一站 · 秋日水域</span><h1>镜之圣所</h1><p id="quest">沿着暖色小径，找到池畔的镜。</p></div>
+<button id="marker" class="marker" hidden><span class="diamond">◇</span><span id="marker-label">万象重构镜</span><small id="distance"></small></button>
+<div id="travel" class="travel" hidden>正在前往 · 镜之圣所</div>
+<section id="welcome" class="veil"><div class="panel"><span class="eyebrow">一次小小的探索</span><h2>装备，生长在<br>自己的世界里。</h2><p>穿过小径，走近池塘。<br>一件镜体，连着一片小小的水域。</p><div class="controls"><span><kbd>W A S D</kbd> / 方向键行走</span><span>点击地面前往 · <kbd>E</kbd> 拾取</span></div><button class="primary" id="start">进入旷野 <span>↗</span></button><small class="preview-note">本地体验样卡 · 不写入 Skill 库或 Profile</small></div></section>
+<section id="pause-panel" class="veil" hidden><div class="panel"><span class="eyebrow">停一会儿</span><h2>旷野在等你。</h2><p>WASD / 方向键行走，点击地面前往。<br>E 拾取，装备袋查看。卡片点击翻面。<br>F 全屏，Esc 返回或暂停。</p><button class="primary" id="resume">继续探索 ↗</button><button class="quiet" id="restart">重新体验这段旅程</button></div></section>
+<div id="card-ui" hidden><div class="card-heading"><span class="eyebrow">装备袋 · 圣品样卡</span><h2>万象重构镜</h2><p>镜环重连，水路成域。</p></div><button id="return" class="return">← 返回旷野</button><p class="card-help" id="card-help">移入卡片轻转 · 点击卡片翻面 · Esc 返回</p></div>
+<footer id="map-footer"><span class="tiny-compass">N ↗</span><span id="hint">点击地面前往 / WASD 行走</span><span class="preview">探索原型 · 01</span></footer>
+<div id="message" role="status" aria-live="polite"></div><div id="fatal" role="alert" hidden></div>
+<script type="module" src="app.js"></script></body></html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f2efe5" />
+    <meta name="description" content="万象重构镜 · 圣品 SSR。四套游戏美术方向，同一件装备的卡面特写与地图拾取态。" />
+    <title>万象重构镜 · 四境试作</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#study">跳到风格概念图</a>
+    <div class="page-shell">
+      <header class="masthead">
+        <a class="wordmark" href="#top" aria-label="四境试作，回到顶部">
+          <svg viewBox="0 0 40 40" aria-hidden="true" class="lens-mark"><path d="M29 7A16 16 0 1 0 35 20"/><path d="M25 11A10 10 0 1 0 30 20"/><path d="m25 11 4-4 6 13-5 0"/><path d="m14 20 6-8 6 8-6 8Z"/></svg>
+          <span>四境试作<small>SKILL ART DIRECTION</small></span>
+        </a>
+        <div class="masthead-end"><span class="preview-label"><i aria-hidden="true"></i>设计预览</span><span class="edition">VOL. 01 / 2026</span></div>
+      </header>
+
+      <main id="top">
+        <section class="introduction" aria-labelledby="page-title">
+          <div class="intro-title">
+            <p class="eyebrow">一件圣物 · 四种世界</p>
+            <h1 id="page-title">万象重构镜<span class="title-dot" aria-hidden="true">。</span></h1>
+            <p class="intro-description">把同一件装备，放进不同的游戏世界。<br class="desktop-break" />看它如何被收藏，又如何在旅途中被发现。</p>
+          </div>
+          <div class="specimen-card" aria-label="固定对照条件：同一件装备，圣品 SSR，风格概念图">
+            <span class="specimen-overline">固定对照条件</span>
+            <div class="grade"><span>圣品</span><b>SSR</b></div>
+            <span class="specimen-note">同一器物 / 同一品阶 / 四套美术</span>
+            <span class="specimen-status">风格概念图 · 尚未授予装备</span>
+          </div>
+        </section>
+
+        <section class="style-section" aria-labelledby="style-heading">
+          <div class="section-line"><h2 id="style-heading">美术方向</h2><p>切换风格，保留器物身份</p></div>
+          <div class="style-tabs" role="tablist" aria-label="美术风格">
+            <button class="style-tab" id="tab-pokemon" role="tab" aria-selected="true" aria-controls="study" tabindex="0" data-style="pokemon"><span class="tab-number">01</span><span class="tab-copy"><strong>精灵冒险</strong><small>赛璐珞 · 明快描线</small></span><span class="tab-marker" aria-hidden="true">↗</span></button>
+            <button class="style-tab" id="tab-bruno" role="tab" aria-selected="false" aria-controls="study" tabindex="-1" data-style="bruno"><span class="tab-number">02</span><span class="tab-copy"><strong>玩具旷野</strong><small>低多边形 · 触感材质</small></span><span class="tab-marker" aria-hidden="true">↗</span></button>
+            <button class="style-tab" id="tab-hd2d" role="tab" aria-selected="false" aria-controls="study" tabindex="-1" data-style="hd2d"><span class="tab-number">03</span><span class="tab-copy"><strong>像素秘境</strong><small>像素簇 · 立体景深</small></span><span class="tab-marker" aria-hidden="true">↗</span></button>
+            <button class="style-tab" id="tab-mythic" role="tab" aria-selected="false" aria-controls="study" tabindex="-1" data-style="mythic"><span class="tab-number">04</span><span class="tab-copy"><strong>神话绘卷</strong><small>手绘 · 戏剧性轮廓</small></span><span class="tab-marker" aria-hidden="true">↗</span></button>
+          </div>
+
+          <div id="study" class="study" role="tabpanel" aria-labelledby="tab-pokemon" tabindex="0">
+            <div class="study-heading"><div><span class="eyebrow" id="study-index">STYLE STUDY / 01</span><h3 id="study-title">精灵冒险 · 赛璐珞</h3></div><a class="text-link original-link" id="original-link" href="./assets/pokemon.png" target="_blank" rel="noopener">查看原尺寸 <span aria-hidden="true">↗</span></a></div>
+            <figure class="art-sheet">
+              <div class="art-frame" id="art-frame">
+                <img id="style-image" src="./assets/pokemon.png" width="1536" height="1024" alt="精灵冒险风格概念图：左侧为万象重构镜的卡面装备特写，右侧为同一件装备在池塘小径旁的地图拾取态。" decoding="async" fetchpriority="high" />
+                <div class="image-error" id="image-error" hidden><span>概念图暂未载入</span><p>请稍后重试，或切换另一套美术方向。</p><button type="button" id="retry-image">重新载入</button></div>
+              </div>
+              <figcaption class="sheet-caption"><span><b>A</b>卡面装备特写<small>近看结构与材质</small></span><span><b>B</b>地图拾取态<small>远看轮廓与场景关系</small></span></figcaption>
+            </figure>
+            <div class="study-footnote"><p>画面里的两个镜体，是<b>同一件装备的两种呈现</b>；池塘守护者独立栖息在场景中。</p><span id="load-status" class="load-status" role="status" aria-live="polite"></span></div>
+
+            <div class="direction-notes">
+              <section class="direction-note" aria-labelledby="material-heading"><span class="note-number">A / 器物</span><h4 id="material-heading">清晰色面，把复杂圣物画得轻盈</h4><p id="material-copy">利落墨线收住三重开环，象牙白与古金用分层赛璐珞明暗塑形。青绿晶核保持通透，珊瑚扣件成为一眼可认的暖色记号。</p></section>
+              <section class="direction-note" aria-labelledby="map-heading"><span class="note-number">B / 世界</span><h4 id="map-heading">沿着草地小径，发现池畔的光</h4><p id="map-copy">明亮的冒险路线连接池塘与低台座。缩小后的镜体强化环形剪影和青色核心；原创长身守护者留在水边，建立装备与地域的联系。</p></section>
+              <aside class="reference-note"><span class="note-number">视觉参照</span><a id="reference-link" href="https://www.pokemon.com/uk/news/get-ready-for-a-pikachu-parade-in-pokemon-tcg-30th-celebration" target="_blank" rel="noopener">Pokémon TCG <span aria-hidden="true">↗</span></a><p id="reference-copy">借用明快描线与收藏插画的视觉语法，器物与守护者均为原创设计。</p></aside>
+            </div>
+          </div>
+        </section>
+
+        <section class="identity-section" aria-labelledby="identity-heading">
+          <div class="identity-title"><p class="eyebrow">IDENTITY, IN EVERY WORLD</p><h2 id="identity-heading">换世界，<br />不换身份。</h2><p>风格变化的同时，守住四个辨认点。</p></div>
+          <ol class="identity-list"><li><span class="identity-symbol crystal" aria-hidden="true"></span><div><h3>青绿切面晶核</h3><p>镜体的视觉中心，也是地图远景中的识别色。</p></div></li><li><span class="identity-symbol rings" aria-hidden="true"></span><div><h3>三重开环与桥接</h3><p>象牙白与古金交叠；右上缺口保留断开、重连的结构。</p></div></li><li><span class="identity-symbol latch" aria-hidden="true"></span><div><h3>珊瑚橙扣件</h3><p>小面积暖色落点，固定器物的方向与性格。</p></div></li><li><span class="identity-symbol grip" aria-hidden="true"></span><div><h3>深海蓝分叉握柄</h3><p>用双支轮廓收束底部，避免变成无方向的普通圆镜。</p></div></li></ol>
+        </section>
+
+        <aside class="next-study" aria-labelledby="next-heading"><div class="next-symbol" aria-hidden="true">02<span>→</span></div><div class="next-copy"><p class="eyebrow">下一步地图实验 · 建议方向</p><h2 id="next-heading">先让「玩具旷野」走起来。</h2><p>厚实轮廓、简化零件与哑光材质，更容易转成小尺度地图拾取物。建议先验证行走视角下的识别距离，以及池塘、小径与台座的空间关系。</p></div><a class="prototype-link" href="http://localhost:4183/" target="_blank" rel="noopener"><span>打开旧版 3D 原型</span><span aria-hidden="true">↗</span><small>独立实验 · 需本地服务运行</small></a></aside>
+      </main>
+      <footer class="page-footer"><span>四境试作 / 万象重构镜</span><p>本页为静态风格概念图，用于比较美术方向；3D、地图行走与拾取交互另行验证。</p><a class="text-link" href="./recipes.json" target="_blank" rel="noopener">查看生成配方 <span aria-hidden="true">↗</span></a></footer>
+    </div>
+    <noscript><p class="noscript-message">当前显示精灵冒险概念图。启用 JavaScript 后可在本页切换全部四套风格。</p></noscript>
+  </body>
+</html>

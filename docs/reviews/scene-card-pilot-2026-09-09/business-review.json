@@ -1,0 +1,92 @@
+{
+  "subject_type": "scene",
+  "scene_ref": {
+    "scene_id": "scene-36c2451fa91aad0e",
+    "scene_name": "商业项目推演",
+    "snapshot": "docs/reviews/scene-card-pilot-2026-09-09/source-snapshot.json",
+    "snapshot_sha256": "a36676fe6d5ced74634c60cfc299afe264b5c72c81d005027d917ec2797852ed",
+    "captured_at": "2026-09-09T13:49:17.326Z"
+  },
+  "scope": "用 office-hours、opportunity-forecasting 与 business-coach 做商业项目的需求取证、机会结构化、风险筛除和 MVP 验证设计；不含真实项目成败、外部调研执行或持久化档案写入。",
+  "current_grade": "R",
+  "ssr_status": "not_established",
+  "basis": "三份可读取正文给出带输入、分支、产物和回退条件的可检查方法；但场景级 handoff 未经运行证实，且 business-coach-family 在正式快照读取失败，因此不能把成员的情境规则提升为已验证的 SR 场景，也没有 SSR 四格的历史方法改变证据。",
+  "next_step": "修复并重新读取 business-coach-family 后，对一个已授权、脱敏的真实项目保留端到端 input/output、handoff、FALSE 阈值和实际观察 receipt。",
+  "visual_seed": "一张展开的商业地形图：左侧放大镜审查需求证据，中间五列表格与黑色风险卡，右侧一支带刻度的低成本实验试管。",
+  "evidenceStrength": "moderate",
+  "evidence": [
+    {
+      "kind": "scene_membership",
+      "source": "docs/reviews/scene-card-pilot-2026-09-09/source-snapshot.json:8-44",
+      "claim": "正式 scene ID、名称与四个成员。"
+    },
+    {
+      "kind": "method",
+      "member": "office-hours",
+      "member_id": "3dd686bd-b3b3-4830-9613-9d28e009b241",
+      "content_digest": "005430d40f94c6259c05f20b1a026ae7541ab2baac56b6954e90287a78d6a6b8",
+      "source_locator": "source-snapshot.documents[id].content decoded lines 939-1099",
+      "claim": "按阶段选择六个需求/现状/具体人/楔子问题，并有停止、跳过和证据充分的条件。"
+    },
+    {
+      "kind": "method",
+      "member": "opportunity-forecasting",
+      "member_id": "3ee50be1-c6ff-4b3c-831b-b3db21070bd9",
+      "content_digest": "55b63644eb409588b209ed916a9cf110a6a2c77e0a9132de0f43fd5e7720e4a1",
+      "source_locator": "source-snapshot.documents[id].content decoded lines 150-302 and 227-259",
+      "claim": "行业语言、MECE 与可执行 Phase C 检验决定画布是否能进入减法；失败返回 Phase B。"
+    },
+    {
+      "kind": "method",
+      "member": "business-coach",
+      "member_id": "ed2efaec-f1c1-4549-a047-a764736dd4e1",
+      "content_digest": "f0e819a79977bd19e10e6db49b65c325ecfee502b2098239e37eb030cb6751c3",
+      "source_locator": "source-snapshot.documents[id].content decoded lines 63-92, 104-117, 121-250 and 254-346",
+      "claim": "断言标签、高风险假设、FALSE 和固定验证项格式把商业判断约束为可证伪行动。"
+    },
+    {
+      "kind": "availability_gap",
+      "member": "business-coach-family",
+      "member_id": "da2a78c0-ad2f-4d03-a25e-1e318cb14cb3",
+      "source_locator": "source-snapshot.documents[id]",
+      "claim": "正式 MCP 读取返回 No such file or directory (os error 2)。"
+    },
+    {
+      "kind": "constructed_desktop_check",
+      "claim": "以无客户证据的假设项目检查三份正文的阶段分支、回退和验证格式；未调用 Skill，未产生外部或商业结果。"
+    }
+  ],
+  "memberVersions": [
+    {
+      "id": "3dd686bd-b3b3-4830-9613-9d28e009b241",
+      "name": "office-hours",
+      "recorded_content_hash": "5c3c14e749c5e2c20f95d9a7a5e87a9363e5de4ef1ba733988879d437394768f",
+      "status": "snapshot_content_available"
+    },
+    {
+      "id": "3ee50be1-c6ff-4b3c-831b-b3db21070bd9",
+      "name": "opportunity-forecasting",
+      "recorded_content_hash": "2393efae02af5f7f82d837f75f76560d0f759f28586fc6226d498c04f162fd35",
+      "status": "snapshot_content_available"
+    },
+    {
+      "id": "da2a78c0-ad2f-4d03-a25e-1e318cb14cb3",
+      "name": "business-coach-family",
+      "recorded_content_hash": "db2d8c4283dd383c9851c5399b52b05a0777218f31923fc2f7e1fe318af8cb6f",
+      "status": "snapshot_read_failed",
+      "error": "No such file or directory (os error 2)"
+    },
+    {
+      "id": "ed2efaec-f1c1-4549-a047-a764736dd4e1",
+      "name": "business-coach",
+      "recorded_content_hash": "d4b0ad0e125eaee10bd0412f5c36fb7b17a283b5bf7f39c22d8c4afcc75747b2",
+      "status": "snapshot_content_available"
+    }
+  ],
+  "gaps": [
+    "business-coach-family 正式 MCP 读取失败，不能声称 family 全链可运行。",
+    "没有场景级端到端 execution receipt；成员同列不是 integration 证据。",
+    "没有真实客户、收入、留存或市场研究结果；桌面验算不是商业验证。",
+    "没有 SSR 所需的旧局限、既有方法改变、实际作用案例和边界四格证据。"
+  ]
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Skill Grade Review"
+  short_description: "Review a Skill method and its evidence."
+  default_prompt: "Use $skill-grade-review to assess this Skill's method and evidence."
+policy:
+  allow_implicit_invocation: true

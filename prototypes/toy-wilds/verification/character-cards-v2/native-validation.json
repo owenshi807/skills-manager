@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-09",
+  "source": "CUA native AX and screenshots, installed Tauri release",
+  "fixtureOnly": false,
+  "appPath": "/Applications/Skill Card Manager.app",
+  "sha256": "a74138a83b6f03a47333bbf83017afa42f0f56e4772306f1042c2c0dfdfd0311",
+  "defaultSaaSAfterRestart": true,
+  "realSkillCount": 434,
+  "localCharacterCount": 2,
+  "observedLocalCharacters": [
+    {
+      "name": "旷野探险者",
+      "lineage": "explorer",
+      "carried": []
+    },
+    {
+      "name": "观星者",
+      "lineage": "sage",
+      "carried": [
+        "knowledge-audit"
+      ]
+    }
+  ],
+  "checks": [
+    "water and pedestal visually stable",
+    "local character creation and lineage selector",
+    "real Skill search and click flip in WebKit",
+    "independent local equip and zero cards on other character",
+    "quit and relaunch preserves selected character and equipped card",
+    "native AX shows armory search and flip/equip/detail controls after repeated tab switches",
+    "native Tab focuses searched card; Enter flips front/back; Escape returns Profile"
+  ],
+  "multicaBound": false,
+  "remoteEquipmentWrites": false,
+  "newAgentTasks": false,
+  "finalVisibleView": "观星者 Profile with knowledge-audit card",
+  "compatibilityFix": "Focusable tabpanels plus fresh active AX container on view change, preserving child DOM, IDs and delegated listeners."
+}

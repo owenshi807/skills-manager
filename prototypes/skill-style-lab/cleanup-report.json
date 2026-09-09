@@ -1,0 +1,29 @@
+{
+  "date": "2026-09-09",
+  "deleted": [
+    {
+      "path": "prototypes/skill-holo-3d/tools/blender-4.5.13-macos-arm64.dmg",
+      "bytes": 311910354,
+      "reason": "已解包并验证可执行的安装包"
+    },
+    {
+      "path": "prototypes/skill-holo-3d/card.blend1",
+      "bytes": 5759168,
+      "reason": "旧自动备份；较新可编辑源已保留"
+    },
+    {
+      "path": "prototypes/skill-holo-3d/equipment-evolution.blend1",
+      "bytes": 7975711,
+      "reason": "旧自动备份；较新可编辑源已保留"
+    }
+  ],
+  "removed_bytes": 325645233,
+  "free_after_bytes": 41182130176,
+  "preserved": [
+    "tools/Blender.app",
+    "card.blend",
+    "equipment-evolution.blend",
+    "所有最终原画与可复用素材",
+    "用途未明确的 _local_backups"
+  ]
+}

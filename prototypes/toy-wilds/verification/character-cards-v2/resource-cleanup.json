@@ -1,0 +1,6 @@
+{
+  "removedBytes": 83281123,
+  "retainedBytes": 2762573,
+  "scope": "Only named task test outputs, adapted client, completed install rollback and build log",
+  "unchanged": "Existing assets, models, dependency caches, historical prototypes and final native app"
+}

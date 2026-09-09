@@ -1,0 +1,7 @@
+/tools/
+/web/node_modules/
+*.blend1
+__pycache__/
+*.log
+
+/runtime-config/

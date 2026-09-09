@@ -1,0 +1,73 @@
+{
+  "method": "Built-in image_gen; explicit user-approved local alpha, registered contour and typography processing. Original RGB sources retained verbatim.",
+  "tiers": {
+    "C": {
+      "title": "素木放大镜",
+      "method": "white-background matte, small enclosed highlights restored; structural gaps retained",
+      "canvas": [
+        1024,
+        1536
+      ],
+      "bbox": [
+        244,
+        360,
+        780,
+        1220
+      ],
+      "transparent_fraction": 0.8705838521321615,
+      "subject_sha256": "d999be3ff2ef58ca9d4d78bfb5ecc467174f25dea6fc02d8c6c693d354e7669b",
+      "source_sha256": "ed7ebd9b5bcd8b979737f39ab39323c9b53d75b48c5eda9ddb17da26da4c54f1"
+    },
+    "R": {
+      "title": "双轴勘察镜",
+      "method": "white-background matte, small enclosed highlights restored; structural gaps retained",
+      "canvas": [
+        1024,
+        1536
+      ],
+      "bbox": [
+        175,
+        275,
+        849,
+        1305
+      ],
+      "transparent_fraction": 0.8191095987955729,
+      "subject_sha256": "9129b429bbb6af59b67feb14d18d7900f83f69cb5793319f6f4b737f55bed4e8",
+      "source_sha256": "6a58a59e14c93389ee5771bc137bc8fbd416282abdcfdb8e60957b1b70d40a04"
+    },
+    "SR": {
+      "title": "三相解析镜",
+      "method": "white-background matte, small enclosed highlights restored; structural gaps retained",
+      "canvas": [
+        1024,
+        1536
+      ],
+      "bbox": [
+        158,
+        230,
+        865,
+        1350
+      ],
+      "transparent_fraction": 0.7607002258300781,
+      "subject_sha256": "ca15274857371a3cae1cb9493e01022e8c8cfc9424024060bcfc8dc38f56a166",
+      "source_sha256": "1a365b47a0da3ac4d806303f7c74e5d9161f5788d5337a6057dbf7aab8b64508"
+    },
+    "SSR": {
+      "title": "万象重构镜",
+      "method": "white-background matte, small enclosed highlights restored; structural gaps retained",
+      "canvas": [
+        1024,
+        1536
+      ],
+      "bbox": [
+        131,
+        205,
+        892,
+        1375
+      ],
+      "transparent_fraction": 0.7454401652018229,
+      "subject_sha256": "fa137b617469148190e9434bf0182d14f2709fde0a95ffd3f3c639d6bfd7d731",
+      "source_sha256": "3fc58d38d3c24934604655a22b9258cc2698133d22080994d7bb36f6b245b7d1"
+    }
+  }
+}

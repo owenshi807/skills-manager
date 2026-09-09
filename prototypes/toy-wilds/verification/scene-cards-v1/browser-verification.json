@@ -1,0 +1,514 @@
+{
+  "scenes": {
+    "fixtureOnly": true,
+    "checks": [
+      "Preserves v3 character and original Skill choices without automatic scene equipment",
+      "81 materials become 24 scene cards; unclassified material and members never become cards",
+      "Scene handbook explains composition; member text is lazy, inert and keyboard accessible",
+      "Adding content updates the same equipped scene; grade and number of cards stay unchanged",
+      "Broken scene reads preserve the full card set and equipment; source retries and late responses stay scoped",
+      "Mobile cards and handbook remain readable; long list closes at the same scroll position",
+      "Manage scene exits Portal to the same official scene; no business writes or resource leaks",
+      "Partially damaged v4 storage remains byte-for-byte intact after opening and equipping"
+    ],
+    "errors": [],
+    "passed": true,
+    "ipcCounts": {
+      "get_settings": 9,
+      "log_startup_event": 6,
+      "get_skill_scene_overview": 10,
+      "get_skill_scene_agent_capabilities": 1,
+      "plugin:event|listen": 4,
+      "get_tool_status": 8,
+      "get_managed_skills": 1,
+      "scan_local_skills": 1,
+      "get_organization_agent_capabilities": 2,
+      "get_skill_library": 7,
+      "read_skill_publish_document": 4
+    }
+  },
+  "portal": {
+    "startedAt": "2026-09-09T13:24:34.364Z",
+    "baseURL": "http://127.0.0.1:4186",
+    "fixtureOnly": true,
+    "nativeValidated": false,
+    "checks": [
+      {
+        "name": "cold Portal URL returns to SaaS without loading game resources",
+        "passed": true,
+        "durationMs": 537
+      },
+      {
+        "name": "scene search, expanded list, page, scroll and focus survive Portal",
+        "passed": true,
+        "durationMs": 1094
+      },
+      {
+        "name": "browser Back exits and Forward cannot re-enter an expired Portal",
+        "passed": true,
+        "durationMs": 312
+      },
+      {
+        "name": "ground interaction, real fixture bag, failed refresh retention and card chain",
+        "passed": true,
+        "durationMs": 1198
+      },
+      {
+        "name": "20 initialized Portal cycles dispose listeners, hooks, frames and GPU resources",
+        "passed": true,
+        "durationMs": 4625
+      },
+      {
+        "name": "text scale 90–120% preserves canvas bounds and physical click mapping",
+        "passed": true,
+        "durationMs": 1924
+      },
+      {
+        "name": "900–1280 widths keep the bag, renderer and exit usable",
+        "passed": true,
+        "durationMs": 2561
+      },
+      {
+        "name": "fresh-context aborted lazy module exposes real failure and return action",
+        "passed": true,
+        "durationMs": 1484
+      },
+      {
+        "name": "Portal emits only inventory reads and no business writes",
+        "passed": true,
+        "durationMs": 0
+      }
+    ],
+    "browserErrors": [
+      {
+        "context": "lazy-failure",
+        "phase": "fresh-context aborted lazy module exposes real failure and return action",
+        "console": true,
+        "message": "Failed to load resource: net::ERR_FAILED"
+      },
+      {
+        "context": "lazy-failure",
+        "phase": "fresh-context aborted lazy module exposes real failure and return action",
+        "console": true,
+        "message": "TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4186/assets/GameShell-t22OGPIe.js"
+      }
+    ],
+    "blockedRequests": [],
+    "diagnostics": {
+      "initial": {
+        "mounts": 3,
+        "disposals": 3,
+        "activeEngines": 0,
+        "activeAnimationFrames": 0,
+        "activeListeners": 0,
+        "activeObservers": 0,
+        "liveGeometries": 0,
+        "liveMaterials": 0,
+        "liveTextures": 0
+      },
+      "final": {
+        "mounts": 23,
+        "disposals": 23,
+        "activeEngines": 0,
+        "activeAnimationFrames": 0,
+        "activeListeners": 0,
+        "activeObservers": 0,
+        "liveGeometries": 0,
+        "liveMaterials": 0,
+        "liveTextures": 0
+      },
+      "initializedCycles": 20
+    },
+    "zoom": [
+      {
+        "scale": 0.9,
+        "rect": {
+          "x": 0,
+          "y": 73.796875,
+          "width": 1100,
+          "height": 566.203125
+        },
+        "renderer": {
+          "left": 0,
+          "top": 73.796875,
+          "width": 1100,
+          "height": 566.203125
+        },
+        "groundClick": "passed",
+        "cardClick": "passed"
+      },
+      {
+        "scale": 1,
+        "rect": {
+          "x": 0,
+          "y": 82,
+          "width": 1100,
+          "height": 558
+        },
+        "renderer": {
+          "left": 0,
+          "top": 82,
+          "width": 1100,
+          "height": 558
+        },
+        "groundClick": "passed",
+        "cardClick": "passed"
+      },
+      {
+        "scale": 1.1,
+        "rect": {
+          "x": 0,
+          "y": 90.1875,
+          "width": 1100,
+          "height": 549.8125
+        },
+        "renderer": {
+          "left": 0,
+          "top": 90.1875,
+          "width": 1100,
+          "height": 549.8125
+        },
+        "groundClick": "passed",
+        "cardClick": "passed"
+      },
+      {
+        "scale": 1.2,
+        "rect": {
+          "x": 0,
+          "y": 98.390625,
+          "width": 1100,
+          "height": 541.609375
+        },
+        "renderer": {
+          "left": 0,
+          "top": 98.390625,
+          "width": 1100,
+          "height": 541.609375
+        },
+        "groundClick": "passed",
+        "cardClick": "passed"
+      }
+    ],
+    "coldResources": {
+      "contexts": 0,
+      "canvases": 0,
+      "resources": []
+    },
+    "restoredScroll": {
+      "before": 100,
+      "after": 100
+    },
+    "firstLibraryStringError": {
+      "visible": true,
+      "readyAfterFailure": false,
+      "recoveredTotal": 80,
+      "recoveredSceneTotal": 24
+    },
+    "bagScroll": [
+      {
+        "width": 900,
+        "parents": [
+          {
+            "id": "inventory-panel",
+            "className": "",
+            "top": 5751,
+            "height": 558,
+            "scrollHeight": 6366
+          }
+        ],
+        "lastCard": {
+          "x": 464,
+          "y": 122.5625,
+          "width": 411,
+          "height": 476,
+          "top": 122.5625,
+          "right": 875,
+          "bottom": 598.5625,
+          "left": 464
+        },
+        "demo": {
+          "x": 158,
+          "y": 425.375,
+          "width": 316.796875,
+          "height": 48
+        },
+        "demoClick": "passed"
+      },
+      {
+        "width": 1100,
+        "parents": [
+          {
+            "id": "inventory-panel",
+            "className": "",
+            "top": 5751,
+            "height": 558,
+            "scrollHeight": 6366
+          }
+        ],
+        "lastCard": {
+          "x": 564,
+          "y": 122.5625,
+          "width": 511,
+          "height": 476,
+          "top": 122.5625,
+          "right": 1075,
+          "bottom": 598.5625,
+          "left": 564
+        },
+        "demo": {
+          "x": 158,
+          "y": 425.375,
+          "width": 406.796875,
+          "height": 48
+        },
+        "demoClick": "passed"
+      },
+      {
+        "width": 1280,
+        "parents": [
+          {
+            "id": "inventory-panel",
+            "className": "",
+            "top": 3780,
+            "height": 558,
+            "scrollHeight": 4396
+          }
+        ],
+        "lastCard": {
+          "x": 859.65625,
+          "y": 123.171875,
+          "width": 375.34375,
+          "height": 476,
+          "top": 123.171875,
+          "right": 1235,
+          "bottom": 599.171875,
+          "left": 859.65625
+        },
+        "demo": {
+          "x": 222,
+          "y": 468.984375,
+          "width": 425,
+          "height": 48
+        },
+        "demoClick": "passed"
+      }
+    ],
+    "lazyModuleAborts": 1,
+    "ipcSummary": {
+      "read": 68,
+      "telemetry": 12,
+      "lifecycle": 8,
+      "unexpected": 0
+    },
+    "businessWrites": 0,
+    "passed": true,
+    "finishedAt": "2026-09-09T13:24:48.806Z",
+    "ipcCounts": {
+      "get_settings": 16,
+      "log_startup_event": 12,
+      "get_skill_scene_overview": 18,
+      "get_skill_scene_agent_capabilities": 2,
+      "plugin:event|listen": 8,
+      "get_tool_status": 14,
+      "get_managed_skills": 2,
+      "get_organization_agent_capabilities": 2,
+      "scan_local_skills": 2,
+      "get_skill_library": 12
+    }
+  },
+  "characters": {
+    "startedAt": "2026-09-09T13:17:53.642Z",
+    "baseURL": "http://127.0.0.1:4186",
+    "fixtureOnly": true,
+    "nativeValidated": false,
+    "checks": [
+      {
+        "name": "local role A carries only explicitly equipped cards",
+        "passed": true,
+        "durationMs": 1099
+      },
+      {
+        "name": "every library card supports independent flip and equip controls",
+        "passed": true,
+        "durationMs": 4335
+      },
+      {
+        "name": "new local role B has an isolated saved loadout and lineage",
+        "passed": true,
+        "durationMs": 430
+      },
+      {
+        "name": "reload restores both local identities, selection and independent loadouts",
+        "passed": true,
+        "durationMs": 966
+      },
+      {
+        "name": "failed and duplicate inventory reads preserve complete snapshot and per-role choices",
+        "passed": true,
+        "durationMs": 483
+      },
+      {
+        "name": "phone and short window scroll to role creation and library bottom with contained keyboard focus",
+        "passed": true,
+        "durationMs": 819
+      },
+      {
+        "name": "dynamic world screenshots cover two complete water ripple cycles and selected character appearance",
+        "passed": true,
+        "durationMs": 753
+      },
+      {
+        "name": "no native business writes, external calls, duplicate IDs or browser errors",
+        "passed": true,
+        "durationMs": 79
+      }
+    ],
+    "browserErrors": [],
+    "blockedRequests": [],
+    "dynamicFrames": [
+      {
+        "simulatedMs": 0,
+        "worldTime": 2.042,
+        "hash": "f98755e7260b7ce5441010a743727316a567798e20b21010d1afedbe05acd9c7"
+      },
+      {
+        "simulatedMs": 1042,
+        "worldTime": 3.083,
+        "hash": "ac3ea67cc2463078fa16b53b14bd0df458246f7fd4fda020e056b57d06ff34a4"
+      },
+      {
+        "simulatedMs": 2083,
+        "worldTime": 4.125,
+        "hash": "a7402d90a3d80d03a566be2863a1de73195b886c1bfbdfa3d519883d73ae8daf"
+      },
+      {
+        "simulatedMs": 3125,
+        "worldTime": 5.167,
+        "hash": "d5a9f87c3bbefc2b9493d9efc37c6490a08c903fe7c3634557a530e8153d2d01"
+      },
+      {
+        "simulatedMs": 4167,
+        "worldTime": 6.208,
+        "hash": "6ab01c0bb3ef01be975b521091d5acb468ba08f4c4ecbfeb9a1abb3625b8e038"
+      },
+      {
+        "simulatedMs": 5208,
+        "worldTime": 7.25,
+        "hash": "420f4c5f8b32f1b45fa7bd017cd99158d4e29757efc8baaed24b1acdf8986118"
+      },
+      {
+        "simulatedMs": 6250,
+        "worldTime": 8.292,
+        "hash": "74c34afdacd30fe571e029253a8ec1de7cb58caf4def5969c82c950c7d9b1f24"
+      },
+      {
+        "simulatedMs": 7292,
+        "worldTime": 9.333,
+        "hash": "ae4275eb39e8d65a523a8c5e45ddd167c54e730f390e1f2a2eae8dff77be6554"
+      },
+      {
+        "simulatedMs": 8333,
+        "worldTime": 10.375,
+        "hash": "f8bd8373d688e6d92e48e9218487e98acca6e0b06ec214eb389d32235d2df29b"
+      }
+    ],
+    "responsive": [
+      {
+        "width": 390,
+        "height": 740,
+        "creationButton": {
+          "x": 16,
+          "y": 651.53125,
+          "width": 358,
+          "height": 39
+        },
+        "beforeEquip": {
+          "x": 17,
+          "y": 166.359375,
+          "width": 356,
+          "height": 490
+        },
+        "afterEquip": {
+          "x": 17,
+          "y": 166.359375,
+          "width": 356,
+          "height": 490
+        },
+        "bottomCardInteractable": true,
+        "containedFocus": true,
+        "focusStopsVerified": 72
+      },
+      {
+        "width": 900,
+        "height": 640,
+        "creationButton": {
+          "x": 20,
+          "y": 454.890625,
+          "width": 107,
+          "height": 39
+        },
+        "beforeEquip": {
+          "x": 464,
+          "y": 122.5625,
+          "width": 411,
+          "height": 476
+        },
+        "afterEquip": {
+          "x": 464,
+          "y": 122.5625,
+          "width": 411,
+          "height": 476
+        },
+        "bottomCardInteractable": true,
+        "containedFocus": true,
+        "focusStopsVerified": 72
+      }
+    ],
+    "cardControls": {
+      "verifiedFlipCount": 24,
+      "independentEquip": true,
+      "tilt": {
+        "x": "1.50deg",
+        "y": "2.72deg"
+      }
+    },
+    "saved": {
+      "version": 4,
+      "localAgentCount": 2,
+      "isolatedLoadouts": true
+    },
+    "businessWrites": 0,
+    "ipcSummary": {
+      "read": 47,
+      "telemetry": 12,
+      "lifecycle": 8,
+      "unexpected": 0
+    },
+    "passed": true,
+    "finishedAt": "2026-09-09T13:18:03.325Z",
+    "ipcCounts": {
+      "get_settings": 16,
+      "log_startup_event": 12,
+      "get_skill_scene_overview": 11,
+      "get_skill_scene_agent_capabilities": 2,
+      "plugin:event|listen": 8,
+      "get_tool_status": 7,
+      "get_managed_skills": 2,
+      "scan_local_skills": 2,
+      "get_organization_agent_capabilities": 2,
+      "get_skill_library": 5
+    }
+  },
+  "unitTests": {
+    "sceneAndDocumentPort": 9,
+    "sceneLoadouts": 5,
+    "historicalSkillCopy": 11,
+    "passed": true
+  },
+  "quality": {
+    "build": "passed",
+    "targetedESLint": "passed",
+    "independentReview": "One P2 fixed: damaged v4 never overwrites original storage; independently rechecked.",
+    "expectedInjectedErrors": "Portal lazy-module-abort browser errors are deliberate. No normal browser errors or business writes."
+  }
+}

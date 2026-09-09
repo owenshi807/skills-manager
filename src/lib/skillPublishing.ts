@@ -31,8 +31,10 @@ export interface LibrarySkill {
   name: string;
   description: string | null;
   source_type: string;
+  source_revision?: string | null;
   central_path: string;
   content_hash: string | null;
+  enabled?: boolean;
   status: string;
 }
 
@@ -88,6 +90,17 @@ export const setMcpControlSettings = (enabled: boolean, allowFileWrites: boolean
 export const connectMcpClient = (client: "codex" | "claude") =>
   invoke<McpConnectionResult>("connect_mcp_client", { client });
 export const getSkillLibrary = () => invoke<[LibrarySkillView[], CanonicalGroup[]]>("get_skill_library");
+export interface SkillDocument {
+  skill_id: string;
+  relative_path: string;
+  content: string;
+  truncated: boolean;
+  total_bytes: number;
+  content_digest: string;
+}
+// The native reader confines this path to the managed Skill and caps the read.
+export const readSkillDocument = (skillId: string) =>
+  invoke<SkillDocument>("read_skill_publish_document", { skillId, relativePath: "SKILL.md", maxBytes: 131072 });
 export const getSkillPublishHistory = (skillId?: string | null, limit = 30) =>
   invoke<PublishHistoryEntry[]>("get_skill_publish_history", { skillId: skillId ?? null, limit });
 export const selectSkillCanonical = (skillId: string, reason: string) =>
